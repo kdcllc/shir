@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,5 +84,54 @@ describe("check-samples CLI", () => {
     });
     expect(res.status).toBe(0);
     expect(res.stdout).toMatch(/^check:samples: \d+ file\(s\) OK/);
+  });
+
+  describe("in a copied tmp repo", () => {
+    let cliDir: string;
+
+    beforeEach(() => {
+      cliDir = realpathSync.native(
+        mkdtempSync(path.join(tmpdir(), "shir-cli-")),
+      );
+      mkdirSync(path.join(cliDir, "scripts"), { recursive: true });
+      copyFileSync(
+        path.join(repoRoot, "scripts", "check-samples.mjs"),
+        path.join(cliDir, "scripts", "check-samples.mjs"),
+      );
+    });
+    afterEach(() => {
+      rmSync(cliDir, { recursive: true, force: true });
+    });
+
+    function putCli(rel: string, content = "x"): void {
+      const full = path.join(cliDir, rel);
+      mkdirSync(path.dirname(full), { recursive: true });
+      writeFileSync(full, content);
+    }
+
+    function runCli() {
+      return spawnSync(process.execPath, ["scripts/check-samples.mjs"], {
+        cwd: cliDir,
+        encoding: "utf8",
+      });
+    }
+
+    it("exits 1 and names the file when a sample has no LICENSES.md entry", () => {
+      putCli("samples/LICENSES.md", licenses("listed.cho"));
+      putCli("samples/listed.cho");
+      putCli("samples/sub/x.cho");
+      const res = runCli();
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain("check:samples: unlisted samples/sub/x.cho");
+    });
+
+    it("exits 1 when samples/ has files but LICENSES.md is missing", () => {
+      putCli("samples/a.cho");
+      const res = runCli();
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain(
+        "check:samples: samples/LICENSES.md missing",
+      );
+    });
   });
 });
