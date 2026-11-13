@@ -1,5 +1,10 @@
+* text=auto eol=lf
 _memory/** text eol=lf
 *.cmd -text
 _memory/loop/LEARNINGS.md merge=union
 _memory/loop/ESCALATIONS.md merge=union
 *.sh text eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.woff2 binary

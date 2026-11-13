@@ -1,0 +1,14 @@
+pnpm-lock.yaml
+**/target/**
+**/dist/**
+apps/desktop/src-tauri/gen/**
+apps/desktop/src-tauri/icons/**
+.agents/
+.claude/
+_kit/
+_loop/
+_memory/
+CLAUDE.md
+skills-lock.json
+orchestration-kit.manifest.json
+samples/**/*.cho
