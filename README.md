@@ -10,7 +10,8 @@ Windows 10/11. It is a Tauri 2 + React 19 desktop app in a pnpm monorepo.
 - **Rust stable** — `rust-toolchain.toml` selects the stable channel with `rustfmt` and `clippy`.
 - **Ubuntu system packages** (as installed by CI):
   `sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb`
-- **Windows** — WebView2. The Windows bundles (`nsis`, `msi`) use the WebView2 bootstrapper
+- **Windows** — Microsoft C++ Build Tools ("Desktop development with C++" workload, required by
+  the Rust MSVC toolchain) and WebView2. The Windows bundles (`nsis`, `msi`) use the WebView2 bootstrapper
   (`webviewInstallMode: downloadBootstrapper` in `apps/desktop/src-tauri/tauri.windows.conf.json`).
 
 ## Getting started
@@ -21,6 +22,12 @@ pnpm install --frozen-lockfile
 pnpm tauri dev            # run the desktop app with the Vite dev server
 pnpm tauri build --debug  # debug build and bundles
 ```
+
+> **Ubuntu + VS Code installed as a snap:** `pnpm tauri dev` started from the VS Code integrated
+> terminal fails with `symbol lookup error: /snap/core20/.../libpthread.so.0: undefined symbol:
+__libc_pthread_init`. The snap terminal leaks `GTK_PATH`, `LOCPATH`, `GIO_MODULE_DIR` and
+> similar variables into the app. Run it from a regular terminal, or see
+> [Troubleshooting](docs/TROUBLESHOOTING.md#linux-symbol-lookup-error-when-launched-from-a-snap-vs-code-terminal).
 
 ## Root scripts
 
@@ -47,7 +54,8 @@ pnpm tauri build --debug  # debug build and bundles
 
 ## Launch smoke
 
-With `SHIR_SMOKE=1` the app prints a line `SHIR_READY` once it is up and then exits. The smoke
+With `SHIR_SMOKE=1` the app prints a line `SHIR_READY` once the main window has finished
+loading, stays up for 10 seconds, then exits 0. The smoke
 scripts run a built binary this way and require exit 0 plus that marker within a timeout
 (default 120 seconds):
 
