@@ -9,6 +9,21 @@ catalogs:
     '@eslint/js':
       specifier: 10.0.1
       version: 10.0.1
+    '@fontsource/heebo':
+      specifier: 5.3.0
+      version: 5.3.0
+    '@fontsource/jetbrains-mono':
+      specifier: 5.3.0
+      version: 5.3.0
+    '@fontsource/noto-sans-hebrew':
+      specifier: 5.3.0
+      version: 5.3.0
+    '@fontsource/noto-serif-hebrew':
+      specifier: 5.3.0
+      version: 5.3.0
+    '@playwright/test':
+      specifier: 1.65.0
+      version: 1.65.0
     '@tauri-apps/api':
       specifier: 2.12.4
       version: 2.12.4
@@ -36,6 +51,9 @@ catalogs:
     '@vitejs/plugin-react':
       specifier: 6.3.0
       version: 6.3.0
+    chordsheetjs:
+      specifier: 18.0.0
+      version: 18.0.0
     eslint:
       specifier: 10.14.0
       version: 10.14.0
@@ -188,7 +206,17 @@ importers:
         version: 5.1.0(@types/node@26.6.6)(jsdom@31.0.0)(vite@8.3.8(@types/node@26.6.6))
 
   packages/chord-core:
+    dependencies:
+      chordsheetjs:
+        specifier: 'catalog:'
+        version: 18.0.0
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.6
+      test-fixtures:
+        specifier: workspace:*
+        version: link:../test-fixtures
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -198,10 +226,25 @@ importers:
 
   packages/chord-render:
     dependencies:
+      '@fontsource/heebo':
+        specifier: 'catalog:'
+        version: 5.3.0
+      '@fontsource/jetbrains-mono':
+        specifier: 'catalog:'
+        version: 5.3.0
+      '@fontsource/noto-sans-hebrew':
+        specifier: 'catalog:'
+        version: 5.3.0
+      '@fontsource/noto-serif-hebrew':
+        specifier: 'catalog:'
+        version: 5.3.0
       chord-core:
         specifier: workspace:*
         version: link:../chord-core
     devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.65.0
       '@testing-library/dom':
         specifier: 'catalog:'
         version: 10.4.2
@@ -217,6 +260,9 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: 'catalog:'
+        version: 6.3.0(vite@8.3.8(@types/node@26.6.6))
       jsdom:
         specifier: 'catalog:'
         version: 31.0.0
@@ -226,9 +272,15 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.3.1(react@19.3.1)
+      test-fixtures:
+        specifier: workspace:*
+        version: link:../test-fixtures
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.8(@types/node@26.6.6)
       vitest:
         specifier: 'catalog:'
         version: 5.1.0(@types/node@26.6.6)(jsdom@31.0.0)(vite@8.3.8(@types/node@26.6.6))
@@ -428,6 +480,18 @@ packages:
       '@noble/hashes':
         optional: true
 
+  '@fontsource/heebo@5.3.0':
+    resolution: {integrity: sha512-Z01U2fWWrfJnSE6SmDYtZJ1uCnKs8V3WSdip/lVDfKnsC1ASumb7IZmOrXjaYK+PVm7qGD3+4cwTAFOxG5uMaw==}
+
+  '@fontsource/jetbrains-mono@5.3.0':
+    resolution: {integrity: sha512-fqDfB5I9f1p1TV486aUgB9t8zP84P0O1FtQR5Ol9vjwPy+S+EIGlVYm1cvj2W5shcZMTg2nZFdVMoH5wFu8a1A==}
+
+  '@fontsource/noto-sans-hebrew@5.3.0':
+    resolution: {integrity: sha512-7owtzuw9D+ipt0g8mcBGOm7MS/mv/REKsjSwEUe749UUsrnG54TSmusNn7oxv2GxbUORAzADLQ8ggdtt7oKkpg==}
+
+  '@fontsource/noto-serif-hebrew@5.3.0':
+    resolution: {integrity: sha512-UbTqdsCCQRYAxQ1ZNjWTcL+tbqYvCG0nhCSD0Y2CmWEfl32e71/DAlRw9IvhjEdCJnKJm0t9AOfiNiut1mHKeA==}
+
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
     engines: {node: '>=18.18.0'}
@@ -494,6 +558,11 @@ packages:
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
+
+  '@playwright/test@1.65.0':
+    resolution: {integrity: sha512-iGURLGuKDLakSEl7Pgfv8h7f+XLT+V861Wfhz0zlEl5nyFuKUopdkFBPKqTllTUp06aOwPuH8iuUEb3yp3MpbQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@rolldown/binding-android-arm-eabi@1.2.19':
     resolution: {integrity: sha512-e+Ebe0WT+9tbXmNKPIiC8YrWAHYwug3m6i4p3rZGGulfZri1jtI4HslT+OZnFf/OIHowWF71DTlHwXBP2SiA7A==}
@@ -923,6 +992,15 @@ packages:
   chai@6.3.0:
     resolution: {integrity: sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==}
     engines: {node: '>=18'}
+
+  chordsheetjs@18.0.0:
+    resolution: {integrity: sha512-i5ElOU6I9ra5BEc1hfMwMnl67xnsVYs2C4eg7Mbs4BiVP9gdvjjCFutJ/I4MBZR3sBEHqmK+ug+X80YPdk48Iw==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      jspdf: ^4.0.0
+    peerDependenciesMeta:
+      jspdf:
+        optional: true
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -1510,6 +1588,16 @@ packages:
   picomatch@4.0.7:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
+
+  playwright-core@1.65.0:
+    resolution: {integrity: sha512-vNSKgH6YqtN7cdT/L334zo0a+YwkrpicyrHJlWWPIm/Q+Nn2SWInil01oT0mbu96U4GgoRtCYQD9CzJQgju+lA==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.65.0:
+    resolution: {integrity: sha512-F3AMWcR44qMBt4kq+6Kb6mX7bjGXshktKFOPULd7reED6ZJWevjbNRqysP7q+AATE9kdPEZBibex1BYsvpVoeA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   postcss-media-query-parser@0.2.3:
     resolution: {integrity: sha512-3sOlxmbKcSHMjlUXQZKQ06jOswE7oVkXPxmZdoB1r5l0q6gTFTQSHxNxOrCccElbW7dxNytifNEo8qidX2Vsig==}
@@ -2128,6 +2216,14 @@ snapshots:
 
   '@exodus/bytes@1.16.0': {}
 
+  '@fontsource/heebo@5.3.0': {}
+
+  '@fontsource/jetbrains-mono@5.3.0': {}
+
+  '@fontsource/noto-sans-hebrew@5.3.0': {}
+
+  '@fontsource/noto-serif-hebrew@5.3.0': {}
+
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -2191,6 +2287,10 @@ snapshots:
       fastq: 1.20.3
 
   '@oxc-project/types@0.156.0': {}
+
+  '@playwright/test@1.65.0':
+    dependencies:
+      playwright: 1.65.0
 
   '@rolldown/binding-android-arm-eabi@1.2.19':
     optional: true
@@ -2552,6 +2652,8 @@ snapshots:
   caniuse-lite@1.0.30001826: {}
 
   chai@6.3.0: {}
+
+  chordsheetjs@18.0.0: {}
 
   color-convert@2.0.1:
     dependencies:
@@ -3070,6 +3172,12 @@ snapshots:
   picomatch@2.3.2: {}
 
   picomatch@4.0.7: {}
+
+  playwright-core@1.65.0: {}
+
+  playwright@1.65.0:
+    dependencies:
+      playwright-core: 1.65.0
 
   postcss-media-query-parser@0.2.3:
     optional: true

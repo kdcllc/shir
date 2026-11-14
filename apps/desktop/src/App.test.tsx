@@ -1,6 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { signalUiReady } from "./uiReady";
+
+vi.mock("./uiReady", () => ({ signalUiReady: vi.fn() }));
 
 describe("App", () => {
   it("renders the Shir heading", () => {
@@ -18,5 +21,11 @@ describe("App", () => {
     expect(chord.classList.contains("chord")).toBe(true);
     expect(chord.textContent).toBe("F#m7(b5)");
     expect(chord).toHaveAttribute("dir", "ltr");
+  });
+
+  it("signals UI ready after render", () => {
+    vi.mocked(signalUiReady).mockClear();
+    render(<App />);
+    expect(signalUiReady).toHaveBeenCalled();
   });
 });

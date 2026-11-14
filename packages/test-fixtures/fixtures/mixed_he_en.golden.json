@@ -1,0 +1,44 @@
+{
+  "title": "רוק בבוקר",
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "אנחנו שרים rock and roll עד הבוקר",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am"
+        },
+        {
+          "index": 11,
+          "chord": "G"
+        },
+        {
+          "index": 21,
+          "chord": "F"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "והעיר רוקדת איתנו",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "C"
+        },
+        {
+          "index": 6,
+          "chord": "E"
+        }
+      ]
+    }
+  ]
+}

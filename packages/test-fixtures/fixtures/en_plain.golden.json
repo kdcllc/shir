@@ -1,0 +1,68 @@
+{
+  "title": "Morning Light",
+  "direction": "ltr",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "Morning light on the hills",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "C"
+        },
+        {
+          "index": 21,
+          "chord": "G"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "lyric": "A quiet song for everyone",
+      "chords": [
+        {
+          "index": 2,
+          "chord": "Am"
+        },
+        {
+          "index": 17,
+          "chord": "F"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "We walk together down the road",
+      "chords": [
+        {
+          "index": 10,
+          "chord": "Dm"
+        },
+        {
+          "index": 26,
+          "chord": "G"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "lyric": "Sing it slow and sing it low",
+      "chords": [
+        {
+          "index": 8,
+          "chord": "C"
+        },
+        {
+          "index": 25,
+          "chord": "F"
+        }
+      ]
+    }
+  ]
+}

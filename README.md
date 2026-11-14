@@ -54,8 +54,9 @@ __libc_pthread_init`. The snap terminal leaks `GTK_PATH`, `LOCPATH`, `GIO_MODULE
 
 ## Launch smoke
 
-With `SHIR_SMOKE=1` the app prints a line `SHIR_READY` once the main window has finished
-loading, stays up for 10 seconds, then exits 0. The smoke
+With `SHIR_SMOKE=1` the app prints a line `SHIR_READY` once the frontend has mounted React and
+emitted the `shir://ui-ready` event (`apps/desktop/src/uiReady.ts`), stays up for 10 seconds, then
+exits 0. The smoke
 scripts run a built binary this way and require exit 0 plus that marker within a timeout
 (default 120 seconds):
 
@@ -74,8 +75,21 @@ pwsh -File scripts/smoke/smoke-launch.ps1 -Binary apps/desktop/src-tauri/target/
 `.github/workflows/ci.yml` runs on pushes to `main`, pull requests and manual dispatch, on a
 matrix of `ubuntu-22.04` and `windows-latest`. Each job installs dependencies with
 `pnpm install --frozen-lockfile`, then runs lint, typecheck, test, stylelint, check:samples,
-format check, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, a
+format check, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, on Linux only the
+Playwright browser install and `pnpm --filter chord-render test:bidi`, a
 `pnpm tauri build --debug`, the platform's launch smoke, and uploads the debug bundles.
+
+## Bidi tests
+
+The chord-render bidi geometry tests run in Playwright (chromium and webkit). Install the browsers
+once, then run:
+
+```sh
+pnpm --filter chord-render exec playwright install --with-deps chromium webkit
+pnpm --filter chord-render test:bidi
+```
+
+See [`docs/BIDI.md`](docs/BIDI.md).
 
 ## Sample songs and copyright
 
@@ -85,5 +99,6 @@ Copyrighted lyrics and chord charts are never committed.
 
 ## More documentation
 
+- [`docs/BIDI.md`](docs/BIDI.md)
 - [`docs/STACK.md`](docs/STACK.md)
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)

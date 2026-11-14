@@ -43,7 +43,7 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | Tauri build script                       | `tauri-build`                   | 2.7.4                                    | crate     | installed (G0) |
 | Serde                                    | `serde`                         | 1.0.229                                  | crate     | installed (G0) |
 | Serde JSON                               | `serde_json`                    | 1.0.154                                  | crate     | installed (G0) |
-| ChordSheetJS                             | `chordsheetjs`                  | 18.0.0                                   | npm       | planned (G2)   |
+| ChordSheetJS                             | `chordsheetjs`                  | 18.0.0                                   | npm       | installed (G1) |
 | fast-check                               | `fast-check`                    | 4.10.2                                   | npm       | planned (G2)   |
 | Zustand                                  | `zustand`                       | 5.1.0                                    | npm       | planned (G7)   |
 | TanStack Router                          | `@tanstack/react-router`        | 1.170.46                                 | npm       | planned (G7)   |
@@ -56,11 +56,11 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | Migrations (choice in G4)                | `refinery`                      | 0.10.0                                   | crate     | planned (G4)   |
 | Specta (rc, no stable 2.x release)       | `specta`                        | 2.0.0-rc.28                              | crate     | planned (G4)   |
 | tauri-specta (rc, no stable 2.x release) | `tauri-specta`                  | 2.0.0-rc.28                              | crate     | planned (G4)   |
-| Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | planned (G1)   |
+| Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | installed (G1) |
 | WebdriverIO                              | `webdriverio`                   | 10.2.0                                   | npm       | planned (G1)   |
 | WDIO Tauri service                       | `@wdio/tauri-service`           | 1.5.1                                    | npm       | planned (G1)   |
 | Tauri updater plugin                     | `tauri-plugin-updater`          | 2.14.1                                   | crate     | planned (G10)  |
-| Noto Sans Hebrew                         | `@fontsource/noto-sans-hebrew`  | 5.3.0                                    | font      | planned (G1)   |
-| Noto Serif Hebrew                        | `@fontsource/noto-serif-hebrew` | 5.3.0                                    | font      | planned (G1)   |
-| Heebo                                    | `@fontsource/heebo`             | 5.3.0                                    | font      | planned (G1)   |
-| JetBrains Mono                           | `@fontsource/jetbrains-mono`    | 5.3.0                                    | font      | planned (G1)   |
+| Noto Sans Hebrew                         | `@fontsource/noto-sans-hebrew`  | 5.3.0                                    | npm       | installed (G1) |
+| Noto Serif Hebrew                        | `@fontsource/noto-serif-hebrew` | 5.3.0                                    | npm       | installed (G1) |
+| Heebo                                    | `@fontsource/heebo`             | 5.3.0                                    | npm       | installed (G1) |
+| JetBrains Mono                           | `@fontsource/jetbrains-mono`    | 5.3.0                                    | npm       | installed (G1) |
