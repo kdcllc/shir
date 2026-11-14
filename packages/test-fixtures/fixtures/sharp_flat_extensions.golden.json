@@ -1,0 +1,53 @@
+{
+  "title": "אקורדים מורחבים",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "לילה שקט על הגגות",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "C#"
+        },
+        {
+          "index": 13,
+          "chord": "Bb"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "lyric": "כוכב אחד מאיר את הדרך",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "F#m7(b5)"
+        },
+        {
+          "index": 17,
+          "chord": "Dsus4/F#"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "ושוב חוזר השיר",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "C#"
+        },
+        {
+          "index": 11,
+          "chord": "Bb"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "title": "פתיחה",
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "נפתח בשקט עם הגיטרה",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am"
+        },
+        {
+          "index": 13,
+          "chord": "G"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "chords",
+      "chords": ["Am", "G", "F", "E"]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "ונמשיך אל השיר",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "F"
+        },
+        {
+          "index": 11,
+          "chord": "E"
+        }
+      ]
+    }
+  ]
+}

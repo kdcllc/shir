@@ -1,0 +1,64 @@
+{
+  "title": "צפוף",
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "לילה שקט על",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am7/G"
+        },
+        {
+          "index": 1,
+          "chord": "Cmaj7"
+        },
+        {
+          "index": 2,
+          "chord": "Dsus4"
+        },
+        {
+          "index": 3,
+          "chord": "F#m7"
+        },
+        {
+          "index": 5,
+          "chord": "Am7/G"
+        },
+        {
+          "index": 6,
+          "chord": "Cmaj7"
+        },
+        {
+          "index": 7,
+          "chord": "Dsus4"
+        },
+        {
+          "index": 9,
+          "chord": "F#m7"
+        },
+        {
+          "index": 10,
+          "chord": "Am7/G"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "ושוב חוזר השיר",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am"
+        }
+      ]
+    }
+  ]
+}
