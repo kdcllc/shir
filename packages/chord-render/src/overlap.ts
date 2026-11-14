@@ -29,40 +29,62 @@ export function computeOverlapPadding(
   return out;
 }
 
-const MAX_ITERATIONS = 3;
+const MAX_ITERATIONS = 8;
 const ROW_TOLERANCE = 1;
+const GAP = 4;
 
-function lineDirection(line: HTMLElement): "rtl" | "ltr" {
-  const attr = line.getAttribute("dir");
-  if (attr === "rtl" || attr === "ltr") return attr;
-  return getComputedStyle(line).direction === "rtl" ? "rtl" : "ltr";
-}
-
+/** A chord box's PHYSICAL x-interval (viewport px); DOM order is the array order. */
 interface Measured {
   anchor: HTMLElement;
-  top: number;
-  span: InlineSpan;
+  left: number;
+  right: number;
 }
 
+/** Chord boxes grouped into visual rows (top within tolerance), each in DOM order. */
 function measureLine(line: HTMLElement): Measured[][] {
-  const dir = lineDirection(line);
-  const lineRect = line.getBoundingClientRect();
   const rows: { top: number; items: Measured[] }[] = [];
   for (const box of line.querySelectorAll<HTMLElement>("[data-chord-box]")) {
     const anchor = box.parentElement;
     if (!anchor) continue;
     const r = box.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) continue; // not laid out
-    const span: InlineSpan =
-      dir === "rtl"
-        ? { start: lineRect.right - r.right, end: lineRect.right - r.left }
-        : { start: r.left - lineRect.left, end: r.right - lineRect.left };
-    const item: Measured = { anchor, top: r.top, span };
+    const item: Measured = { anchor, left: r.left, right: r.right };
     const row = rows.find((x) => Math.abs(x.top - r.top) <= ROW_TOLERANCE);
     if (row) row.items.push(item);
     else rows.push({ top: r.top, items: [item] });
   }
   return rows.map((r) => r.items);
+}
+
+/**
+ * Padding needed to separate `later` from `earlier`: the actual physical
+ * overlap plus the gap, measured on the side where `later` lies. 0 when the
+ * intervals are already further apart than the gap.
+ */
+function pairPadding(earlier: Measured, later: Measured): number {
+  const collides =
+    earlier.left < later.right + GAP && later.left < earlier.right + GAP;
+  if (!collides) return 0;
+  const laterIsRight = later.left + later.right >= earlier.left + earlier.right;
+  return laterIsRight
+    ? earlier.right + GAP - later.left
+    : later.right + GAP - earlier.left;
+}
+
+/** Per-chord padding for one physical row in DOM order; shifts cascade. */
+function rowPadding(row: readonly Measured[]): number[] {
+  const cum: number[] = [];
+  const out: number[] = [];
+  row.forEach((later, i) => {
+    let pad = 0;
+    for (let j = 0; j < i; j++) {
+      const applied = (cum[i - 1] ?? 0) - (cum[j] ?? 0);
+      pad = Math.max(pad, pairPadding(row[j]!, later) - applied);
+    }
+    out.push(pad);
+    cum.push((cum[i - 1] ?? 0) + pad);
+  });
+  return out;
 }
 
 /** Measures all lyric lines and pads; `padded` tracks elements we touched. */
@@ -77,7 +99,7 @@ export function runOverlapPass(
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
       let changed = false;
       for (const row of measureLine(line)) {
-        const pads = computeOverlapPadding(row.map((m) => m.span));
+        const pads = rowPadding(row);
         row.forEach((m, i) => {
           const pad = pads[i] ?? 0;
           const target = m.anchor.previousElementSibling;

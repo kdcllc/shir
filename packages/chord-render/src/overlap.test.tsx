@@ -86,6 +86,7 @@ const song: SongModel = {
 
 let width = 500;
 let measured: string[] = [];
+let boxRect: ((idx: number, pad: number) => DOMRect) | null = null;
 const origRect = Element.prototype.getBoundingClientRect;
 
 function rect(x: number, w: number): DOMRect {
@@ -104,6 +105,7 @@ function rect(x: number, w: number): DOMRect {
 beforeEach(() => {
   width = 500;
   measured = [];
+  boxRect = null;
   Element.prototype.getBoundingClientRect = function (this: Element) {
     if (this.hasAttribute("data-song")) return rect(0, width);
     if (this.getAttribute("data-line") === "lyric") return rect(0, width);
@@ -115,6 +117,7 @@ beforeEach(() => {
         0;
       measured.push(`${this.textContent}:${pad}`);
       const idx = Number(this.parentElement?.getAttribute("data-index"));
+      if (boxRect) return boxRect(idx, pad);
       return rect(idx * 10 + pad, 40); // boxes always overlap without padding
     }
     return rect(0, 0);
@@ -219,5 +222,56 @@ describe("SongView overlap pass", () => {
       />,
     );
     expect(anchor0().style.getPropertyValue("padding-inline-end")).toBe("");
+  });
+
+  describe("physical-rect collision", () => {
+    const seg = (c: HTMLElement, i: number) =>
+      c.querySelector(`[data-anchor][data-index="${i}"]`) as HTMLElement;
+
+    it("adds no padding in an RTL line when the later chord sits physically right of the earlier one without intersecting", () => {
+      // A [100,140], B [200,240]: a logical-coordinate conversion would see overlap.
+      boxRect = (idx, pad) => rect(idx === 0 ? 100 : 200 + pad, 40);
+      const { container } = render(
+        <SongView song={{ ...song, direction: "rtl" }} />,
+      );
+      expect(
+        seg(container, 0).style.getPropertyValue("padding-inline-end"),
+      ).toBe("");
+    });
+
+    it("pads the element preceding the later chord's anchor for one physical intersection", () => {
+      boxRect = (idx, pad) => rect(idx === 0 ? 100 : 120 + pad, 40);
+      const { container } = render(<SongView song={song} />);
+      expect(
+        seg(container, 0).style.getPropertyValue("padding-inline-end"),
+      ).toBe("24px"); // 140 - 120 + 4
+    });
+
+    it("pads by exactly overlap + gap whichever side the later chord lies on", () => {
+      // later chord physically right of earlier in an RTL line: overlap 20 + gap 4
+      boxRect = (idx, pad) => rect(idx === 0 ? 100 : 120 + pad, 40);
+      const a = render(<SongView song={{ ...song, direction: "rtl" }} />);
+      expect(
+        seg(a.container, 0).style.getPropertyValue("padding-inline-end"),
+      ).toBe("24px");
+      a.unmount();
+      // later chord physically left of earlier (same-direction RTL row)
+      boxRect = (idx, pad) => rect(idx === 0 ? 120 : 100 - pad, 40);
+      const b = render(<SongView song={{ ...song, direction: "rtl" }} />);
+      expect(
+        seg(b.container, 0).style.getPropertyValue("padding-inline-end"),
+      ).toBe("24px");
+    });
+
+    it("stops after 8 iterations without throwing when padding never resolves the collision", () => {
+      let calls = 0;
+      boxRect = (idx) => {
+        if (idx === 1) calls++;
+        return rect(idx === 0 ? 100 : 120, 40);
+      };
+      const { container } = render(<SongView song={song} />);
+      expect(calls).toBe(8);
+      expect(pass(container)).toBe(1);
+    });
   });
 });
