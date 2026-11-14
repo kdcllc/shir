@@ -1,7 +1,13 @@
+import { useEffect } from "react";
 import { ChordSymbol } from "chord-render";
 import styles from "./App.module.css";
+import { signalUiReady } from "./uiReady";
 
 export function App() {
+  useEffect(() => {
+    void signalUiReady();
+  }, []);
+
   return (
     <main className={styles.shell}>
       <h1>

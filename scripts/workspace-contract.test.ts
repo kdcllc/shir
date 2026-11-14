@@ -79,16 +79,31 @@ const PNPM_BUILTINS = new Set([
   "--version",
 ]);
 
-/** Root scripts invoked as `pnpm <script>` / `pnpm run <script>` in CI commands. */
-function ciPnpmScripts(commands: string[]): string[] {
+/**
+ * `root:<script>` / `<pkg>:<script>` pairs for `pnpm [run] <script>` and
+ * `pnpm --filter <pkg> <script>` in CI commands. `pnpm --filter <pkg> exec …` and
+ * other builtins are ignored.
+ */
+function ciPnpmPairs(commands: string[]): string[] {
   const out = new Set<string>();
   for (const cmd of commands) {
-    for (const m of cmd.matchAll(/\bpnpm\s+(?:run\s+)?(-{0,2}[a-z][\w:-]*)/g)) {
-      const script = m[1] ?? "";
-      if (!PNPM_BUILTINS.has(script)) out.add(script);
+    for (const m of cmd.matchAll(
+      /\bpnpm\s+(?:--filter\s+(\S+)\s+)?(?:run\s+)?(-{0,2}[a-z][\w:-]*)/g,
+    )) {
+      const filter = m[1];
+      const script = m[2] ?? "";
+      if (PNPM_BUILTINS.has(script)) continue;
+      out.add(`${filter ?? "root"} ${script}`);
     }
   }
   return [...out].sort();
+}
+
+/** Root scripts invoked as `pnpm <script>` / `pnpm run <script>` in CI commands. */
+function ciPnpmScripts(commands: string[]): string[] {
+  return ciPnpmPairs(commands)
+    .filter((p) => p.startsWith("root "))
+    .map((p) => p.slice("root ".length));
 }
 
 /** Frozen kit-doc extraction regex from the task contract. */
@@ -296,6 +311,22 @@ describe("CI workflow <-> root scripts", () => {
     for (const s of used) {
       expect(rootScripts, `root script '${s}' used by CI`).toHaveProperty(s);
     }
+    const unresolved = ciPnpmPairs(commands).filter((p) => !resolvePair(p));
+    expect(unresolved, "CI pnpm pairs that do not resolve").toEqual([]);
+  });
+
+  it("resolves `pnpm --filter <pkg> <script>` and ignores `--filter <pkg> exec`", () => {
+    const pairs = ciPnpmPairs([
+      "pnpm --filter chord-render nope",
+      "pnpm --filter chord-render test:bidi",
+      "pnpm --filter chord-render exec playwright install",
+    ]);
+    expect(pairs).toEqual(["chord-render nope", "chord-render test:bidi"]);
+    expect(pairs.filter((p) => !resolvePair(p))).toEqual(["chord-render nope"]);
+    expect(ciPnpmScripts(["pnpm --filter chord-render test:bidi"])).toEqual([]);
+    expect(ciPnpmPairs(commands), "real CI uses the bidi script").toContain(
+      "chord-render test:bidi",
+    );
   });
 
   it("the CI extractor flags a missing script (non-vacuous)", () => {

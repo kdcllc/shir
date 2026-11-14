@@ -76,6 +76,23 @@ jobs:
       - name: Cargo test
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
+      - name: Install Playwright browsers
+        if: runner.os == 'Linux'
+        run: pnpm --filter chord-render exec playwright install --with-deps chromium webkit
+
+      - name: Bidi geometry (chromium + webkit)
+        if: runner.os == 'Linux'
+        run: pnpm --filter chord-render test:bidi
+
+      - name: Upload bidi report
+        if: failure() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bidi-report
+          path: packages/chord-render/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Tauri debug build
         run: pnpm tauri build --debug
 
