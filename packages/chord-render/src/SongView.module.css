@@ -1,0 +1,28 @@
+.song {
+  unicode-bidi: isolate;
+  font-family: "Noto Sans Hebrew", heebo, sans-serif;
+}
+
+@media print {
+  .song {
+    color: #000;
+    background: none;
+  }
+
+  .song :global([data-line]) {
+    break-inside: avoid;
+    background: none;
+  }
+
+  .song :global([data-chord-box]) {
+    position: absolute;
+    inset-block-end: 100%;
+    inset-inline-start: 0;
+    color: #000;
+    background: none;
+  }
+
+  :global([data-ui-chrome]) {
+    display: none;
+  }
+}

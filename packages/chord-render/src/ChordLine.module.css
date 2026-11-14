@@ -1,0 +1,36 @@
+/* Amended B3: inline bidi run; anchor wraps its grapheme; only the chord box is positioned. */
+.lyric {
+  display: block;
+  position: relative;
+  line-height: 2.6;
+}
+
+.chords {
+  display: block;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.empty {
+  display: block;
+  min-block-size: 1.5em;
+}
+
+.seg {
+  display: inline;
+}
+
+.anchor {
+  display: inline;
+  position: relative;
+}
+
+.box {
+  position: absolute;
+  inset-block-end: 100%;
+  inset-inline-start: 0;
+  white-space: nowrap;
+  line-height: 1;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+}
