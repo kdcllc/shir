@@ -20,6 +20,11 @@ interface StackRow {
 }
 
 const INSTALLED = "installed (G0)";
+const INSTALLED_RE = /^installed \(G\d+\)$/;
+
+function isInstalled(status: string): boolean {
+  return INSTALLED_RE.test(status);
+}
 
 /** Parse the `## Pinned versions` table; tolerates prettier column padding. */
 function parseStackTable(markdown: string): StackRow[] {
@@ -139,7 +144,7 @@ function compareStack({
 }: Sources): string[] {
   const problems: string[] = [];
   for (const row of rows) {
-    if (row.status !== INSTALLED) continue;
+    if (!isInstalled(row.status)) continue;
     if (row.ecosystem === "npm") {
       if (catalog[row.pkg] !== row.version) {
         problems.push(
@@ -162,7 +167,7 @@ function compareStack({
   }
   for (const name of Object.keys(catalog)) {
     const row = rows.find((r) => r.pkg === name && r.ecosystem === "npm");
-    if (!row || row.status !== INSTALLED) {
+    if (!row || !isInstalled(row.status)) {
       problems.push(`${name}: in catalog but no '${INSTALLED}' STACK.md row`);
     }
   }
@@ -175,7 +180,7 @@ const catalog = parseCatalog(read("pnpm-workspace.yaml"));
 const lockCatalog = parseLockCatalog(read("pnpm-lock.yaml"));
 const cargoLock = parseCargoLock(read("apps/desktop/src-tauri/Cargo.lock"));
 const sources: Sources = { rows, catalog, lockCatalog, cargoLock };
-const installed = rows.filter((r) => r.status === INSTALLED);
+const installed = rows.filter((r) => isInstalled(r.status));
 
 describe("STACK.md parsing", () => {
   it("fails loudly when the Pinned versions header is missing", () => {
@@ -208,6 +213,23 @@ describe("STACK.md parsing", () => {
     for (const eco of ["toolchain", "npm", "crate"]) {
       expect(installed.some((r) => r.ecosystem === eco)).toBe(true);
     }
+  });
+
+  it("treats installed (G<n>) rows as installed and planned rows as not", () => {
+    const md = [
+      "## Pinned versions",
+      "",
+      "| Component | Package | Version | Ecosystem | Status         |",
+      "| --------- | ------- | ------- | --------- | -------------- |",
+      "| A         | `a`     | 1.0.0   | npm       | installed (G1) |",
+      "| B         | `b`     | 2.0.0   | npm       | planned (G2)   |",
+    ].join("\n");
+    const parsed = parseStackTable(md);
+    expect(
+      parsed.filter((r) => isInstalled(r.status)).map((r) => r.pkg),
+    ).toEqual(["a"]);
+    expect(isInstalled("planned (G2)")).toBe(false);
+    expect(isInstalled("installed (G1)")).toBe(true);
   });
 
   it("parses catalog and lockfile sources non-vacuously", () => {
@@ -244,7 +266,10 @@ describe("STACK.md consistency with pnpm and cargo", () => {
   it("every catalog entry has an installed STACK.md row (no undocumented installs)", () => {
     for (const name of Object.keys(catalog)) {
       const row = rows.find((r) => r.pkg === name && r.ecosystem === "npm");
-      expect(row?.status, `row for ${name}`).toBe(INSTALLED);
+      expect(
+        isInstalled(row?.status ?? ""),
+        `row for ${name}: ${row?.status}`,
+      ).toBe(true);
     }
   });
 

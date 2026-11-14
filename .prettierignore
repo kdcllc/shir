@@ -12,3 +12,6 @@ CLAUDE.md
 skills-lock.json
 orchestration-kit.manifest.json
 samples/**/*.cho
+**/playwright-report/**
+**/test-results/**
+packages/chord-render/bidi/__screenshots__/**

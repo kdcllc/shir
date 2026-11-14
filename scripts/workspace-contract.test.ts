@@ -332,7 +332,7 @@ describe("kit docs reference only resolvable pnpm scripts", () => {
     ...manifestCommandContexts(read("orchestration-kit.manifest.json")),
   ];
   const pairs = extractPnpmPairs(contexts);
-  const allowListed = new Set(["root e2e", "chord-render test:bidi"]);
+  const allowListed = new Set(["root e2e"]);
 
   it("extracts at least the ten known resolvable pairs", () => {
     for (const p of [

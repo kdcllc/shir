@@ -15,12 +15,19 @@ Normative rules for Shir. Code, tests and evaluator verdicts cite rule ids (B1�
   must never display as "#F…" or "(5b)…".
 - **B2** Chord positions are grapheme indices into the LOGICAL lyric string
   (Intl.Segmenter / unicode-segmentation). Never store visual columns.
-- **B3** Each lyric line renders as ONE inline bidi run with zero-width anchors
-  (`position:relative; display:inline`) at chord offsets; chord is absolutely
-  positioned above the anchor. No flex/inline-block "chunk" layout for lines
-  containing both strong RTL and strong LTR characters.
+- **B3** Each lyric line renders as ONE inline bidi run. A chord's anchor is a plain inline
+  element (`display:inline; position:relative`; never inline-block/flex/grid) that WRAPS exactly
+  the anchored grapheme cluster (base letter + marks); a chord at end of line
+  (`index == graphemeCount`) uses an empty anchor after the last grapheme. The chord sits in an
+  absolutely positioned chord box (`inset-block-end:100%; inset-inline-start:0`) whose `dir` is
+  the anchored grapheme's direction (first strong character of the grapheme; neutral or end of
+  line → the line's resolved direction), so the box aligns on that grapheme's inline-start edge
+  even at bidi run boundaries. The LTR chord symbol (B1) is never itself the positioned element.
+  No flex/inline-block "chunk" layout for lines containing both strong RTL and strong LTR
+  characters. (Amended in G1, Q&A 11: zero-width anchors land 109–125px off at the start of an
+  embedded opposite-direction run in Chromium/WebKit.)
 - **B4** After layout, a measure pass prevents chord overlap by adding
-  padding-inline-end to the preceding text segment; re-run on resize/font change.
+  padding-inline-end to the element preceding the later chord's anchor (text segment or previous anchor); re-run on resize/font change.
 - **B5** Line base direction: line.direction if set, else song.base_direction, else
   `dir="auto"` (first strong char). Song container uses `unicode-bidi:isolate`.
 - **B6** Chord-only lines (instrumental) follow the song direction for ordering of
@@ -56,8 +63,10 @@ entry). Never use copyrighted lyrics.
 Each item is a command or an assertion the evaluator checks; a missing item for a task in scope is a NEEDS FIXES.
 
 1. **textContent equality** — every `.chord` node's `textContent` === source chord string.
-2. **Anchor edge ≤ 2px** — chord box inline-start edge within 2px of its anchor's x for
-   the anchored grapheme (RTL: right edge). Runs in Playwright `chromium` AND `webkit`
+2. **Anchor edge ≤ 2px** — chord box inline-start edge within 2px of the anchored grapheme's
+   inline-start edge in that grapheme's direction (RTL letter: right edges; LTR letter: left
+   edges; neutral: line direction); an end-of-line chord aligns on the last grapheme's
+   inline-end edge in the line direction. Runs in Playwright `chromium` AND `webkit`
    (`pnpm --filter chord-render test:bidi`).
 3. **No overlap** — no two chord boxes on the same visual line intersect.
 4. **Mixed word order** — in `mixed_he_en`, "rock and roll" is visually LTR (word boxes increase in x).

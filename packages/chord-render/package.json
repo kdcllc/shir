@@ -4,13 +4,19 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./fonts.css": "./src/fonts.css"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:bidi": "playwright test -c playwright.config.ts"
   },
   "dependencies": {
+    "@fontsource/heebo": "catalog:",
+    "@fontsource/jetbrains-mono": "catalog:",
+    "@fontsource/noto-sans-hebrew": "catalog:",
+    "@fontsource/noto-serif-hebrew": "catalog:",
     "chord-core": "workspace:*"
   },
   "peerDependencies": {
@@ -18,15 +24,19 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@testing-library/dom": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
     "jsdom": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "test-fixtures": "workspace:*",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }
