@@ -47,7 +47,8 @@ Fixes, in order of preference:
 ## Linux: headless launch smoke needs a display
 
 The launch smoke (`scripts/smoke/smoke-launch.sh`) starts the real binary with `SHIR_SMOKE=1` and
-requires exit code 0 plus a `SHIR_READY` line. Without a display the binary cannot start, so on a
+requires exit code 0 plus a `SHIR_READY` line, which the app prints after the frontend emits
+`shir://ui-ready` (React mounted). Without a display the binary cannot start, so on a
 headless machine wrap the script in `xvfb-run`, as CI does:
 
 ```sh
@@ -64,3 +65,9 @@ version is used:
 ```sh
 corepack enable
 ```
+
+## Bidi tests: Playwright WebKit fails to launch
+
+`pnpm --filter chord-render test:bidi` needs the Playwright browsers and their host libraries. CI
+installs them with `pnpm --filter chord-render exec playwright install --with-deps chromium webkit`;
+run the same command once locally.
