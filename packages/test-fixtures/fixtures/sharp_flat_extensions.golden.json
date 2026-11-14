@@ -2,6 +2,15 @@
   "title": "אקורדים מורחבים",
   "lines": [
     {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "אקורדים מורחבים"
+    },
+    {
       "kind": "empty"
     },
     {

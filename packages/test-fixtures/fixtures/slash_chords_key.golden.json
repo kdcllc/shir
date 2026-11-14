@@ -1,0 +1,100 @@
+{
+  "title": "Slash Chords",
+  "direction": "ltr",
+  "key": "Bb",
+  "lines": [
+    {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "Slash Chords"
+    },
+    {
+      "kind": "meta",
+      "name": "key",
+      "value": "Bb"
+    },
+    {
+      "kind": "meta",
+      "name": "direction",
+      "value": "ltr"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "Walking down the lane",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Bb"
+        },
+        {
+          "index": 17,
+          "chord": "Eb"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "lyric": "Past the old stone wall",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Gm"
+        },
+        {
+          "index": 9,
+          "chord": "C/E"
+        },
+        {
+          "index": 19,
+          "chord": "F7"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "lyric": "Under silver rain",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am7/G"
+        },
+        {
+          "index": 6,
+          "chord": "F#m7b5"
+        },
+        {
+          "index": 13,
+          "chord": "Bbsus4"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "chords",
+      "chords": ["Bb", "Eb", "Gm", "F7"]
+    },
+    {
+      "kind": "lyric",
+      "lyric": "Silence for a bar",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "N.C."
+        },
+        {
+          "index": 14,
+          "chord": "Bb"
+        }
+      ]
+    }
+  ]
+}

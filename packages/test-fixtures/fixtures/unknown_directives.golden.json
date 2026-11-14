@@ -1,0 +1,81 @@
+{
+  "title": "מעורב Mixed",
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "מעורב Mixed"
+    },
+    {
+      "kind": "meta",
+      "name": "direction",
+      "value": "rtl"
+    },
+    {
+      "kind": "meta",
+      "name": "x_shir_mood",
+      "value": "calm"
+    },
+    {
+      "kind": "directive",
+      "name": "x_shir_note",
+      "value": "בדיקה חוזרת"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "number #1 yes",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "G"
+        },
+        {
+          "index": 10,
+          "chord": "C"
+        }
+      ]
+    },
+    {
+      "kind": "directive",
+      "name": "new_page"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "plain words {in braces} here",
+      "chords": []
+    },
+    {
+      "kind": "directive",
+      "name": "x_shir_gap",
+      "value": "4"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "another line",
+      "chords": []
+    },
+    {
+      "kind": "lyric",
+      "lyric": "  # indented hash is lyric",
+      "chords": []
+    },
+    {
+      "kind": "lyric",
+      "lyric": "שורה עם אקורד",
+      "chords": [
+        {
+          "index": 8,
+          "chord": "Am"
+        }
+      ]
+    }
+  ]
+}

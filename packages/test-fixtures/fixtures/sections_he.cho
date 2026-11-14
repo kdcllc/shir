@@ -1,0 +1,23 @@
+# Original text written for the Shir repository (CC0-1.0)
+{title: שיר הערב}
+{meta: direction rtl}
+{artist: להקת הדוגמה}
+{key: Am}
+{capo: 2}
+
+{start_of_verse: בית 1}
+[Am]הערב יורד על ה[G]נהר
+[F]והכוכבים עולים [E]לאט
+{end_of_verse}
+
+{start_of_chorus}
+[C]שירו איתי [G]שוב
+{end_of_chorus}
+
+{comment: חוזרים פעמיים}
+{comment_italic: בשקט}
+{comment_box: סולו בסוף}
+
+{start_of_bridge}
+[Dm]הרוח נושבת [Am]רחוק
+{end_of_bridge}

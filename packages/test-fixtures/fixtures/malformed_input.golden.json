@@ -1,0 +1,93 @@
+{
+  "title": "שורות שבורות",
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "שורות שבורות"
+    },
+    {
+      "kind": "meta",
+      "name": "direction",
+      "value": "rtl"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "chorus"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "שורה תקינה ראשונה",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am"
+        }
+      ]
+    },
+    {
+      "kind": "raw",
+      "text": "{title: unterminated"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "שורה תקינה אחרי כותרת",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "C"
+        }
+      ]
+    },
+    {
+      "kind": "raw",
+      "text": "[A unterminated chord"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "שורה תקינה אחרי אקורד",
+      "chords": []
+    },
+    {
+      "kind": "raw",
+      "text": "[]empty chord"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "שורה תקינה אחרונה",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "G"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "verse"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "בית שלא נסגר",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "F"
+        }
+      ]
+    }
+  ]
+}

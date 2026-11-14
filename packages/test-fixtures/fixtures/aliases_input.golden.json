@@ -1,0 +1,158 @@
+{
+  "title": "שיר כינויים",
+  "direction": "rtl",
+  "key": "Am",
+  "lines": [
+    {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "שיר כינויים"
+    },
+    {
+      "kind": "meta",
+      "name": "subtitle",
+      "value": "Aliases"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "Second Title"
+    },
+    {
+      "kind": "meta",
+      "name": "artist",
+      "value": "Someone Else"
+    },
+    {
+      "kind": "meta",
+      "name": "direction",
+      "value": "rtl"
+    },
+    {
+      "kind": "meta",
+      "name": "key",
+      "value": "Am"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "verse",
+      "label": "בית ראשון"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "שורה ראשונה כאן",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am"
+        },
+        {
+          "index": 12,
+          "chord": "G"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "verse"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "chorus"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "מקהלה קצרה",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "C"
+        },
+        {
+          "index": 6,
+          "chord": "F"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "chorus"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "verse",
+      "label": "בית 2"
+    },
+    {
+      "kind": "chords",
+      "chords": ["Am", "G"]
+    },
+    {
+      "kind": "chords",
+      "chords": ["Am", "G", "F"]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "verse"
+    },
+    {
+      "kind": "comment",
+      "style": "normal",
+      "text": "הערה רגילה"
+    },
+    {
+      "kind": "comment",
+      "style": "italic",
+      "text": "Italic note"
+    },
+    {
+      "kind": "comment",
+      "style": "box",
+      "text": "הערה בתיבה"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "tab"
+    },
+    {
+      "kind": "tab",
+      "text": "e|--0--|"
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "tab"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "grid"
+    },
+    {
+      "kind": "tab",
+      "text": "| Am | G |"
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "grid"
+    }
+  ]
+}
