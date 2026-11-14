@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { firstStrongDirection, splitGraphemes } from "chord-core";
-import type { SongModel, TextDirection } from "chord-core";
+import type { SongLine, SongModel, TextDirection } from "chord-core";
 import { readGolden } from "test-fixtures";
 import type { FixtureName } from "test-fixtures";
 
@@ -27,9 +27,24 @@ export function golden(name: FixtureName): SongModel {
   return readGolden(name) as SongModel;
 }
 
+/** True when SongView renders a `[data-line]` element for this golden line. */
+export function isRendered(l: SongLine): boolean {
+  return !(
+    l.kind === "meta" ||
+    l.kind === "remark" ||
+    l.kind === "directive" ||
+    (l.kind === "section" && l.edge === "end")
+  );
+}
+
+/** The golden lines that produce a `[data-line]` element, in order. */
+export function renderedLines(song: SongModel): SongLine[] {
+  return song.lines.filter(isRendered);
+}
+
 /** Direction the renderer resolves for a lyric line (amended B3 / B5). */
 export function lineDirection(song: SongModel, i: number): TextDirection {
-  const line = song.lines[i];
+  const line = renderedLines(song)[i];
   if (!line || line.kind !== "lyric") return song.direction ?? "ltr";
   return (
     line.direction ??
@@ -102,7 +117,7 @@ export async function measure(
   page: Page,
   song: SongModel,
 ): Promise<LineMeasure[]> {
-  const graphemes = song.lines.map((l) =>
+  const graphemes = renderedLines(song).map((l) =>
     l.kind === "lyric" ? splitGraphemes(l.lyric) : null,
   );
   return page.evaluate((all) => {
@@ -192,7 +207,7 @@ export function anchorEdgeErrors(
   lines: LineMeasure[],
 ): EdgeError[] {
   const errors: EdgeError[] = [];
-  song.lines.forEach((sl, i) => {
+  renderedLines(song).forEach((sl, i) => {
     const lm = lines[i];
     if (sl.kind !== "lyric" || !lm) return;
     const lineDir = lineDirection(song, i);
@@ -268,7 +283,7 @@ export function wrapReport(song: SongModel, lines: LineMeasure[]): WrapReport {
   let rows = 0;
   let misplaced = 0;
   let crossRow = 0;
-  song.lines.forEach((sl, i) => {
+  renderedLines(song).forEach((sl, i) => {
     const lm = lines[i];
     if (sl.kind !== "lyric" || !lm) return;
     rows = Math.max(rows, groupRows(lm.graphemes).length);
@@ -298,7 +313,7 @@ export function boxesBelowAnchor(
   lines: LineMeasure[],
 ): number {
   let n = 0;
-  song.lines.forEach((sl, i) => {
+  renderedLines(song).forEach((sl, i) => {
     const lm = lines[i];
     if (sl.kind !== "lyric" || !lm) return;
     for (const box of lm.boxes) {
@@ -371,7 +386,7 @@ export async function chordTexts(page: Page): Promise<string[]> {
 
 /** Golden chords in golden order (lyric anchors and chord-only lines). */
 export function goldenChords(song: SongModel): string[] {
-  return song.lines.flatMap((l) =>
+  return renderedLines(song).flatMap((l) =>
     l.kind === "lyric"
       ? l.chords.map((c) => c.chord)
       : l.kind === "chords"
