@@ -14,6 +14,9 @@ export default defineConfig({
   build: {
     target:
       process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
+    // Logical CSS must not be lowered to :lang() physical rules (BIDI B3/B8).
+    cssTarget:
+      process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari15",
     outDir: "dist",
   },
 });

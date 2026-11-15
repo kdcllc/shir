@@ -84,3 +84,10 @@ pnpm --filter chord-render test:bidi
 - Screenshot snapshots are named per platform; baselines are Linux-only. CI runs this step on
   `ubuntu-22.04` only and uploads `playwright-report/` on failure.
 - Unit and render tests (jsdom) run with `pnpm --filter chord-render test`.
+- `SongView` is also rendered by the desktop app (`apps/desktop/src/App.tsx`), not only by the harness.
+- The Vite dev server does not minify CSS, so `test:bidi` and `tauri dev` never exercise the production
+  CSS. The production desktop build keeps logical properties because `apps/desktop/vite.config.ts`
+  sets `build.cssTarget` (`safari15` on Linux, `chrome105` on Windows). Without it, Vite's CSS
+  minifier lowered logical properties to `:lang()`-guarded `left`/`right` rules and misplaced RTL
+  chord boxes. Guard: after `pnpm --filter desktop build`, `apps/desktop/dist/assets/*.css` must
+  contain no `:lang(`.

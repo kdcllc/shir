@@ -1,0 +1,26 @@
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin-block-end: 1rem;
+  color-scheme: light dark;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.artist {
+  margin: 0;
+  color: GrayText;
+}
+
+.meta {
+  margin: 0;
+}
+
+.label {
+  color: GrayText;
+}
