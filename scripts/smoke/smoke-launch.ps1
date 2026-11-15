@@ -70,13 +70,24 @@ try {
 }
 $sw.Stop()
 
-# ReadAllLines is one bulk read; a missing or unreadable file yields no lines.
+# Read each log through one shared-mode stream (FileShare.ReadWrite) so a process that
+# outlives the binary and still holds a redirected handle cannot break the read. A
+# missing or unreadable file yields no lines. ReadLine splits on CRLF, LF and CR.
 $lines = New-Object System.Collections.Generic.List[string]
 foreach ($f in @($outLog, $errLog)) {
+    $fs = $null
+    $sr = $null
     try {
-        $lines.AddRange([string[]][System.IO.File]::ReadAllLines($f))
+        $fs = [System.IO.File]::Open($f, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        $sr = New-Object System.IO.StreamReader($fs)
+        while ($null -ne ($line = $sr.ReadLine())) {
+            $lines.Add($line)
+        }
     } catch {
-        # no lines from this file
+        # no further lines from this file
+    } finally {
+        if ($null -ne $sr) { $sr.Dispose() }
+        if ($null -ne $fs) { $fs.Dispose() }
     }
 }
 

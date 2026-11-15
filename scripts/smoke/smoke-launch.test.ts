@@ -35,7 +35,8 @@ type StubKind =
   | "envecho"
   | "bigLog"
   | "nonexec"
-  | "ignoreTerm";
+  | "ignoreTerm"
+  | "lowercase";
 
 // Payload printed after the marker by the bigLog stub: 3000 CRLF lines of 100 x
 // (303 000 bytes), none equal to SHIR_READY.
@@ -62,6 +63,7 @@ function stub(kind: StubKind): string {
       "echo SHIR_READY\nhead -c 300000 /dev/zero | tr '\\0' x\necho\nexit 0",
     nonexec: "echo SHIR_READY\nexit 0",
     ignoreTerm: "trap '' TERM\nwhile :; do sleep 1; done",
+    lowercase: "echo shir_ready\nexit 0",
   };
   const win: Record<StubKind, string> = {
     ready: "echo SHIR_READY\r\nexit /b 0",
@@ -72,6 +74,7 @@ function stub(kind: StubKind): string {
     bigLog: `echo SHIR_READY\r\ntype "${join(dir, "biglog.txt")}"\r\nexit /b 0`,
     nonexec: "echo SHIR_READY\r\nexit /b 0",
     ignoreTerm: "exit /b 0", // POSIX-only case; never generated on Windows
+    lowercase: "echo shir_ready\r\nexit /b 0",
   };
   if (isWin) {
     if (kind === "bigLog")
@@ -201,6 +204,12 @@ function cases(run: Runner): void {
     },
     20_000,
   );
+
+  it("j: lowercase marker is not accepted", () => {
+    const r = run(stub("lowercase"));
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("smoke: FAIL - no SHIR_READY marker");
+  }, 20_000);
 }
 
 describe.skipIf(isWin)("smoke-launch.sh", () => {
