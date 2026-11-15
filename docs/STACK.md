@@ -51,11 +51,17 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | react-i18next                            | `react-i18next`                 | 18.0.1                                   | npm       | planned (G7)   |
 | SVGuitar                                 | `svguitar`                      | 2.10.1                                   | npm       | planned (G3)   |
 | Chord fingering data (HEAD commit)       | `tabsy-gr/chords-db`            | 43f8b4a7ba7b61b90bb48f8721ae918a4f421d64 | data      | planned (G3)   |
-| SQLite bindings (bundled)                | `rusqlite`                      | 0.42.0                                   | crate     | planned (G4)   |
-| Migrations (choice in G4)                | `rusqlite_migration`            | 2.7.0                                    | crate     | planned (G4)   |
-| Migrations (choice in G4)                | `refinery`                      | 0.10.0                                   | crate     | planned (G4)   |
-| Specta (rc, no stable 2.x release)       | `specta`                        | 2.0.0-rc.28                              | crate     | planned (G4)   |
-| tauri-specta (rc, no stable 2.x release) | `tauri-specta`                  | 2.0.0-rc.28                              | crate     | planned (G4)   |
+| SQLite bindings (bundled)                | `rusqlite`                      | 0.41.1                                   | crate     | installed (G4) |
+| Migrations (choice in G4)                | `rusqlite_migration`            | 2.7.0                                    | crate     | installed (G4) |
+| Migrations (choice in G4)                | `refinery`                      | 0.10.0                                   | crate     | not used (G4)  |
+| Specta (rc, no stable 2.x release)       | `specta`                        | 2.0.0-rc.28                              | crate     | installed (G4) |
+| tauri-specta (rc, no stable 2.x release) | `tauri-specta`                  | 2.0.0-rc.29                              | crate     | installed (G4) |
+| Specta TypeScript exporter               | `specta-typescript`             | 0.0.15                                   | crate     | installed (G4) |
+| UUID (v7 ids)                            | `uuid`                          | 1.29.2                                   | crate     | installed (G4) |
+| Time formatting                          | `time`                          | 0.3.55                                   | crate     | installed (G4) |
+| Unicode normalization                    | `unicode-normalization`         | 0.1.26                                   | crate     | installed (G4) |
+| Error derive                             | `thiserror`                     | 2.0.21                                   | crate     | installed (G4) |
+| Temp files (dev-dependency)              | `tempfile`                      | 3.27.0                                   | crate     | installed (G4) |
 | Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | installed (G1) |
 | WebdriverIO                              | `webdriverio`                   | 10.2.0                                   | npm       | planned (G1)   |
 | WDIO Tauri service                       | `@wdio/tauri-service`           | 1.5.1                                    | npm       | planned (G1)   |

@@ -1,3 +1,4 @@
+pub mod db;
 pub mod smoke;
 
 use std::io::Write;

@@ -22,6 +22,29 @@ interface StackRow {
 const INSTALLED = "installed (G0)";
 const INSTALLED_RE = /^installed \(G\d+\)$/;
 
+/** Packages with no stable release; an installed row may be a pre-release only if listed here. */
+export const PRERELEASE_ALLOWED = ["specta", "tauri-specta"];
+const PRERELEASE_RE = /-(alpha|beta|rc)/i;
+const PRERELEASE_NOTE = "rc, no stable";
+
+/** Installed rows that are pre-releases without being allowlisted and annotated. */
+function preReleaseProblems(rows: StackRow[]): string[] {
+  const problems: string[] = [];
+  for (const row of rows) {
+    if (!isInstalled(row.status) || !PRERELEASE_RE.test(row.version)) continue;
+    if (!PRERELEASE_ALLOWED.includes(row.pkg)) {
+      problems.push(
+        `${row.pkg}: pre-release ${row.version} is not allowlisted`,
+      );
+    } else if (!row.component.includes(PRERELEASE_NOTE)) {
+      problems.push(
+        `${row.pkg}: pre-release ${row.version} lacks '${PRERELEASE_NOTE}' note`,
+      );
+    }
+  }
+  return problems;
+}
+
 function isInstalled(status: string): boolean {
   return INSTALLED_RE.test(status);
 }
@@ -254,7 +277,22 @@ describe("STACK.md consistency with pnpm and cargo", () => {
   it("every installed crate row equals the Cargo.lock resolution", () => {
     const crateRows = installed.filter((r) => r.ecosystem === "crate");
     expect(crateRows.map((r) => r.pkg).sort()).toEqual(
-      ["serde", "serde_json", "tauri", "tauri-build"].sort(),
+      [
+        "rusqlite",
+        "rusqlite_migration",
+        "serde",
+        "serde_json",
+        "specta",
+        "specta-typescript",
+        "tauri",
+        "tauri-build",
+        "tauri-specta",
+        "tempfile",
+        "thiserror",
+        "time",
+        "unicode-normalization",
+        "uuid",
+      ].sort(),
     );
     for (const row of crateRows) {
       expect(cargoLock.get(row.pkg), `Cargo.lock ${row.pkg}`).toContain(
@@ -295,10 +333,38 @@ describe("STACK.md consistency with pnpm and cargo", () => {
     expect(mm("@tauri-apps/cli")).toBe(mm("tauri"));
   });
 
-  it("no installed row is a pre-release", () => {
-    for (const row of installed) {
-      expect(row.version, row.pkg).not.toMatch(/-(alpha|beta|rc)/i);
-    }
+  it("an installed pre-release must be allowlisted and annotated 'rc, no stable'", () => {
+    expect(preReleaseProblems(rows)).toEqual([]);
+    const preReleases = installed.filter((r) => PRERELEASE_RE.test(r.version));
+    expect(preReleases.map((r) => r.pkg).sort()).toEqual(
+      [...PRERELEASE_ALLOWED].sort(),
+    );
+  });
+
+  it("rejects an unlisted pre-release and a listed one without the note", () => {
+    const row = (
+      pkg: string,
+      component: string,
+      version: string,
+    ): StackRow => ({
+      component,
+      pkg,
+      version,
+      ecosystem: "crate",
+      status: "installed (G4)",
+    });
+    expect(
+      preReleaseProblems([row("foo", "Foo (rc, no stable)", "1.0.0-rc.1")]),
+    ).toEqual(["foo: pre-release 1.0.0-rc.1 is not allowlisted"]);
+    expect(
+      preReleaseProblems([row("specta", "Specta", "2.0.0-rc.28")]),
+    ).toEqual(["specta: pre-release 2.0.0-rc.28 lacks 'rc, no stable' note"]);
+    expect(
+      preReleaseProblems([
+        row("specta", "Specta (rc, no stable 2.x release)", "2.0.0-rc.28"),
+        row("serde", "Serde", "1.0.229"),
+      ]),
+    ).toEqual([]);
   });
 
   it("no version cell uses a range, wildcard or 'latest'", () => {
