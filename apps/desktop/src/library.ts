@@ -1,3 +1,4 @@
+import { parseSong } from "chord-core";
 import type { Diagnostic, SongModel } from "chord-core";
 
 /** Library group; `samples` come first, then `test-songs`. */
@@ -26,9 +27,13 @@ export interface LibrarySong {
  * non-empty; otherwise `undefined`.
  */
 export function songMeta(song: SongModel, name: string): string | undefined {
-  void song;
-  void name;
-  throw new Error("not implemented");
+  for (const line of song.lines) {
+    if (line.kind === "meta" && line.name === name) {
+      const value = line.value.trim();
+      if (value !== "") return value;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -39,17 +44,55 @@ export function buildLibrary(
   sources: Readonly<Record<string, string>>,
   group: SongGroup,
 ): LibrarySong[] {
-  void sources;
-  void group;
-  throw new Error("not implemented");
+  const entries: LibrarySong[] = [];
+  for (const [path, source] of Object.entries(sources)) {
+    const fileName = path.slice(path.lastIndexOf("/") + 1);
+    if (!fileName.endsWith(".cho") || fileName.endsWith(".canonical.cho")) {
+      continue;
+    }
+    const baseName = fileName.slice(0, -".cho".length);
+    const { song, diagnostics } = parseSong(source);
+    const title = song.title?.trim() || baseName;
+    const artist = songMeta(song, "artist");
+    const entry: LibrarySong = {
+      id: `${group}:${baseName}`,
+      group,
+      fileName,
+      title,
+      song,
+      diagnostics,
+    };
+    if (artist !== undefined) entry.artist = artist;
+    entries.push(entry);
+  }
+  return entries.sort((a, b) =>
+    a.fileName < b.fileName ? -1 : a.fileName > b.fileName ? 1 : 0,
+  );
 }
+
+const sampleSources = import.meta.glob("../../../samples/*.cho", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+const testSongSources = import.meta.glob(
+  "../../../packages/test-fixtures/fixtures/*.cho",
+  { query: "?raw", import: "default", eager: true },
+) as Record<string, string>;
+
+let library: LibrarySong[] | undefined;
 
 /**
  * The bundled library: `samples/*.cho` (group `samples`) followed by
  * `packages/test-fixtures/fixtures/*.cho` (group `test-songs`).
  */
 export function loadLibrary(): LibrarySong[] {
-  throw new Error("not implemented");
+  library ??= [
+    ...buildLibrary(sampleSources, "samples"),
+    ...buildLibrary(testSongSources, "test-songs"),
+  ];
+  return library;
 }
 
 /**
@@ -57,6 +100,14 @@ export function loadLibrary(): LibrarySong[] {
  * integer in 13..24.
  */
 export function capoOptions(songCapo: number | undefined): number[] {
-  void songCapo;
-  throw new Error("not implemented");
+  const options = Array.from({ length: 13 }, (_, i) => i);
+  if (
+    songCapo !== undefined &&
+    Number.isInteger(songCapo) &&
+    songCapo >= 13 &&
+    songCapo <= 24
+  ) {
+    options.push(songCapo);
+  }
+  return options;
 }
