@@ -44,7 +44,7 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | Serde                                    | `serde`                         | 1.0.229                                  | crate     | installed (G0) |
 | Serde JSON                               | `serde_json`                    | 1.0.154                                  | crate     | installed (G0) |
 | ChordSheetJS                             | `chordsheetjs`                  | 18.0.0                                   | npm       | removed (G2)   |
-| fast-check                               | `fast-check`                    | 4.10.2                                   | npm       | planned (G2)   |
+| fast-check                               | `fast-check`                    | 4.10.2                                   | npm       | planned        |
 | Zustand                                  | `zustand`                       | 5.1.0                                    | npm       | planned (G7)   |
 | TanStack Router                          | `@tanstack/react-router`        | 1.170.46                                 | npm       | planned (G7)   |
 | i18next                                  | `i18next`                       | 27.1.1                                   | npm       | planned (G7)   |

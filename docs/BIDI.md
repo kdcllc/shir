@@ -22,6 +22,12 @@ implemented in `packages/chord-core` and `packages/chord-render`. The normative 
 - **B10** Niqqud stays with its base letter (the anchor wraps the whole grapheme cluster); the font
   stack is Noto Sans Hebrew, Heebo, sans-serif.
 
+Non-lyric lines: `SongView` renders `comment` as `<p data-line="comment" data-style dir="auto">`, a
+section start as `<p data-line="section" data-section dir="auto">` showing the label or else the
+section name, `tab` as `<p data-line="tab" dir="ltr">`, and `raw` as `<p data-line="raw" dir="auto">`,
+all as plain text. `meta`, `remark`, `directive` and section ends render nothing. Chord symbols
+(`<bdi dir="ltr">`) appear only in lyric and chord-only lines.
+
 B7–B9 (editor, UI chrome, importer) are not part of the G1 rendering spike.
 
 ## Overlap pass (B4)
@@ -45,10 +51,10 @@ B7–B9 (editor, UI chrome, importer) are not part of the G1 rendering spike.
   of a text: Hebrew/Arabic letters give `rtl`, other letters `ltr`; digits, punctuation, spaces and
   marks are skipped; `null` if there is no strong character. Explicit marks count like `dir="auto"`:
   RLM (U+200F) and ALM (U+061C) give `rtl`, LRM (U+200E) gives `ltr`.
-- `parseSong` (`packages/chord-core/src/song.ts`) reads the song direction from the `{meta: direction
-rtl|ltr}` metadata, falling back to the plain `{direction: rtl|ltr}` tag that ChordSheetJS 18 does
-  not treat as metadata. Values are case-insensitive; other values, or conflicting repeats, give no
-  song direction.
+- `parseSong` (`packages/chord-core/src/song.ts`) returns a `ParseResult`. The song direction is on
+  `song.direction`, read from every `direction` meta line in either form (`{meta: direction v}` or
+  `{direction: v}`), trimmed and lower-cased. Only `rtl` and `ltr` count; any invalid or conflicting
+  value leaves it absent. See `docs/CHORDPRO.md` `## Song fields`.
 
 ## Fonts
 

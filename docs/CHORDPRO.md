@@ -42,7 +42,7 @@ The parser is a line-oriented parser written in chord-core. It uses no parsing l
 - `comment`/`c` give a `comment` line with style `normal`; `comment_italic`/`ci` give `italic`; `comment_box`/`cb` give `box`. The text is the value, or `""`.
 - `start_of_X` and `end_of_X` for any `X` matching `[a-z0-9_]+` give a `section` line, as do the aliases `soc`/`eoc` (chorus), `sov`/`eov` (verse), `sob`/`eob` (bridge), `sot`/`eot` (tab) and `sog`/`eog` (grid).
   - On a start tag, the label is the value. When the value has the form `label="…"`, the label is the quoted text; any other attribute form keeps the whole value as the label.
-  - There is no `label` key when there is no value.
+  - There is no `label` key when there is no value. An empty quoted label (`label=""`) also gives no `label` key.
   - An end tag never has a label; a value on an end tag is dropped (see `## Normalizations`).
 - Literal sections are `tab`, `grid`, `abc`, `ly`, `textblock` and `svg`. After their start tag, every line up to and including the first line whose whitespace-trimmed form is a valid matching end tag (long form or alias, any name case) is either that end tag or `tab`. An indented `  {end_of_tab}` therefore closes the section; it is saved as `{end_of_tab}`, per the whitespace normalization.
 - Every other tag gives a `directive` line.
@@ -122,6 +122,9 @@ These are every case where `serializeSong(parseSong(x).song) !== x`, listed expl
 - The inner name of `{meta: N v}` is lowercased (`{meta: Direction rtl}` becomes `{meta: direction rtl}`).
 - Every `\r` directly before a `\n` is stripped, not only one: `a\r\r\n` becomes `a\n` (follow-up #4).
 - Chord-only lines are re-joined with exactly one space between chords. This inserts a space in `[Am][G]` to give `[Am] [G]`; leading and trailing whitespace is dropped.
+- an empty quoted label (`label=""`) is the same as no label: `{start_of_X: label=""}` becomes `{start_of_X}`.
+- U+FEFF (byte-order mark) counts as whitespace in every rule above, as in JavaScript `trim()`: it is dropped around a tag or its value (`﻿{title: x}` becomes `{title: x}`), on a whitespace-only line, and around the chords of a chord-only line; inside other lyric and `raw` lines, and in `remark` and `tab` lines, it is kept.
+- no-value forms follow the same rules: `{direction}` (no colon) becomes `{meta: direction}`, and `{meta: title}` (an inner `META_NAMES` name with no value) becomes `{title}`.
 
 Everything else, including `#` inside lyrics and `{…}` text inside a lyric line, is preserved byte-exactly.
 
