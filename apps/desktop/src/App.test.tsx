@@ -42,7 +42,8 @@ describe("App", () => {
   it("renders the Shir heading", () => {
     render(<App />);
     const h1 = screen.getByRole("heading", { level: 1 });
-    expect(h1.textContent).toContain("Shir");
+    expect(h1.textContent).toBe("Shir · שיר");
+    expect(h1).toHaveAttribute("data-ui-chrome");
     expect(h1.querySelector("bdi")).toHaveAttribute("lang", "he");
   });
 
@@ -70,6 +71,20 @@ describe("App", () => {
     expect(screen.getByTestId("song-title").textContent).toBe(entry.title);
     expect(screen.getByTestId("capo-select")).toHaveValue("2");
     expect(screen.getByTestId("capo-value").textContent).toBe("2");
+  });
+
+  it("switching to a capo-less song resets capo to 0", () => {
+    const lib = loadLibrary();
+    const withCapo = lib.find((s) => s.song.capo === 2);
+    const without = lib.find((s) => s.song.capo === undefined);
+    expect(withCapo).toBeDefined();
+    expect(without).toBeDefined();
+    render(<App />);
+    pickSong(withCapo!.id);
+    expect(screen.getByTestId("capo-select")).toHaveValue("2");
+    pickSong(without!.id);
+    expect(screen.getByTestId("capo-select")).toHaveValue("0");
+    expect(screen.queryByTestId("capo-value")).toBeNull();
   });
 
   it("transpose +1 renders the chords viewSong predicts", () => {

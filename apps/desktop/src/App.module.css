@@ -9,7 +9,14 @@
   min-block-size: 0;
   padding-block: 1rem;
   padding-inline: 1rem;
-  border-inline-end: 1px solid color-mix(in srgb, currentcolor 20%, transparent);
+  border-inline-end: 1px solid GrayText;
+}
+
+@supports (color: color-mix(in srgb, red, blue)) {
+  .sidebar {
+    border-inline-end: 1px solid
+      color-mix(in srgb, currentcolor 20%, transparent);
+  }
 }
 
 .heading {

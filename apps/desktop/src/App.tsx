@@ -47,8 +47,9 @@ export function App() {
   return (
     <div className={styles.root}>
       <div className={styles.sidebar}>
-        <h1 className={styles.heading}>
-          {STRINGS.appName} · <bdi lang="he">{STRINGS.appNameHebrew}</bdi>
+        <h1 className={styles.heading} data-ui-chrome>
+          {STRINGS.appName} {STRINGS.separator}{" "}
+          <bdi lang="he">{STRINGS.appNameHebrew}</bdi>
         </h1>
         <SongList songs={songs} selectedId={selectedId} onSelect={select} />
       </div>
