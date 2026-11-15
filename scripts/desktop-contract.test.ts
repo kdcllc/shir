@@ -136,19 +136,53 @@ const CLOSE = "\u0002";
 const EXPR = "\u0003";
 
 /**
- * Collapses every innermost `{…}` without markup to a placeholder (JSX expression, attribute
- * value, code block). A brace group that contains JSX (`<`) is kept, with its braces
- * replaced by markers, so literal text nested in `cond ? (<p>Hello</p>) : …` is still scanned.
+ * Replaces every `{…}` with balanced-brace scanning (nested braces, JSX inside braces). A group
+ * without markup collapses to a placeholder (JSX expression, attribute value, code block). A
+ * group that contains JSX (`<`) is kept, scanned recursively, between OPEN/CLOSE markers so
+ * literal text nested in `cond ? (<p>Hello</p>) : …` is still found.
  */
 function stripBraces(text: string): string {
-  let out = text;
-  for (;;) {
-    const next = out.replace(/\{([^{}]*)\}/g, (_m, inner: string) =>
-      inner.includes("<") ? `${OPEN}${inner}${CLOSE}` : EXPR,
-    );
-    if (next === out) return out;
-    out = next;
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch !== "{") {
+      out += ch;
+      i += 1;
+      continue;
+    }
+    let depth = 1;
+    let j = i + 1;
+    while (j < text.length && depth > 0) {
+      if (text[j] === "{") depth += 1;
+      else if (text[j] === "}") depth -= 1;
+      j += 1;
+    }
+    if (depth > 0) {
+      out += text.slice(i);
+      break;
+    }
+    const inner = text.slice(i + 1, j - 1);
+    out += inner.includes("<") ? `${OPEN}${stripBraces(inner)}${CLOSE}` : EXPR;
+    i = j;
   }
+  return out;
+}
+
+/** The part of a `>…<` run that sits outside any kept brace group (its JSX text). */
+function outsideBraces(run: string): string {
+  const firstOpen = run.indexOf(OPEN);
+  const firstClose = run.indexOf(CLOSE);
+  // A run that starts inside a kept group meets its CLOSE before any OPEN.
+  let depth =
+    firstClose >= 0 && (firstOpen < 0 || firstClose < firstOpen) ? 1 : 0;
+  let text = "";
+  for (const ch of run) {
+    if (ch === OPEN) depth += 1;
+    else if (ch === CLOSE) depth = Math.max(0, depth - 1);
+    else if (depth === 0) text += ch;
+  }
+  return text;
 }
 
 /** Files whose JSX text (between `>` and `<`, outside `{…}`) holds 3+ Latin letters. */
@@ -158,10 +192,12 @@ function checkJsxText(sources: Source[]): string[] {
     const code = stripBraces(text);
     for (const m of code.matchAll(/(?<![=?])>([^<>]*)</g)) {
       // Ignore HTML entities and the `return (` / `) : (` residue of JSX control flow.
-      if (m[1]!.includes(OPEN) || m[1]!.includes(CLOSE)) continue;
-      const visible = m[1]!.replace(/&#?\w+;/g, "").replace(/\breturn\b/g, "");
+      const jsxText = outsideBraces(m[1]!);
+      const visible = jsxText
+        .replace(/&#?\w+;/g, "")
+        .replace(/\breturn\b/g, "");
       if (/[A-Za-z]{3}/.test(visible))
-        problems.push(`${file}: ${JSON.stringify(m[1]!.trim())}`);
+        problems.push(`${file}: ${JSON.stringify(jsxText.trim())}`);
     }
   }
   return problems;
@@ -205,6 +241,11 @@ describe("(d) self-tests", () => {
     expect(
       checkJsxText([{ file: "t.tsx", text: "{ok ? (<p>Hello</p>) : null}" }]),
     ).toEqual(['t.tsx: "Hello"']);
+    expect(
+      checkJsxText([
+        { file: "j.tsx", text: "<p>{cond ? <b>x</b> : null} Hello</p>" },
+      ]),
+    ).toEqual(['j.tsx: "Hello"']);
   });
 
   it("(b) parser reads values and the table parser drops header rows", () => {

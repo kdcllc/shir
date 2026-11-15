@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseSong } from "chord-core";
 import { buildLibrary, capoOptions, loadLibrary, songMeta } from "./library";
@@ -149,6 +151,12 @@ describe("capoOptions", () => {
   });
 });
 
+function choCount(dirUrl: string): number {
+  return readdirSync(fileURLToPath(new URL(dirUrl, import.meta.url))).filter(
+    (n) => n.endsWith(".cho") && !n.endsWith(".canonical.cho"),
+  ).length;
+}
+
 describe("loadLibrary", () => {
   const lib = loadLibrary();
   const samples = lib.filter((s) => s.group === "samples");
@@ -159,7 +167,13 @@ describe("loadLibrary", () => {
     const firstTest = lib.map((s) => s.group).indexOf("test-songs");
     expect(samples.length).toBeGreaterThan(0);
     expect(lastSample).toBeLessThan(firstTest);
-    expect(lib.length).toBe(samples.length + tests.length);
+    const samplesOnDisk = choCount("../../../samples");
+    const fixturesOnDisk = choCount("../../../packages/test-fixtures/fixtures");
+    expect(samplesOnDisk).toBeGreaterThan(0);
+    expect(fixturesOnDisk).toBeGreaterThan(0);
+    expect(samples.length).toBe(samplesOnDisk);
+    expect(tests.length).toBe(fixturesOnDisk);
+    expect(lib.length).toBe(samplesOnDisk + fixturesOnDisk);
     expect(lib.map((s) => s.id)).toContain("samples:demo-shir-bilingual");
   });
 

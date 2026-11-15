@@ -40,6 +40,22 @@ describe("App integration: every bundled song", () => {
     expect(library.length).toBeGreaterThan(1);
   });
 
+  it("covers key, capo and diagnostics branches", () => {
+    const diagCount = (e: (typeof library)[number]): number =>
+      e.diagnostics.length +
+      viewSong(e.song, { capo: e.song.capo ?? 0 }).diagnostics.length;
+    expect(
+      library.some(
+        (e) =>
+          viewSong(e.song, { capo: e.song.capo ?? 0 }).soundingKey !==
+          undefined,
+      ),
+    ).toBe(true);
+    expect(library.some((e) => (e.song.capo ?? 0) > 0)).toBe(true);
+    expect(library.some((e) => diagCount(e) > 0)).toBe(true);
+    expect(library.some((e) => diagCount(e) === 0)).toBe(true);
+  });
+
   it.each(library.map((e) => [e.id, e] as const))("%s", (_id, entry) => {
     render(<App />);
     const index = library.findIndex((s) => s.id === entry.id);
