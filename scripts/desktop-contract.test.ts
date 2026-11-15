@@ -107,8 +107,16 @@ describe("(b) docs/DESKTOP.md strings", () => {
     rows.map((r) => [stripTicks(r[0]!), stripTicks(r[1]!)]),
   );
 
-  it("parses 15 STRINGS keys", () => {
-    expect(Object.keys(strings)).toHaveLength(15);
+  it("parsed STRINGS keys match an independent line count", () => {
+    const source = read("apps/desktop/src/strings.ts");
+    const literal = /export const STRINGS = \{([\s\S]*?)\} as const/.exec(
+      source,
+    )?.[1];
+    const lineCount = (literal ?? "")
+      .split(/\r?\n/)
+      .filter((l) => /^\s+\w+: "/.test(l)).length;
+    expect(lineCount).toBeGreaterThan(0);
+    expect(Object.keys(strings)).toHaveLength(lineCount);
   });
 
   it("every STRINGS key is in the table with the same value", () => {

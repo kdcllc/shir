@@ -15,6 +15,9 @@ export const STRINGS = {
   diagnostics: "Diagnostics",
   noSongSelected: "Select a song",
   noKey: "No key",
+  separator: "·",
+  transposeDownGlyph: "−",
+  transposeUpGlyph: "+",
 } as const;
 
 /** Diagnostics heading count: `1 problem`, otherwise `N problems`. */
