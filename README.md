@@ -19,7 +19,7 @@ Windows 10/11. It is a Tauri 2 + React 19 desktop app in a pnpm monorepo.
 ```sh
 corepack enable
 pnpm install --frozen-lockfile
-pnpm tauri dev            # run the desktop app with the Vite dev server
+pnpm tauri dev            # run the desktop app (song viewer) with the Vite dev server
 pnpm tauri build --debug  # debug build and bundles
 ```
 
@@ -44,7 +44,7 @@ __libc_pthread_init`. The snap terminal leaks `GTK_PATH`, `LOCPATH`, `GIO_MODULE
 
 ## Repository layout
 
-- `apps/desktop` — Tauri 2 + React 19 + Vite desktop app (Rust side in `apps/desktop/src-tauri`).
+- `apps/desktop` — Tauri 2 + React 19 + Vite desktop app (Rust side in `apps/desktop/src-tauri`). The frontend is the desktop song viewer: a bundled library of every `.cho` song in `samples/` and the test fixtures, a transpose/capo view and a diagnostics panel; file open is not supported yet. Spec in [`docs/DESKTOP.md`](docs/DESKTOP.md).
 - `packages/chord-core` — shared chord logic package (text-direction and grapheme helpers, ChordPro parse and canonical save, chord transpose and capo view; spec in [`docs/CHORDPRO.md`](docs/CHORDPRO.md)).
 - `packages/chord-render` — shared React chord-sheet rendering package (`ChordSymbol`, `ChordLine`, `SongView`, `computeOverlapPadding`).
 - `packages/test-fixtures` — shared fixture package.
@@ -101,5 +101,6 @@ Copyrighted lyrics and chord charts are never committed.
 
 - [`docs/BIDI.md`](docs/BIDI.md)
 - [`docs/CHORDPRO.md`](docs/CHORDPRO.md)
+- [`docs/DESKTOP.md`](docs/DESKTOP.md)
 - [`docs/STACK.md`](docs/STACK.md)
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
