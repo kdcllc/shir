@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { STRINGS } from "../strings";
 import styles from "./ViewControls.module.css";
 
@@ -26,6 +27,7 @@ export function ViewControls({
   onCapo,
   onReset,
 }: ViewControlsProps) {
+  const capoId = useId();
   return (
     <div data-ui-chrome className={styles.controls}>
       <div className={styles.group}>
@@ -40,7 +42,7 @@ export function ViewControls({
               onTranspose(Math.min(MAX_TRANSPOSE, transpose - 1));
           }}
         >
-          &minus;
+          {STRINGS.transposeDownGlyph}
         </button>
         <bdi dir="ltr" data-testid="transpose-value" className={styles.value}>
           {formatTranspose(transpose)}
@@ -55,15 +57,15 @@ export function ViewControls({
               onTranspose(Math.max(-MAX_TRANSPOSE, transpose + 1));
           }}
         >
-          +
+          {STRINGS.transposeUpGlyph}
         </button>
       </div>
       <div className={styles.group}>
-        <label htmlFor="capo-select" className={styles.label}>
+        <label htmlFor={capoId} className={styles.label}>
           {STRINGS.capo}
         </label>
         <select
-          id="capo-select"
+          id={capoId}
           data-testid="capo-select"
           value={capo}
           onChange={(e) => onCapo(Number(e.target.value))}

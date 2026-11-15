@@ -3,9 +3,15 @@
   padding-block: 0.5rem;
   padding-inline: 0.75rem;
   border: 1px solid GrayText;
-  border-inline-start: 4px solid Mark;
+  border-inline-start: 4px solid GrayText;
   border-radius: 0.375rem;
   color-scheme: light dark;
+}
+
+@supports (color: Mark) {
+  .panel {
+    border-inline-start: 4px solid Mark;
+  }
 }
 
 .heading {

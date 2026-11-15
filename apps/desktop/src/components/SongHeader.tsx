@@ -1,3 +1,4 @@
+import { firstStrongDirection } from "chord-core";
 import { STRINGS } from "../strings";
 import styles from "./SongHeader.module.css";
 
@@ -15,7 +16,11 @@ export function SongHeader({
   capo,
 }: SongHeaderProps) {
   return (
-    <header data-testid="song-header" className={styles.header}>
+    <header
+      data-testid="song-header"
+      dir={firstStrongDirection(title) ?? undefined}
+      className={styles.header}
+    >
       <h2 dir="auto" data-testid="song-title" className={styles.title}>
         {title}
       </h2>
@@ -24,7 +29,7 @@ export function SongHeader({
           {artist}
         </p>
       )}
-      <p className={styles.meta}>
+      <p dir="ltr" className={styles.meta}>
         <span className={styles.label}>{STRINGS.key}</span>{" "}
         <span data-testid="sounding-key">
           {soundingKey !== undefined ? (

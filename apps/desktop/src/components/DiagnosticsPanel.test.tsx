@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { Diagnostic } from "chord-core";
+import { STRINGS, diagnosticsCount } from "../strings";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 
 const d = (line: number, column: number, message: string): Diagnostic => ({
@@ -26,6 +27,20 @@ describe("DiagnosticsPanel", () => {
     expect(screen.getByRole("heading").textContent).toContain("1 problem");
     expect(screen.getByRole("heading").textContent).not.toContain("problems");
   });
+
+  it.each([1, 2])(
+    "renders the heading with the STRINGS separator for n=%i",
+    (n) => {
+      render(
+        <DiagnosticsPanel
+          diagnostics={Array.from({ length: n }, (_, i) => d(i + 1, 1, "x"))}
+        />,
+      );
+      expect(screen.getByRole("heading").textContent).toBe(
+        `${STRINGS.diagnostics} ${STRINGS.separator} ${diagnosticsCount(n)}`,
+      );
+    },
+  );
 
   it("renders plural count and items in input order", () => {
     render(

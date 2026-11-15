@@ -11,7 +11,8 @@ export function DiagnosticsPanel({ diagnostics }: DiagnosticsPanelProps) {
   return (
     <section data-testid="diagnostics" data-ui-chrome className={styles.panel}>
       <h3 className={styles.heading}>
-        {STRINGS.diagnostics} · {diagnosticsCount(diagnostics.length)}
+        {STRINGS.diagnostics} {STRINGS.separator}{" "}
+        {diagnosticsCount(diagnostics.length)}
       </h3>
       <ul className={styles.items}>
         {diagnostics.map((d, i) => (

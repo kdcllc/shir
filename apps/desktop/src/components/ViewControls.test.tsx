@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { STRINGS } from "../strings";
 import { ViewControls, type ViewControlsProps } from "./ViewControls";
 
 const OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -96,6 +97,38 @@ describe("ViewControls", () => {
     expect(select.value).toBe("14");
     expect(Array.from(select.options).map((o) => o.value)).toEqual(
       [...OPTIONS, 14].map(String),
+    );
+  });
+
+  it("gives each instance a unique capo select id with its own label", () => {
+    const base = {
+      transpose: 0,
+      capo: 0,
+      capoOptions: OPTIONS,
+      onTranspose: vi.fn(),
+      onCapo: vi.fn(),
+      onReset: vi.fn(),
+    };
+    render(
+      <>
+        <ViewControls {...base} />
+        <ViewControls {...base} />
+      </>,
+    );
+    const selects = screen.getAllByLabelText("Capo");
+    expect(selects).toHaveLength(2);
+    expect(selects).toEqual(screen.getAllByTestId("capo-select"));
+    expect(selects[0]!.id).not.toBe("");
+    expect(selects[0]!.id).not.toBe(selects[1]!.id);
+  });
+
+  it("renders the transpose glyphs from STRINGS", () => {
+    setup();
+    expect(screen.getByTestId("transpose-down").textContent).toBe(
+      STRINGS.transposeDownGlyph,
+    );
+    expect(screen.getByTestId("transpose-up").textContent).toBe(
+      STRINGS.transposeUpGlyph,
     );
   });
 

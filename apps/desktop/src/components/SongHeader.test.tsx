@@ -52,6 +52,24 @@ describe("SongHeader", () => {
     expect(screen.getByTestId("song-artist").textContent).toBe("אמן");
   });
 
+  it("sets the header direction from the first strong character of the title", () => {
+    const { unmount } = render(<SongHeader title="שיר ראשון" capo={0} />);
+    expect(screen.getByTestId("song-header")).toHaveAttribute("dir", "rtl");
+    unmount();
+    const second = render(<SongHeader title="Alpha" capo={0} />);
+    expect(screen.getByTestId("song-header")).toHaveAttribute("dir", "ltr");
+    second.unmount();
+    render(<SongHeader title="123" capo={0} />);
+    expect(screen.getByTestId("song-header")).not.toHaveAttribute("dir");
+  });
+
+  it("keeps the key/capo meta line ltr", () => {
+    render(<SongHeader title="שיר" soundingKey="C" capo={2} />);
+    const meta = screen.getByTestId("sounding-key").parentElement!;
+    expect(meta.tagName).toBe("P");
+    expect(meta).toHaveAttribute("dir", "ltr");
+  });
+
   it("contains no inline style attributes", () => {
     const { container } = render(
       <SongHeader title="A" artist="B" soundingKey="C" capo={1} />,

@@ -43,7 +43,13 @@
 }
 
 .item:hover {
-  background: color-mix(in srgb, CanvasText 8%, Canvas);
+  background: ButtonFace;
+}
+
+@supports (color: color-mix(in srgb, CanvasText 8%, Canvas)) {
+  .item:hover {
+    background: color-mix(in srgb, CanvasText 8%, Canvas);
+  }
 }
 
 .item:focus-visible {
@@ -53,8 +59,14 @@
 
 .item[aria-current="true"] {
   border-color: Highlight;
-  background: color-mix(in srgb, Highlight 15%, Canvas);
+  background: Canvas;
   font-weight: 600;
+}
+
+@supports (color: color-mix(in srgb, Highlight 15%, Canvas)) {
+  .item[aria-current="true"] {
+    background: color-mix(in srgb, Highlight 15%, Canvas);
+  }
 }
 
 .title {
