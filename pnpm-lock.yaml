@@ -51,9 +51,6 @@ catalogs:
     '@vitejs/plugin-react':
       specifier: 6.3.0
       version: 6.3.0
-    chordsheetjs:
-      specifier: 18.0.0
-      version: 18.0.0
     eslint:
       specifier: 10.14.0
       version: 10.14.0
@@ -206,10 +203,6 @@ importers:
         version: 5.1.0(@types/node@26.6.6)(jsdom@31.0.0)(vite@8.3.8(@types/node@26.6.6))
 
   packages/chord-core:
-    dependencies:
-      chordsheetjs:
-        specifier: 'catalog:'
-        version: 18.0.0
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -992,15 +985,6 @@ packages:
   chai@6.3.0:
     resolution: {integrity: sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==}
     engines: {node: '>=18'}
-
-  chordsheetjs@18.0.0:
-    resolution: {integrity: sha512-i5ElOU6I9ra5BEc1hfMwMnl67xnsVYs2C4eg7Mbs4BiVP9gdvjjCFutJ/I4MBZR3sBEHqmK+ug+X80YPdk48Iw==}
-    engines: {node: '>=16'}
-    peerDependencies:
-      jspdf: ^4.0.0
-    peerDependenciesMeta:
-      jspdf:
-        optional: true
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -2652,8 +2636,6 @@ snapshots:
   caniuse-lite@1.0.30001826: {}
 
   chai@6.3.0: {}
-
-  chordsheetjs@18.0.0: {}
 
   color-convert@2.0.1:
     dependencies:

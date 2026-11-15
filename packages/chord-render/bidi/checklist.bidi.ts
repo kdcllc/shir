@@ -8,6 +8,7 @@ import {
   chordTexts,
   fontsInUse,
   golden,
+  renderedLines,
   goldenChords,
   measure,
   open,
@@ -100,7 +101,7 @@ test.describe("checklist 3", () => {
 test("checklist 4 mixed word order", async ({ page }) => {
   await open(page, "mixed_he_en", { width: 720 });
   const song = golden("mixed_he_en");
-  const idx = song.lines.findIndex(
+  const idx = renderedLines(song).findIndex(
     (l) => l.kind === "lyric" && l.lyric.includes("rock"),
   );
   const words = await wordRects(page, idx);
@@ -144,7 +145,7 @@ test("checklist 6 print CSS", async ({ page }) => {
 test("B6 chord-only line order", async ({ page }) => {
   await open(page, "chord_only_line", { width: 720 });
   const song = golden("chord_only_line");
-  const idx = song.lines.findIndex((l) => l.kind === "chords");
+  const idx = renderedLines(song).findIndex((l) => l.kind === "chords");
   const chords = await page.evaluate((i) => {
     const line = document.querySelectorAll("[data-line]")[i];
     return [...(line?.querySelectorAll(".chord") ?? [])].map((e) => ({
@@ -152,7 +153,7 @@ test("B6 chord-only line order", async ({ page }) => {
       x: e.getBoundingClientRect().x,
     }));
   }, idx);
-  const line = song.lines[idx];
+  const line = renderedLines(song)[idx];
   if (!line || line.kind !== "chords") throw new Error("no chord line");
   expect(chords.map((c) => c.text)).toEqual(line.chords);
   for (let i = 1; i < chords.length; i++) {

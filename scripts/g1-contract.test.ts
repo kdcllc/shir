@@ -16,7 +16,6 @@ const unquote = (s: string): string => s.replace(/^["']|["']$/g, "");
 // ---- (a) STACK rows -------------------------------------------------------
 
 const G1_PACKAGES = [
-  "chordsheetjs",
   "@playwright/test",
   "@fontsource/noto-sans-hebrew",
   "@fontsource/noto-serif-hebrew",
@@ -101,10 +100,17 @@ describe("(a) STACK rows for G1 packages", () => {
     expect(checkG1Rows(rows, catalog)).toEqual([]);
   });
 
-  it("covers chordsheetjs, playwright and 4 fontsource packages", () => {
-    expect(G1_PACKAGES).toHaveLength(6);
+  it("covers playwright and 4 fontsource packages", () => {
+    expect(G1_PACKAGES).toHaveLength(5);
     for (const p of G1_PACKAGES)
       expect(rows.some((r) => r.pkg === p)).toBe(true);
+  });
+
+  it("chordsheetjs is removed (G2): STACK row says so and the catalog has no entry", () => {
+    expect(rows.find((r) => r.pkg === "chordsheetjs")?.status).toBe(
+      "removed (G2)",
+    );
+    expect("chordsheetjs" in catalog).toBe(false);
   });
 
   it("self-test: detects wrong status, ecosystem, version drift and missing row", () => {
@@ -312,7 +318,7 @@ describe("(d) ci.yml Linux-only Playwright wiring", () => {
   });
 });
 
-// ---- (e) no Formatter use; chordsheetjs only in song.ts --------------------
+// ---- (e) no Formatter use; no chordsheetjs import anywhere ------------------
 
 const SCAN_ROOTS = [
   "packages/chord-core/src",
@@ -336,25 +342,24 @@ function walk(dir: string, out: string[] = []): string[] {
 const FORMATTER_RE = /[A-Za-z]*Formatter\b/;
 // Value imports only: `typeof import("chordsheetjs")` type queries do not count.
 const CSJS_IMPORT_RE =
-  /(?:from\s+|(?<!typeof\s+)import\s*\(\s*|require\s*\(\s*)["']chordsheetjs["']/;
+  /(?:from\s+|(?<!typeof\s+)import\s*\(\s*|import\s+|require\s*\(\s*)["']chordsheetjs["']/;
 
 interface Source {
   file: string;
   text: string;
 }
-/** Files with a *Formatter use, and files importing chordsheetjs other than `allowed`. */
-function checkSources(sources: Source[], allowed: string): string[] {
+/** Files with a *Formatter use, and files importing chordsheetjs. */
+function checkSources(sources: Source[]): string[] {
   const problems: string[] = [];
   for (const { file, text } of sources) {
     if (FORMATTER_RE.test(text)) problems.push(`${file}: Formatter`);
-    if (CSJS_IMPORT_RE.test(text) && file !== allowed)
+    if (CSJS_IMPORT_RE.test(text))
       problems.push(`${file}: imports chordsheetjs`);
   }
   return problems;
 }
 
-describe("(e) no *Formatter use; chordsheetjs confined to chord-core song.ts", () => {
-  const ALLOWED = "packages/chord-core/src/song.ts";
+describe("(e) no *Formatter use; no chordsheetjs import anywhere", () => {
   const sources: Source[] = SCAN_ROOTS.flatMap((root) =>
     walk(path.join(repoRoot, root)).map((abs) => ({
       file: path.relative(repoRoot, abs).split(path.sep).join("/"),
@@ -365,36 +370,32 @@ describe("(e) no *Formatter use; chordsheetjs confined to chord-core song.ts", (
 
   it("scans a non-trivial file set including song.ts", () => {
     expect(sources.length).toBeGreaterThan(10);
-    expect(sources.some((s) => s.file === ALLOWED)).toBe(true);
-  });
-
-  it("finds no Formatter and no other chordsheetjs importer", () => {
-    expect(checkSources(sources, ALLOWED)).toEqual([]);
-  });
-
-  it("song.ts is the importer of chordsheetjs", () => {
-    const song = sources.find((s) => s.file === ALLOWED);
-    expect(song && CSJS_IMPORT_RE.test(song.text)).toBe(true);
-  });
-
-  it("self-test: detects Formatter use and a stray chordsheetjs import", () => {
     expect(
-      checkSources([{ file: "a.ts", text: "new TextFormatter()" }], ALLOWED),
+      sources.some((s) => s.file === "packages/chord-core/src/song.ts"),
+    ).toBe(true);
+  });
+
+  it("finds no Formatter and no chordsheetjs importer", () => {
+    expect(checkSources(sources)).toEqual([]);
+  });
+
+  it("self-test: detects Formatter use and a chordsheetjs import", () => {
+    expect(
+      checkSources([{ file: "a.ts", text: "new TextFormatter()" }]),
     ).toEqual(["a.ts: Formatter"]);
     expect(
-      checkSources(
-        [{ file: "b.ts", text: 'import x from "chordsheetjs";' }],
-        ALLOWED,
-      ),
+      checkSources([{ file: "b.ts", text: 'import x from "chordsheetjs";' }]),
     ).toEqual(["b.ts: imports chordsheetjs"]);
     expect(
-      checkSources(
-        [{ file: ALLOWED, text: 'import { P } from "chordsheetjs";' }],
-        ALLOWED,
-      ),
-    ).toEqual([]);
+      checkSources([
+        { file: "song.ts", text: 'import { P } from "chordsheetjs";' },
+      ]),
+    ).toEqual(["song.ts: imports chordsheetjs"]);
     expect(
-      checkSources([{ file: "c.ts", text: "const formatted = 1;" }], ALLOWED),
+      checkSources([{ file: "d.ts", text: 'import "chordsheetjs";' }]),
+    ).toEqual(["d.ts: imports chordsheetjs"]);
+    expect(
+      checkSources([{ file: "c.ts", text: "const formatted = 1;" }]),
     ).toEqual([]);
   });
 });

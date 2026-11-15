@@ -45,8 +45,8 @@ __libc_pthread_init`. The snap terminal leaks `GTK_PATH`, `LOCPATH`, `GIO_MODULE
 ## Repository layout
 
 - `apps/desktop` — Tauri 2 + React 19 + Vite desktop app (Rust side in `apps/desktop/src-tauri`).
-- `packages/chord-core` — shared chord logic package (currently the text direction and grapheme helpers).
-- `packages/chord-render` — shared React chord-sheet rendering package (currently `ChordSymbol`).
+- `packages/chord-core` — shared chord logic package (text-direction and grapheme helpers, ChordPro parse and canonical save, chord transpose and capo view; spec in [`docs/CHORDPRO.md`](docs/CHORDPRO.md)).
+- `packages/chord-render` — shared React chord-sheet rendering package (`ChordSymbol`, `ChordLine`, `SongView`, `computeOverlapPadding`).
 - `packages/test-fixtures` — shared fixture package.
 - `scripts` — repo scripts and cross-workspace contract tests, including `scripts/smoke`.
 - `samples` — original sample songs and their `LICENSES.md`.
@@ -100,5 +100,6 @@ Copyrighted lyrics and chord charts are never committed.
 ## More documentation
 
 - [`docs/BIDI.md`](docs/BIDI.md)
+- [`docs/CHORDPRO.md`](docs/CHORDPRO.md)
 - [`docs/STACK.md`](docs/STACK.md)
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)

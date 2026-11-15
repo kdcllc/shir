@@ -1,0 +1,28 @@
+# Original text written for the Shir repository (CC0-1.0)
+{title: שיר כינויים}
+{subtitle: Aliases}
+{title: Second Title}
+{artist: Someone Else}
+{meta: direction rtl}
+{key: Am}
+
+{start_of_verse: בית ראשון}
+[Am]שורה ראשונה [G]כאן
+{end_of_verse}
+{start_of_chorus}
+[C]מקהלה [F]קצרה
+{end_of_chorus}
+{start_of_verse: בית 2}
+[Am] [G]
+[Am] [G] [F]
+
+{end_of_verse}
+{comment: הערה רגילה}
+{comment_italic: Italic note}
+{comment_box: הערה בתיבה}
+{start_of_tab}
+e|--0--|
+{end_of_tab}
+{start_of_grid}
+| Am | G |
+{end_of_grid}

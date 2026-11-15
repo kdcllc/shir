@@ -50,7 +50,7 @@ function mount() {
       <>
         <nav data-ui-chrome="">Shir harness chrome</nav>
         <main data-harness="" style={{ inlineSize: `${widthPx}px` }}>
-          <SongView song={parseSong(src)} />
+          <SongView song={parseSong(src).song} />
         </main>
       </>,
     );

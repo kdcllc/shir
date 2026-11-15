@@ -1,0 +1,32 @@
+[
+  {
+    "line": 5,
+    "column": 1,
+    "code": "section-unopened",
+    "message": "end_of_chorus without an open section"
+  },
+  {
+    "line": 7,
+    "column": 1,
+    "code": "syntax",
+    "message": "Malformed directive"
+  },
+  {
+    "line": 9,
+    "column": 1,
+    "code": "syntax",
+    "message": "Unterminated chord"
+  },
+  {
+    "line": 11,
+    "column": 1,
+    "code": "syntax",
+    "message": "Empty chord"
+  },
+  {
+    "line": 14,
+    "column": 1,
+    "code": "section-unclosed",
+    "message": "verse section is not closed"
+  }
+]

@@ -3,6 +3,20 @@
   "direction": "rtl",
   "lines": [
     {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "צפוף"
+    },
+    {
+      "kind": "meta",
+      "name": "direction",
+      "value": "rtl"
+    },
+    {
       "kind": "empty"
     },
     {

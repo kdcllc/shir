@@ -2,10 +2,15 @@ import { readdirSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  ALL_FIXTURE_NAMES,
   FIXTURE_NAMES,
+  ROUNDTRIP_FIXTURE_NAMES,
+  canonicalPath,
   fixturePath,
   goldenPath,
   isFixtureName,
+  readCanonical,
+  readDiagnostics,
   readFixture,
   readGolden,
   type FixtureName,
@@ -88,12 +93,13 @@ function finalFormErrors(text: string): string[] {
 }
 
 describe("fixture files", () => {
-  it("directory holds exactly the 16 expected files", () => {
+  it("directory holds exactly the expected files", () => {
     const dir = dirname(fixturePath("he_plain"));
-    const expected = FIXTURE_NAMES.flatMap((n) => [
-      `${n}.cho`,
-      `${n}.golden.json`,
-    ]).sort();
+    const expected = [
+      ...ALL_FIXTURE_NAMES.flatMap((n) => [`${n}.cho`, `${n}.golden.json`]),
+      "aliases_input.canonical.cho",
+      "malformed_input.diagnostics.json",
+    ].sort();
     expect(readdirSync(dir).sort()).toEqual(expected);
   });
   it("goldenPath resolves and rejects unknown names", () => {
@@ -104,7 +110,7 @@ describe("fixture files", () => {
     ).toBe(true);
     expect(() => goldenPath("nope" as FixtureName)).toThrow(TypeError);
   });
-  it.each([...FIXTURE_NAMES])(
+  it.each([...ALL_FIXTURE_NAMES])(
     "%s: files exist, licence line, one trailing newline",
     (n) => {
       const src = readFixture(n);
@@ -116,7 +122,7 @@ describe("fixture files", () => {
       expect(Array.isArray(golden(n).lines)).toBe(true);
     },
   );
-  it.each([...FIXTURE_NAMES])(
+  it.each([...ALL_FIXTURE_NAMES])(
     "%s: anchor indices valid and non-decreasing",
     (n) => {
       for (const l of lyricLines(n)) {
@@ -132,7 +138,7 @@ describe("fixture files", () => {
       }
     },
   );
-  it.each([...FIXTURE_NAMES])("%s: Hebrew final-form discipline", (n) => {
+  it.each([...ALL_FIXTURE_NAMES])("%s: Hebrew final-form discipline", (n) => {
     for (const l of lyricLines(n)) {
       expect(finalFormErrors(l.lyric ?? "")).toEqual([]);
     }
@@ -178,5 +184,83 @@ describe("fixture files", () => {
     );
     expect(l).toBeDefined();
     expect(anchors(l as GLine).length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+// Copy of chord-core's LINE_KINDS (packages/chord-core/src/model.ts). test-fixtures
+// must not import chord-core (chord-core devDepends on this package); the chord-core
+// tests (task 06 R3) guard this copy against drift.
+const LINE_KINDS_COPY = [
+  "lyric",
+  "chords",
+  "empty",
+  "meta",
+  "comment",
+  "section",
+  "tab",
+  "remark",
+  "directive",
+  "raw",
+] as const;
+
+describe("round-trip fixtures", () => {
+  it("freezes the six round-trip names in order", () => {
+    expect([...ROUNDTRIP_FIXTURE_NAMES]).toEqual([
+      "sections_he",
+      "tab_block",
+      "unknown_directives",
+      "slash_chords_key",
+      "aliases_input",
+      "malformed_input",
+    ]);
+    expect([...ALL_FIXTURE_NAMES]).toEqual([
+      ...FIXTURE_NAMES,
+      ...ROUNDTRIP_FIXTURE_NAMES,
+    ]);
+    expect(isFixtureName("tab_block")).toBe(true);
+  });
+  it("canonicalPath uses .canonical.cho when present, else the fixture", () => {
+    expect(
+      canonicalPath("aliases_input")
+        .replaceAll("\\", "/")
+        .endsWith("fixtures/aliases_input.canonical.cho"),
+    ).toBe(true);
+    expect(canonicalPath("he_plain")).toBe(fixturePath("he_plain"));
+    expect(readCanonical("he_plain")).toBe(readFixture("he_plain"));
+    expect(readCanonical("aliases_input")).not.toBe(
+      readFixture("aliases_input"),
+    );
+    expect(() => canonicalPath("nope" as FixtureName)).toThrow(TypeError);
+    expect(() => readCanonical("nope" as FixtureName)).toThrow(TypeError);
+  });
+  it("readDiagnostics returns the file or []", () => {
+    expect(readDiagnostics("he_plain")).toEqual([]);
+    const d = readDiagnostics("malformed_input") as { code: string }[];
+    expect(d.map((x) => x.code)).toEqual([
+      "section-unopened",
+      "syntax",
+      "syntax",
+      "syntax",
+      "section-unclosed",
+    ]);
+    expect(() => readDiagnostics("nope" as FixtureName)).toThrow(TypeError);
+  });
+  it("aliases_input.cho is stored with LF endings only", () => {
+    expect(readFixture("aliases_input")).not.toContain("\r");
+  });
+  it("goldens cover all ten line kinds", () => {
+    const seen = new Set(
+      ROUNDTRIP_FIXTURE_NAMES.flatMap((n) =>
+        golden(n).lines.map((l) => l.kind),
+      ),
+    );
+    for (const k of LINE_KINDS_COPY) expect(seen.has(k)).toBe(true);
+    expect(LINE_KINDS_COPY).toHaveLength(10);
+  });
+  it("raw goldens come from malformed_input", () => {
+    const rawOwners = ROUNDTRIP_FIXTURE_NAMES.filter((n) =>
+      golden(n).lines.some((l) => l.kind === "raw"),
+    );
+    expect(rawOwners).toEqual(["malformed_input"]);
   });
 });

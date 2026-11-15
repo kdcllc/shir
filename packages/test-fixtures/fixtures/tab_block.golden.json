@@ -1,0 +1,105 @@
+{
+  "title": "Tab Block",
+  "direction": "ltr",
+  "lines": [
+    {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "Tab Block"
+    },
+    {
+      "kind": "meta",
+      "name": "direction",
+      "value": "ltr"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "tab"
+    },
+    {
+      "kind": "tab",
+      "text": "e|--0--3--5--|"
+    },
+    {
+      "kind": "tab",
+      "text": "B|--1--3--5--|"
+    },
+    {
+      "kind": "tab",
+      "text": "  G|-0--2--4--|"
+    },
+    {
+      "kind": "tab",
+      "text": ""
+    },
+    {
+      "kind": "tab",
+      "text": "# open strings {start_of_verse}"
+    },
+    {
+      "kind": "tab",
+      "text": "{comment: not a comment}"
+    },
+    {
+      "kind": "tab",
+      "text": "D|--0--0--0--|"
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "tab"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "Back to the words again",
+      "chords": [
+        {
+          "index": 12,
+          "chord": "C"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "tab"
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "tab"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "edge": "start",
+      "section": "grid"
+    },
+    {
+      "kind": "tab",
+      "text": "| Am . . . | C . . . |"
+    },
+    {
+      "kind": "tab",
+      "text": "| F . . . | G . . . |"
+    },
+    {
+      "kind": "section",
+      "edge": "end",
+      "section": "grid"
+    }
+  ]
+}
