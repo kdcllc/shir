@@ -70,14 +70,22 @@ try {
 }
 $sw.Stop()
 
-$lines = @()
+# ReadAllLines is one bulk read; a missing or unreadable file yields no lines.
+$lines = New-Object System.Collections.Generic.List[string]
 foreach ($f in @($outLog, $errLog)) {
-    $lines += @(Get-Content -LiteralPath $f -ErrorAction SilentlyContinue)
+    try {
+        $lines.AddRange([string[]][System.IO.File]::ReadAllLines($f))
+    } catch {
+        # no lines from this file
+    }
 }
 
 if ($reason -eq '') {
-    $ready = @($lines | Where-Object { $_.TrimEnd("`r") -ceq 'SHIR_READY' })
-    if ($ready.Count -eq 0) {
+    $found = $false
+    foreach ($l in $lines) {
+        if ($l.TrimEnd("`r") -ceq 'SHIR_READY') { $found = $true; break }
+    }
+    if (-not $found) {
         $reason = 'no SHIR_READY marker'
     }
 }
