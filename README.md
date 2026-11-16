@@ -95,12 +95,15 @@ See [`docs/BIDI.md`](docs/BIDI.md).
 
 Every file under `samples/` must be original work written for this repository, or verified
 public domain with its source recorded in [`samples/LICENSES.md`](samples/LICENSES.md).
-Copyrighted lyrics and chord charts are never committed.
+Copyrighted lyrics and chord charts are never committed. A new song under `samples/` also
+needs an entry in `apps/desktop/src-tauri/tests/golden/extract.json`, derived from chord-core
+(see [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)).
 
 ## More documentation
 
 - [`docs/BIDI.md`](docs/BIDI.md)
 - [`docs/CHORDPRO.md`](docs/CHORDPRO.md)
+- [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)
 - [`docs/DESKTOP.md`](docs/DESKTOP.md)
 - [`docs/STACK.md`](docs/STACK.md)
 - [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)

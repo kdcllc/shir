@@ -149,7 +149,7 @@ Every exported function of chord-core:
 ## Unicode
 
 - Lyric codepoints are never normalized (no NFC). Niqqud order is preserved.
-- Normalization is a DB and search concern, not a chord-core concern.
+- Normalization is a DB and search concern, not a chord-core concern; see [`DATA_MODEL.md`](DATA_MODEL.md).
 
 ## Chords and transpose
 
