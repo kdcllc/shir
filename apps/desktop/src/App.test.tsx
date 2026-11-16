@@ -378,6 +378,168 @@ describe("App database mode", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("ignores a stale getSong rejection that settles after a newer song loaded", async () => {
+    await renderDb();
+    let rejectAlpha!: (e: Error) => void;
+    vi.mocked(getSong).mockImplementation((id) =>
+      id === "a"
+        ? new Promise<Song>((_ok, fail) => (rejectAlpha = fail))
+        : Promise.resolve(stored(id, DB_SONGS[id]!)),
+    );
+    fireEvent.click(screen.getByText("Alpha"));
+    fireEvent.click(screen.getByText("Beta"));
+    await waitFor(() =>
+      expect(screen.getByTestId("song-title").textContent).toBe("Beta"),
+    );
+    rejectAlpha(new Error("late failure"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByTestId("song-title").textContent).toBe("Beta");
+    expect(screen.queryByText(STRINGS.songLoadFailed)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("passes a search hit missing from the library to the header", async () => {
+    await renderDb();
+    vi.mocked(getSong).mockImplementation((id) =>
+      Promise.resolve(
+        stored(
+          id,
+          id === "z" ? "{title: Stored Title}\n[C]Zeta" : DB_SONGS[id]!,
+        ),
+      ),
+    );
+    vi.mocked(searchSongs).mockResolvedValue([
+      { song: summary("z", "Zeta Hit", "Zed Artist"), snippet: null },
+    ]);
+    fireEvent.change(screen.getByTestId("search-input"), {
+      target: { value: "zeta" },
+    });
+    await screen.findByTestId("search-results");
+    fireEvent.click(screen.getByText("Zeta Hit"));
+    await waitFor(() =>
+      expect(screen.getByTestId("song-title").textContent).toBe("Zeta Hit"),
+    );
+    expect(screen.getByTestId("song-artist").textContent).toBe("Zed Artist");
+  });
+
+  it("selects the bundled-first song's title match on launch", async () => {
+    const demo = loadLibrary()[0]!;
+    vi.mocked(listSongs).mockResolvedValue([
+      ...DB_LIST,
+      summary("demo-db", demo.title),
+    ]);
+    vi.mocked(getSong).mockImplementation((id) =>
+      Promise.resolve(
+        stored(id, id === "demo-db" ? "{title: Demo}\n[C]x" : DB_SONGS[id]!),
+      ),
+    );
+    render(<App />);
+    await screen.findByTestId("song-title");
+    expect(getSong).toHaveBeenCalledExactlyOnceWith("demo-db");
+    const current = screen
+      .getAllByTestId("song-item")
+      .filter((el) => el.getAttribute("aria-current") === "true");
+    expect(current).toHaveLength(1);
+    expect(current[0]!.textContent).toContain(demo.title);
+  });
+
+  it("falls back to the first sorted song when no title matches", async () => {
+    await renderDb();
+    expect(getSong).toHaveBeenCalledExactlyOnceWith("c");
+  });
+
+  describe("search pending status", () => {
+    function pending() {
+      return screen.getByTestId("search-pending");
+    }
+
+    it("is a persistent empty polite live region hidden in print", async () => {
+      await renderDb();
+      expect(pending()).toHaveAttribute("role", "status");
+      expect(pending()).toHaveAttribute("data-ui-chrome");
+      expect(pending().textContent).toBe("");
+    });
+
+    it("is absent in bundled mode", async () => {
+      await renderBundled();
+      expect(screen.queryByTestId("search-pending")).toBeNull();
+    });
+
+    it("says Searching while debouncing and loading, then clears on results", async () => {
+      await renderDb();
+      let resolve!: (h: SearchHit[]) => void;
+      vi.mocked(searchSongs).mockImplementation(
+        () => new Promise<SearchHit[]>((r) => (resolve = r)),
+      );
+      fireEvent.change(screen.getByTestId("search-input"), {
+        target: { value: "line" },
+      });
+      expect(pending().textContent).toBe(STRINGS.searching);
+      await waitFor(() => expect(searchSongs).toHaveBeenCalledTimes(1));
+      expect(pending().textContent).toBe(STRINGS.searching);
+      resolve([hit("a", "Alpha", null)]);
+      await screen.findByTestId("search-results");
+      expect(pending().textContent).toBe("");
+      expect(screen.getByTestId("search-results")).not.toHaveAttribute(
+        "aria-busy",
+      );
+    });
+
+    it("keeps previous results visible and busy while a new query is pending", async () => {
+      await renderDb();
+      vi.mocked(searchSongs).mockResolvedValue([hit("a", "Alpha", null)]);
+      const input = screen.getByTestId("search-input");
+      fireEvent.change(input, { target: { value: "alp" } });
+      await screen.findByTestId("search-results");
+      expect(pending().textContent).toBe("");
+
+      let resolve!: (h: SearchHit[]) => void;
+      vi.mocked(searchSongs).mockImplementation(
+        () => new Promise<SearchHit[]>((r) => (resolve = r)),
+      );
+      fireEvent.change(input, { target: { value: "alph" } });
+      expect(pending().textContent).toBe(STRINGS.searching);
+      expect(screen.getByTestId("search-results")).toHaveAttribute(
+        "aria-busy",
+        "true",
+      );
+      expect(titles()).toEqual(["Alpha"]);
+      await waitFor(() => expect(searchSongs).toHaveBeenCalledTimes(2));
+      expect(screen.getByTestId("search-results")).toHaveAttribute(
+        "aria-busy",
+        "true",
+      );
+      resolve([hit("a", "Alpha", null)]);
+      await waitFor(() => expect(pending().textContent).toBe(""));
+      expect(screen.getByTestId("search-results")).not.toHaveAttribute(
+        "aria-busy",
+      );
+    });
+
+    it("clears when the query is cleared, on no results and on an error", async () => {
+      await renderDb();
+      const input = screen.getByTestId("search-input");
+      fireEvent.change(input, { target: { value: "x" } });
+      expect(pending().textContent).toBe(STRINGS.searching);
+      fireEvent.change(input, { target: { value: "" } });
+      expect(pending().textContent).toBe("");
+
+      vi.mocked(searchSongs).mockResolvedValue([]);
+      fireEvent.change(input, { target: { value: "zzz" } });
+      await screen.findByTestId("search-empty");
+      expect(pending().textContent).toBe("");
+
+      vi.mocked(searchSongs).mockRejectedValue(new Error("fts"));
+      fireEvent.change(input, { target: { value: "boom" } });
+      await waitFor(() =>
+        expect(
+          within(screen.getByRole("navigation")).getByRole("alert"),
+        ).toBeInTheDocument(),
+      );
+      expect(pending().textContent).toBe("");
+    });
+  });
+
   it("replaces the list with ranked hits, keeps the query on select, Esc restores", async () => {
     await renderDb();
     vi.mocked(searchSongs).mockResolvedValue([

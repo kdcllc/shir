@@ -22,6 +22,7 @@ export const STRINGS = {
   // prettier-ignore
   searchUnavailable: "Search unavailable: the song library could not be opened. Showing bundled songs.",
   loadingLibrary: "Loading songs…",
+  searching: "Searching…",
   libraryEmpty: "No songs in the library",
   songLoadFailed: "Could not open this song",
   noKey: "No key",

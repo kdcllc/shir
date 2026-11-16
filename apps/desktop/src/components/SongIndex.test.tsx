@@ -107,4 +107,41 @@ describe("SongIndex", () => {
     fireEvent.click(screen.getByText("Gamma"));
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("c");
   });
+
+  it("marks only the results list aria-busy when busy", () => {
+    const { rerender } = render(
+      <SongIndex
+        variant="results"
+        items={items}
+        selectedId={undefined}
+        busy
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("search-results")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    rerender(
+      <SongIndex
+        variant="results"
+        items={items}
+        selectedId={undefined}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("search-results")).not.toHaveAttribute(
+      "aria-busy",
+    );
+    rerender(
+      <SongIndex
+        variant="library"
+        items={items}
+        selectedId={undefined}
+        busy
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("song-index")).not.toHaveAttribute("aria-busy");
+  });
 });

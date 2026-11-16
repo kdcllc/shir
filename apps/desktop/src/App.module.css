@@ -45,3 +45,10 @@
   color: GrayText;
   overflow-wrap: anywhere;
 }
+
+.status {
+  margin-block: 0.25rem 0;
+  min-block-size: 1.25rem;
+  font-size: 0.85rem;
+  color: GrayText;
+}

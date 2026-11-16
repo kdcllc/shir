@@ -19,20 +19,25 @@ function hit(id: string): SearchHit {
 }
 
 describe("sortByTitle", () => {
-  it("sorts Hebrew and English titles with base sensitivity and numeric order", () => {
-    const input = [
-      summary("1", "תודה"),
-      summary("2", "Song 10"),
-      summary("3", "אהבה"),
-      summary("4", "Song 2"),
-      summary("5", "banana"),
-      summary("6", "Apple"),
-    ];
-    expect(sortByTitle(input).map((s) => s.title)).toEqual([
+  const order = (items: SongSummary[]) =>
+    sortByTitle(items).map((s) => s.title);
+
+  it("orders Hebrew titles among themselves", () => {
+    expect(order([summary("1", "תודה"), summary("2", "אהבה")])).toEqual([
       "אהבה",
       "תודה",
+    ]);
+  });
+
+  it("orders Latin titles with base sensitivity", () => {
+    expect(order([summary("1", "banana"), summary("2", "Apple")])).toEqual([
       "Apple",
       "banana",
+    ]);
+  });
+
+  it("orders numbers numerically", () => {
+    expect(order([summary("1", "Song 10"), summary("2", "Song 2")])).toEqual([
       "Song 2",
       "Song 10",
     ]);

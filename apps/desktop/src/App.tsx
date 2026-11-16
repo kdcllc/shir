@@ -32,25 +32,34 @@ interface Current {
   diagnostics: Diagnostic[];
 }
 
+const loadingMode = (): Mode => "loading";
+const noSummaries = (): SongSummary[] => [];
+const noId = (): string | undefined => undefined;
+const noCurrent = (): Current | undefined => undefined;
+const idle = (): SearchState => ({ status: "idle" });
+const noList = (): SummaryList | undefined => undefined;
+const noSearch = (): DebouncedSearch | undefined => undefined;
+const newIndex = (): SummaryIndex => new Map();
+
 function toItem(s: SongSummary): SongIndexItem {
   return { id: s.id, title: s.title, artist: s.artist };
 }
 
 export function App() {
   const bundled = useMemo(() => loadLibrary(), []);
-  const [mode, setMode] = useState("loading" as Mode);
-  const [summaries, setSummaries] = useState([] as SongSummary[]);
-  const [selectedId, setSelectedId] = useState(undefined as string | undefined);
-  const [dbCurrent, setDbCurrent] = useState(undefined as Current | undefined);
+  const [mode, setMode] = useState(loadingMode);
+  const [summaries, setSummaries] = useState(noSummaries);
+  const [selectedId, setSelectedId] = useState(noId);
+  const [dbCurrent, setDbCurrent] = useState(noCurrent);
   const [loadFailed, setLoadFailed] = useState(false);
   const [transpose, setTranspose] = useState(0);
   const [capo, setCapo] = useState(0);
   const [query, setQuery] = useState("");
-  const [search, setSearch] = useState({ status: "idle" } as SearchState);
+  const [search, setSearch] = useState(idle);
   const request = useRef(0);
-  const listing = useRef(undefined as SummaryList | undefined);
-  const debounced = useRef(undefined as DebouncedSearch | undefined);
-  const knownHits = useRef(new Map() as SummaryIndex);
+  const listing = useRef(noList());
+  const debounced = useRef(noSearch());
+  const knownHits = useRef(newIndex());
 
   const selectDb = useCallback((id: string, summary?: SongSummary) => {
     const token = ++request.current;
@@ -95,7 +104,8 @@ export function App() {
         const sorted = sortByTitle(list);
         setSummaries(sorted);
         setMode("db");
-        const first = sorted[0];
+        const demoTitle = bundled[0]?.title;
+        const first = sorted.find((s) => s.title === demoTitle) ?? sorted[0];
         if (first) selectDb(first.id, first);
       },
       () => {
@@ -153,6 +163,12 @@ export function App() {
     setCapo(song?.capo ?? 0);
   };
 
+  const trimmed = query.trim();
+  const settled =
+    (search.status === "done" || search.status === "error") &&
+    search.query === trimmed;
+  const pending = trimmed !== "" && !settled;
+
   const hitItems: SongIndexItem[] =
     search.status === "done"
       ? search.hits.map((h) => ({ ...toItem(h.song), snippet: h.snippet }))
@@ -201,6 +217,14 @@ export function App() {
         {showDb && (
           <>
             <SearchBox value={query} onChange={onQuery} />
+            <p
+              role="status"
+              className={styles.status}
+              data-testid="search-pending"
+              data-ui-chrome
+            >
+              {pending ? STRINGS.searching : ""}
+            </p>
             <nav
               aria-label={STRINGS.songList}
               data-testid="song-list"
@@ -214,6 +238,7 @@ export function App() {
               {showHits && (
                 <SongIndex
                   variant="results"
+                  busy={pending}
                   items={hitItems}
                   selectedId={selectedId}
                   onSelect={pickDb}
