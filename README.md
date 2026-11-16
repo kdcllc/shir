@@ -44,7 +44,7 @@ __libc_pthread_init`. The snap terminal leaks `GTK_PATH`, `LOCPATH`, `GIO_MODULE
 
 ## Repository layout
 
-- `apps/desktop` — Tauri 2 + React 19 + Vite desktop app (Rust side in `apps/desktop/src-tauri`). The frontend is the desktop song viewer: a searchable SQLite library seeded on first run from the bundled `.cho` songs (`samples/` plus the test fixtures), with niqqud-insensitive search. When the database cannot be opened, the app falls back to a read-only bundled library. The viewer also has a transpose/capo view and a diagnostics panel; file open is not supported yet. Spec in [`docs/DESKTOP.md`](docs/DESKTOP.md).
+- `apps/desktop` — Tauri 2 + React 19 + Vite desktop app (Rust side in `apps/desktop/src-tauri`). The frontend is the desktop song viewer: a searchable SQLite library seeded on first run from the bundled `.cho` songs (`samples/` plus the test fixtures), with niqqud-insensitive search. When the database cannot be opened, the app falls back to a read-only bundled library. The viewer also has a transpose/capo view and a diagnostics panel, and, in database mode, a ChordPro editor with live preview: New song, Edit, paste or convert chords-over-lyrics text, and Open files… to import `.cho`, `.chopro`, `.chordpro` and `.txt` files (RTL chord sheets go through an alignment review). Spec in [`docs/DESKTOP.md`](docs/DESKTOP.md).
 - `packages/chord-core` — shared chord logic package (text-direction and grapheme helpers, ChordPro parse and canonical save, chord transpose and capo view; spec in [`docs/CHORDPRO.md`](docs/CHORDPRO.md)).
 - `packages/chord-render` — shared React chord-sheet rendering package (`ChordSymbol`, `ChordLine`, `SongView`, `computeOverlapPadding`).
 - `packages/test-fixtures` — shared fixture package.
