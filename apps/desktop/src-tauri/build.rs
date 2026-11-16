@@ -15,6 +15,7 @@ fn main() {
             "list_songs",
             "delete_song",
             "search_songs",
+            "read_text_file",
             "log_webview_error",
         ]));
 

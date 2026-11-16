@@ -43,6 +43,8 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | Tauri JS API                             | `@tauri-apps/api`               | 2.12.4                                   | npm       | installed (G0) |
 | Tauri core                               | `tauri`                         | 2.12.5                                   | crate     | installed (G0) |
 | Tauri build script                       | `tauri-build`                   | 2.7.4                                    | crate     | installed (G0) |
+| Tauri dialog plugin                      | `tauri-plugin-dialog`           | 2.8.4                                    | crate     | installed (G6) |
+| Tauri dialog plugin JS                   | `@tauri-apps/plugin-dialog`     | 2.8.4                                    | npm       | installed (G6) |
 | Serde                                    | `serde`                         | 1.0.229                                  | crate     | installed (G0) |
 | Serde JSON                               | `serde_json`                    | 1.0.154                                  | crate     | installed (G0) |
 | ChordSheetJS                             | `chordsheetjs`                  | 18.0.0                                   | npm       | removed (G2)   |

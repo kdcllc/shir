@@ -18,6 +18,7 @@ const COMMANDS = [
   "listSongs",
   "deleteSong",
   "searchSongs",
+  "readTextFile",
   "logWebviewError",
 ];
 const ERROR_KINDS = [
@@ -33,6 +34,7 @@ const SNAKE = [
   "list_songs",
   "delete_song",
   "search_songs",
+  "read_text_file",
   "log_webview_error",
 ];
 const STACK_PKGS = [
@@ -170,7 +172,7 @@ function bindingsCommands(src: string): string[] {
 describe("(b) bindings.ts commands", () => {
   const src = read("apps/desktop/src/bindings.ts");
 
-  it("exports exactly the five storage commands plus logWebviewError", () => {
+  it("exports exactly the five storage commands plus readTextFile and logWebviewError", () => {
     expect(sorted(bindingsCommands(src))).toEqual(sorted(COMMANDS));
   });
 
@@ -235,6 +237,7 @@ function capabilityPermissions(json: string): string[] {
 
 const expectedPermissions = (): string[] => [
   "core:default",
+  "dialog:allow-open",
   ...SNAKE.map(kebab),
 ];
 
@@ -242,11 +245,11 @@ describe("(d) build.rs and capability", () => {
   const build = read("apps/desktop/src-tauri/build.rs");
   const cap = read("apps/desktop/src-tauri/capabilities/default.json");
 
-  it("build.rs lists exactly the five storage commands plus log_webview_error", () => {
+  it("build.rs lists exactly the five storage commands plus read_text_file and log_webview_error", () => {
     expect(sorted(buildRsCommands(build))).toEqual(sorted(SNAKE));
   });
 
-  it("capability holds allow-<kebab> for each and core:default only", () => {
+  it("capability holds allow-<kebab> for each, dialog:allow-open and core:default only", () => {
     expect(sorted(capabilityPermissions(cap))).toEqual(
       sorted(expectedPermissions()),
     );
@@ -269,6 +272,14 @@ describe("(d) build.rs and capability", () => {
 
   it("negative: a missing allow permission is detected", () => {
     const mutated = cap.replace('"allow-get-song",', "");
+    expect(mutated).not.toBe(cap);
+    expect(sorted(capabilityPermissions(mutated))).not.toEqual(
+      sorted(expectedPermissions()),
+    );
+  });
+
+  it("negative: a missing dialog permission is detected", () => {
+    const mutated = cap.replace('"dialog:allow-open",', "");
     expect(mutated).not.toBe(cap);
     expect(sorted(capabilityPermissions(mutated))).not.toEqual(
       sorted(expectedPermissions()),
