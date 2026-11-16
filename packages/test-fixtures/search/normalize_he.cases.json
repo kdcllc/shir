@@ -1,0 +1,53 @@
+{
+  "license": "Original text written for the Shir repository (CC0-1.0)",
+  "cases": [
+    { "name": "niqqud shalom", "input": "שָׁלוֹם", "expected": "שלומ" },
+    { "name": "niqqud melech final kaf", "input": "מֶלֶךְ", "expected": "מלכ" },
+    { "name": "final kaf", "input": "דרך", "expected": "דרכ" },
+    { "name": "final mem", "input": "שלום", "expected": "שלומ" },
+    { "name": "final nun", "input": "בן", "expected": "בנ" },
+    { "name": "final pe", "input": "סוף", "expected": "סופ" },
+    { "name": "final tsadi", "input": "עץ", "expected": "עצ" },
+    { "name": "all five finals", "input": "ךםןףץ", "expected": "כמנפצ" },
+    {
+      "name": "cantillation marks",
+      "input": "בְּרֵאשִׁ֖ית בָּרָ֣א",
+      "expected": "בראשית ברא"
+    },
+    {
+      "name": "cantillation range edges",
+      "input": "ש֑ל֯וׇם",
+      "expected": "שלומ"
+    },
+    { "name": "maqaf splits tokens", "input": "בֶּן־אָדָם", "expected": "בנ אדמ" },
+    {
+      "name": "latin lowercase",
+      "input": "Shalom HELLO",
+      "expected": "shalom hello"
+    },
+    {
+      "name": "mixed hebrew english lyric",
+      "input": "שָׁלוֹם Hello עוֹלָם World",
+      "expected": "שלומ hello עולמ world"
+    },
+    {
+      "name": "digits and punctuation",
+      "input": "Track 01, Fm7!",
+      "expected": "track 01, fm7!"
+    },
+    { "name": "whitespace kept", "input": "A  B\tC", "expected": "a  b\tc" },
+    { "name": "empty string", "input": "", "expected": "" },
+    { "name": "precomposed latin", "input": "café", "expected": "café" },
+    {
+      "name": "decomposed latin equals precomposed",
+      "input": "café",
+      "expected": "café"
+    },
+    {
+      "name": "precomposed shin with dot",
+      "input": "שׁלום",
+      "expected": "שלומ"
+    },
+    { "name": "decomposed shin with dot", "input": "שׁלום", "expected": "שלומ" }
+  ]
+}
