@@ -11,7 +11,7 @@ export const commands = {
 	getSong: (id: string, options?: InvokeOptions) => typedError<Song_Serialize, DbError>(__TAURI_INVOKE("get_song", { id }, options)),
 	listSongs: (options?: InvokeOptions) => typedError<SongSummary_Serialize[], DbError>(__TAURI_INVOKE("list_songs", undefined, options)),
 	deleteSong: (id: string, options?: InvokeOptions) => typedError<null, DbError>(__TAURI_INVOKE("delete_song", { id }, options)),
-	searchSongs: (query: string, options?: InvokeOptions) => typedError<SongSummary_Serialize[], DbError>(__TAURI_INVOKE("search_songs", { query }, options)),
+	searchSongs: (query: string, options?: InvokeOptions) => typedError<SearchHit_Serialize[], DbError>(__TAURI_INVOKE("search_songs", { query }, options)),
 };
 
 /* Types */
@@ -40,6 +40,30 @@ export type SaveSongInput_Deserialize = {
 export type SaveSongInput_Serialize = {
 	id: string | null,
 	chordpro: string,
+};
+
+/**
+ *  A search result: the matching song plus the original lyric line holding the match, or
+ *  null when only title/artist matched.
+ */
+export type SearchHit = SearchHit_Serialize | SearchHit_Deserialize;
+
+/**
+ *  A search result: the matching song plus the original lyric line holding the match, or
+ *  null when only title/artist matched.
+ */
+export type SearchHit_Deserialize = {
+	song: SongSummary_Deserialize,
+	snippet?: string | null,
+};
+
+/**
+ *  A search result: the matching song plus the original lyric line holding the match, or
+ *  null when only title/artist matched.
+ */
+export type SearchHit_Serialize = {
+	song: SongSummary_Serialize,
+	snippet: string | null,
 };
 
 /**  A stored song with its full ChordPro source. */

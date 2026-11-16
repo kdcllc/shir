@@ -41,6 +41,15 @@ pub struct SongSummary {
     pub updated_at: String,
 }
 
+/// A search result: the matching song plus the original lyric line holding the match, or
+/// null when only title/artist matched.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    pub song: SongSummary,
+    pub snippet: Option<String>,
+}
+
 /// Input for saving a song. `id: None` creates a new song.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -104,6 +113,41 @@ mod tests {
             serde_json::to_value(&s).unwrap(),
             json!({"id":"i","title":"t","artist":"a","key":"G","language":"mixed","updatedAt":"u"})
         );
+    }
+
+    #[test]
+    fn search_hit_serializes_with_nullable_snippet_and_round_trips() {
+        let song = SongSummary {
+            id: "i".into(),
+            title: "t".into(),
+            artist: None,
+            key: None,
+            language: Language::He,
+            updated_at: "u".into(),
+        };
+        let summary =
+            json!({"id":"i","title":"t","artist":null,"key":null,"language":"he","updatedAt":"u"});
+        let none = SearchHit {
+            song: song.clone(),
+            snippet: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&none).unwrap(),
+            json!({"song": summary, "snippet": null})
+        );
+        let some = SearchHit {
+            song,
+            snippet: Some("שלום [C]עולם".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(&some).unwrap(),
+            json!({"song": summary, "snippet": "שלום [C]עולם"})
+        );
+        for hit in [none, some] {
+            let back: SearchHit =
+                serde_json::from_value(serde_json::to_value(&hit).unwrap()).unwrap();
+            assert_eq!(back, hit);
+        }
     }
 
     #[test]

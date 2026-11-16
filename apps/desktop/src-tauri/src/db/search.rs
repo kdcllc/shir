@@ -1,6 +1,6 @@
 //! Full-text song search over the normalized `songs_fts` index.
 use super::error::DbError;
-use super::model::SongSummary;
+use super::model::{SearchHit, SongSummary};
 use super::normalize::normalize_he;
 use super::repo::summary_from_row;
 use rusqlite::Connection;
@@ -28,7 +28,7 @@ fn match_expression(query: &str) -> Option<String> {
 }
 
 /// Search songs by normalized query, at most `SEARCH_LIMIT` results.
-pub fn search_songs(conn: &Connection, query: &str) -> Result<Vec<SongSummary>, DbError> {
+pub fn search_songs(conn: &Connection, query: &str) -> Result<Vec<SearchHit>, DbError> {
     let Some(expr) = match_expression(query) else {
         return Ok(Vec::new());
     };
@@ -41,7 +41,14 @@ pub fn search_songs(conn: &Connection, query: &str) -> Result<Vec<SongSummary>, 
     )?;
     let limit = i64::try_from(SEARCH_LIMIT).unwrap_or(100);
     let rows = stmt.query_map(rusqlite::params![expr, limit], summary_from_row)?;
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    let songs: Vec<SongSummary> = rows.collect::<Result<Vec<_>, _>>()?;
+    Ok(songs
+        .into_iter()
+        .map(|song| SearchHit {
+            song,
+            snippet: None,
+        })
+        .collect())
 }
 
 #[cfg(test)]
@@ -127,7 +134,7 @@ mod tests {
         let id = add(&mut c, "{title: x}\nשָׁלוֹם עָלֵיכֶם\n");
         let hits = search_songs(&c, "שלום").unwrap();
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].id, id);
+        assert_eq!(hits[0].song.id, id);
     }
 
     #[test]
@@ -265,7 +272,7 @@ mod tests {
         assert_eq!(found(&c, "bluebird"), 0);
         let hits = search_songs(&c, "redwing").unwrap();
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].id, id);
+        assert_eq!(hits[0].song.id, id);
         let n = |sql: &str| -> i64 { c.query_row(sql, [], |r| r.get(0)).unwrap() };
         assert_eq!(
             n("SELECT count(*) FROM songs_fts"),
@@ -310,7 +317,7 @@ mod tests {
         let ids: Vec<String> = search_songs(&c, "lantern")
             .unwrap()
             .into_iter()
-            .map(|s| s.id)
+            .map(|h| h.song.id)
             .collect();
         assert_eq!(ids, vec![strong, weak]);
     }
@@ -333,7 +340,7 @@ mod tests {
         let ids: Vec<String> = search_songs(&c, "marigold")
             .unwrap()
             .into_iter()
-            .map(|s| s.id)
+            .map(|h| h.song.id)
             .collect();
         assert_eq!(ids, vec![old, new]);
     }

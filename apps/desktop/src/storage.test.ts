@@ -11,6 +11,7 @@ import {
   saveSong,
   searchSongs,
   type ErrorKind,
+  type SearchHit,
   type Song,
   type SongSummary,
 } from "./storage";
@@ -98,9 +99,13 @@ describe("storage client", () => {
     );
   });
 
-  it("searchSongs invokes search_songs", async () => {
-    mockInvoke.mockResolvedValue([summary]);
-    await expect(searchSongs("שלום")).resolves.toEqual([summary]);
+  it("searchSongs resolves SearchHit[] with null and string snippets", async () => {
+    const hits: SearchHit[] = [
+      { song: summary, snippet: null },
+      { song: { ...summary, id: "s2" }, snippet: "[C]שלום עולם" },
+    ];
+    mockInvoke.mockResolvedValue(hits);
+    await expect(searchSongs("שלום")).resolves.toEqual(hits);
     expect(mockInvoke).toHaveBeenCalledWith(
       "search_songs",
       { query: "שלום" },

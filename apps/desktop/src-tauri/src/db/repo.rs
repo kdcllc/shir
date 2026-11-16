@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(count(&c, "songs_fts"), 2);
         assert_ne!(rowid(&c, &second.id), before);
         assert!(search_songs(&c, "alpha").unwrap().is_empty());
-        assert_eq!(search_songs(&c, "gamma").unwrap()[0].id, first.id);
+        assert_eq!(search_songs(&c, "gamma").unwrap()[0].song.id, first.id);
     }
 
     #[test]
@@ -518,7 +518,7 @@ mod tests {
         assert!(search_songs(&c, "quokka").unwrap().is_empty());
         assert_eq!(count(&c, "songs"), 1);
         assert_eq!(count(&c, "songs_fts"), 1);
-        assert_eq!(search_songs(&c, "keepsake").unwrap()[0].id, keep.id);
+        assert_eq!(search_songs(&c, "keepsake").unwrap()[0].song.id, keep.id);
     }
 
     #[test]

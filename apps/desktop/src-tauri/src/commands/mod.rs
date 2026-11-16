@@ -6,7 +6,7 @@
 
 pub mod state;
 
-use crate::db::{repo, search, DbError, ErrorKind, SaveSongInput, Song, SongSummary};
+use crate::db::{repo, search, DbError, ErrorKind, SaveSongInput, SearchHit, Song, SongSummary};
 use state::DbState;
 use std::path::Path;
 use tauri::State;
@@ -34,7 +34,7 @@ pub fn delete_song_impl(state: &DbState, id: &str) -> Result<(), DbError> {
     state.with_conn(|c| repo::delete_song(c, id))
 }
 
-pub fn search_songs_impl(state: &DbState, query: &str) -> Result<Vec<SongSummary>, DbError> {
+pub fn search_songs_impl(state: &DbState, query: &str) -> Result<Vec<SearchHit>, DbError> {
     state.with_conn(|c| search::search_songs(c, query))
 }
 
@@ -64,7 +64,7 @@ pub fn delete_song(state: State<'_, DbState>, id: String) -> Result<(), DbError>
 
 #[tauri::command(async)]
 #[specta::specta]
-pub fn search_songs(state: State<'_, DbState>, query: String) -> Result<Vec<SongSummary>, DbError> {
+pub fn search_songs(state: State<'_, DbState>, query: String) -> Result<Vec<SearchHit>, DbError> {
     search_songs_impl(&state, &query)
 }
 
@@ -138,6 +138,8 @@ mod tests {
         assert_eq!(list[0].id, saved.id);
         let found = search_songs_impl(&st, "Hello").unwrap();
         assert_eq!(found.len(), 1);
+        assert_eq!(found[0].song.id, saved.id);
+        assert_eq!(found[0].snippet, None);
         delete_song_impl(&st, &saved.id).unwrap();
         assert_eq!(
             get_song_impl(&st, &saved.id).unwrap_err().kind,
@@ -223,6 +225,7 @@ mod tests {
         for t in [
             "Song",
             "SongSummary",
+            "SearchHit",
             "SaveSongInput",
             "Language",
             "ErrorKind",

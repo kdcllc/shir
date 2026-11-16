@@ -11,6 +11,7 @@ pub mod model;
 pub mod normalize;
 pub mod repo;
 pub mod search;
+pub mod seed;
 
 pub use error::{DbError, ErrorKind};
-pub use model::{Language, SaveSongInput, Song, SongSummary, MAX_CHORDPRO_BYTES};
+pub use model::{Language, SaveSongInput, SearchHit, Song, SongSummary, MAX_CHORDPRO_BYTES};
