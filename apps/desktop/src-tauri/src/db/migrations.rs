@@ -1,12 +1,24 @@
 //! Connection opening and schema migrations.
 use super::error::DbError;
+use super::repo;
 use rusqlite::Connection;
-use rusqlite_migration::{Migrations, M};
+use rusqlite_migration::{HookError, Migrations, M};
 use std::path::Path;
 
 /// The ordered schema migrations. Forward-only: append new entries, never edit old ones.
 pub fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(include_str!("../../migrations/0001_init.sql"))])
+    Migrations::new(vec![
+        M::up(include_str!("../../migrations/0001_init.sql")),
+        // V2 rebuilds the search index because the normalization rule changed.
+        M::up_with_hook(
+            include_str!("../../migrations/0002_app_meta_fts_rebuild.sql"),
+            |tx: &rusqlite::Transaction| {
+                repo::rebuild_fts(tx)
+                    .map(|_| ())
+                    .map_err(|e| HookError::Hook(e.message))
+            },
+        ),
+    ])
 }
 
 /// Open (creating if needed) a file-backed database and migrate it.
@@ -76,11 +88,20 @@ mod tests {
     }
 
     #[test]
-    fn in_memory_applies_v1() {
+    fn in_memory_applies_latest() {
         let c = open_in_memory().unwrap();
-        assert_eq!(user_version(&c), 1);
+        assert_eq!(user_version(&c), 2);
         assert!(table_exists(&c, "songs"));
         assert!(table_exists(&c, "songs_fts"));
+        assert!(table_exists(&c, "app_meta"));
+        let sql: String = c
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE name = 'app_meta'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(sql.contains("STRICT"), "app_meta must be STRICT: {sql}");
     }
 
     #[test]
@@ -88,7 +109,7 @@ mod tests {
         let mut c = open_in_memory().unwrap();
         assert!(migrate(&mut c).is_ok());
         assert!(migrate(&mut c).is_ok());
-        assert_eq!(user_version(&c), 1);
+        assert_eq!(user_version(&c), 2);
     }
 
     #[test]
@@ -109,10 +130,10 @@ mod tests {
                 .query_row("PRAGMA busy_timeout", [], |r| r.get(0))
                 .unwrap();
             assert_eq!(bt, 5000);
-            assert_eq!(user_version(&c), 1);
+            assert_eq!(user_version(&c), 2);
         }
         let c = open(&path).unwrap();
-        assert_eq!(user_version(&c), 1);
+        assert_eq!(user_version(&c), 2);
         assert!(table_exists(&c, "songs_fts"));
     }
 
@@ -155,5 +176,83 @@ mod tests {
         c.pragma_update(None, "user_version", 99).unwrap();
         let err = migrate(&mut c).unwrap_err();
         assert_eq!(err.kind, ErrorKind::Migration);
+    }
+
+    fn v1_only(c: &mut Connection) {
+        let v1 = Migrations::new(vec![M::up(include_str!("../../migrations/0001_init.sql"))]);
+        v1.to_latest(c).unwrap();
+    }
+
+    fn count(c: &Connection, table: &str) -> i64 {
+        c.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn rerun_is_idempotent() {
+        let mut c = open_in_memory().unwrap();
+        c.execute_batch(
+            "INSERT INTO songs (id, chordpro, language, created_at, updated_at) \
+             VALUES ('a', 'x', 'en', 't', 't')",
+        )
+        .unwrap();
+        migrate(&mut c).unwrap();
+        assert_eq!(user_version(&c), 2);
+        assert_eq!(count(&c, "songs"), 1);
+        assert_eq!(count(&c, "app_meta"), 0);
+        // The V2 hook does not run again: the song added after V2 stays without an FTS row.
+        assert_eq!(count(&c, "songs_fts"), 0);
+    }
+
+    #[test]
+    fn v1_upgrade_rebuilds_fts_with_new_rule() {
+        let mut c = Connection::open_in_memory().unwrap();
+        v1_only(&mut c);
+        assert_eq!(user_version(&c), 1);
+        c.execute(
+            "INSERT INTO songs (id, chordpro, title, language, created_at, updated_at) \
+             VALUES ('s1', ?1, 'x', 'he', 't', 't')",
+            ["{title: x}\nצה\"ל\n"],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO songs_fts (rowid, title_norm, artist_norm, lyrics_norm) \
+             SELECT rowid, 'x', '', 'צה ל' FROM songs",
+            [],
+        )
+        .unwrap();
+        // An orphan FTS row (no songs row) that the rebuild must drop.
+        c.execute(
+            "INSERT INTO songs_fts (rowid, title_norm, artist_norm, lyrics_norm) \
+             VALUES (999, 'orphan', '', 'orphan')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(crate::db::search::search_songs(&c, "צהל").unwrap().len(), 0);
+
+        migrate(&mut c).unwrap();
+
+        assert_eq!(user_version(&c), 2);
+        assert_eq!(crate::db::search::search_songs(&c, "צהל").unwrap().len(), 1);
+        assert_eq!(count(&c, "songs_fts"), count(&c, "songs"));
+        let (a, b): (i64, i64) = c
+            .query_row(
+                "SELECT (SELECT rowid FROM songs), (SELECT rowid FROM songs_fts)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn failed_rebuild_rolls_back_migration() {
+        let mut c = Connection::open_in_memory().unwrap();
+        v1_only(&mut c);
+        c.execute_batch("DROP TABLE songs_fts").unwrap();
+        let err = migrate(&mut c).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::Migration);
+        assert_eq!(user_version(&c), 1);
+        assert!(!table_exists(&c, "app_meta"));
     }
 }

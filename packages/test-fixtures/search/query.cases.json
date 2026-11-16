@@ -3,61 +3,101 @@
   "cases": [
     {
       "name": "niqqud-insensitive",
-      "stored": { "title": "", "artist": "", "lyrics": "שָׁלוֹם עֲלֵיכֶם" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "שָׁלוֹם עֲלֵיכֶם"
+      },
       "query": "שלום",
       "matches": true
     },
     {
       "name": "final letters",
-      "stored": { "title": "", "artist": "", "lyrics": "מֶלֶךְ הַיָּם" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "מֶלֶךְ הַיָּם"
+      },
       "query": "מלך",
       "matches": true
     },
     {
       "name": "prefix",
-      "stored": { "title": "", "artist": "", "lyrics": "גשם חלון הישן" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "גשם חלון הישן"
+      },
       "query": "חלו",
       "matches": true
     },
     {
       "name": "multi-token AND positive",
-      "stored": { "title": "", "artist": "", "lyrics": "ים כחול וחול זהוב" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "ים כחול וחול זהוב"
+      },
       "query": "ים זהוב",
       "matches": true
     },
     {
       "name": "multi-token AND negative",
-      "stored": { "title": "", "artist": "", "lyrics": "ים כחול וחול זהוב" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "ים כחול וחול זהוב"
+      },
       "query": "ים אדום",
       "matches": false
     },
     {
       "name": "english contraction",
-      "stored": { "title": "", "artist": "", "lyrics": "we don't stop" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "we don't stop"
+      },
       "query": "don't",
       "matches": true
     },
     {
       "name": "hyphenated word",
-      "stored": { "title": "", "artist": "", "lyrics": "a sing-along tune" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "a sing-along tune"
+      },
       "query": "sing-along",
       "matches": true
     },
     {
       "name": "hebrew word with geresh",
-      "stored": { "title": "", "artist": "", "lyrics": "צ׳יפס חם" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "צ׳יפס חם"
+      },
       "query": "צ׳יפס",
       "matches": true
     },
     {
       "name": "fts syntax is literal words",
-      "stored": { "title": "", "artist": "", "lyrics": "not sing" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "not sing"
+      },
       "query": "NOT sing",
       "matches": true
     },
     {
       "name": "fts syntax does not act as an operator",
-      "stored": { "title": "", "artist": "", "lyrics": "red lantern" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "red lantern"
+      },
       "query": "red OR zebra",
       "matches": false
     },
@@ -73,8 +113,82 @@
     },
     {
       "name": "absent term",
-      "stored": { "title": "", "artist": "", "lyrics": "red lantern" },
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "red lantern"
+      },
       "query": "zebra",
+      "matches": false
+    },
+    {
+      "name": "acronym plain query finds gershayim",
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "צה״ל"
+      },
+      "query": "צהל",
+      "matches": true
+    },
+    {
+      "name": "acronym ascii quote query finds plain",
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "צהל"
+      },
+      "query": "צה\"ל",
+      "matches": true
+    },
+    {
+      "name": "curly apostrophe stored, plain query",
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "Ka’tamar"
+      },
+      "query": "katamar",
+      "matches": true
+    },
+    {
+      "name": "ascii apostrophe query finds plain",
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "katamar"
+      },
+      "query": "ka'tamar",
+      "matches": true
+    },
+    {
+      "name": "abbreviation plain query finds quoted",
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "ע\"י"
+      },
+      "query": "עי",
+      "matches": true
+    },
+    {
+      "name": "whole word: tamar is not a prefix of ka'tamar",
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "Ka’tamar"
+      },
+      "query": "tamar",
+      "matches": false
+    },
+    {
+      "name": "whole word: final letter no longer a separate token",
+      "stored": {
+        "title": "",
+        "artist": "",
+        "lyrics": "צה״ל"
+      },
+      "query": "ל",
       "matches": false
     }
   ]

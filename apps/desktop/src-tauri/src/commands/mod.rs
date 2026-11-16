@@ -6,8 +6,9 @@
 
 pub mod state;
 
-use crate::db::{repo, search, DbError, ErrorKind, SaveSongInput, Song, SongSummary};
+use crate::db::{repo, search, DbError, ErrorKind, SaveSongInput, SearchHit, Song, SongSummary};
 use state::DbState;
+use std::io::Write;
 use std::path::Path;
 use tauri::State;
 use tauri_specta::{collect_commands, Builder, ErrorHandlingMode};
@@ -34,7 +35,7 @@ pub fn delete_song_impl(state: &DbState, id: &str) -> Result<(), DbError> {
     state.with_conn(|c| repo::delete_song(c, id))
 }
 
-pub fn search_songs_impl(state: &DbState, query: &str) -> Result<Vec<SongSummary>, DbError> {
+pub fn search_songs_impl(state: &DbState, query: &str) -> Result<Vec<SearchHit>, DbError> {
     state.with_conn(|c| search::search_songs(c, query))
 }
 
@@ -64,11 +65,36 @@ pub fn delete_song(state: State<'_, DbState>, id: String) -> Result<(), DbError>
 
 #[tauri::command(async)]
 #[specta::specta]
-pub fn search_songs(state: State<'_, DbState>, query: String) -> Result<Vec<SongSummary>, DbError> {
+pub fn search_songs(state: State<'_, DbState>, query: String) -> Result<Vec<SearchHit>, DbError> {
     search_songs_impl(&state, &query)
 }
 
-/// The tauri-specta builder: the five commands, `Result` error handling, and the
+/// Longest webview message kept in the log line, in chars.
+const WEBVIEW_LOG_MAX_CHARS: usize = 2000;
+
+/// The stderr line for a webview-reported error: control chars become spaces, the text is
+/// capped at 2000 chars (`…` appended when cut).
+pub fn webview_log_line(message: &str) -> String {
+    let mut text: String = message
+        .chars()
+        .take(WEBVIEW_LOG_MAX_CHARS)
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if message.chars().nth(WEBVIEW_LOG_MAX_CHARS).is_some() {
+        text.push('…');
+    }
+    format!("shir: webview: {text}")
+}
+
+/// Forward a webview error to stderr. Never fails.
+#[tauri::command]
+#[specta::specta]
+pub fn log_webview_error(message: String) {
+    // Best effort: a closed or broken stderr must not panic the app.
+    let _ = writeln!(std::io::stderr(), "{}", webview_log_line(&message));
+}
+
+/// The tauri-specta builder: the five storage commands plus `log_webview_error`, `Result` error handling, and the
 /// error types (so `ErrorKind` is present in TS even where only nested).
 pub fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
@@ -77,7 +103,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             get_song,
             list_songs,
             delete_song,
-            search_songs
+            search_songs,
+            log_webview_error
         ])
         .error_handling(ErrorHandlingMode::Result)
         .typ::<ErrorKind>()
@@ -138,6 +165,8 @@ mod tests {
         assert_eq!(list[0].id, saved.id);
         let found = search_songs_impl(&st, "Hello").unwrap();
         assert_eq!(found.len(), 1);
+        assert_eq!(found[0].song.id, saved.id);
+        assert_eq!(found[0].snippet, None);
         delete_song_impl(&st, &saved.id).unwrap();
         assert_eq!(
             get_song_impl(&st, &saved.id).unwrap_err().kind,
@@ -183,6 +212,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn webview_log_line_replaces_control_chars() {
+        assert_eq!(
+            webview_log_line("a\nb\rc\td\u{0}e\u{7f}f"),
+            "shir: webview: a b c d e f"
+        );
+        assert_eq!(webview_log_line("שלום [C]"), "shir: webview: שלום [C]");
+    }
+
+    #[test]
+    fn webview_log_line_empty_input() {
+        assert_eq!(webview_log_line(""), "shir: webview: ");
+    }
+
+    #[test]
+    fn webview_log_line_caps_on_a_char_boundary() {
+        let exact = "é".repeat(2000);
+        assert_eq!(webview_log_line(&exact), format!("shir: webview: {exact}"));
+        let long = "é".repeat(2001);
+        let line = webview_log_line(&long);
+        assert_eq!(line, format!("shir: webview: {}…", "é".repeat(2000)));
+        assert_eq!(line.chars().count(), "shir: webview: ".len() + 2001);
+    }
+
     /// Field names of the `export const commands = { ... };` block.
     fn command_fields(ts: &str) -> Vec<String> {
         let start = ts.find("export const commands = {").unwrap();
@@ -204,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn exported_ts_has_exactly_the_five_commands() {
+    fn exported_ts_has_exactly_the_six_commands() {
         let ts = exported_ts();
         let mut fields = command_fields(&ts);
         fields.sort();
@@ -214,6 +267,7 @@ mod tests {
                 "deleteSong",
                 "getSong",
                 "listSongs",
+                "logWebviewError",
                 "saveSong",
                 "searchSongs"
             ],
@@ -223,6 +277,7 @@ mod tests {
         for t in [
             "Song",
             "SongSummary",
+            "SearchHit",
             "SaveSongInput",
             "Language",
             "ErrorKind",

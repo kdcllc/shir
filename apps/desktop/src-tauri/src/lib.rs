@@ -11,15 +11,18 @@ fn open_db_state(app: &tauri::App) -> DbState {
     match app.path().app_data_dir() {
         Ok(dir) => {
             let state = DbState::open(&dir.join("shir.db"));
-            if let Err(e) = state.with_conn(|_| Ok(())) {
-                eprintln!("shir: database unavailable: {e}");
+            if let Some(line) = state.unavailable_line() {
+                eprintln!("{line}");
             }
             state
         }
         Err(e) => {
             let err = db::DbError::unavailable(format!("cannot resolve app data dir: {e}"));
-            eprintln!("shir: database unavailable: {err}");
-            DbState::unavailable(err)
+            let state = DbState::unavailable(err);
+            if let Some(line) = state.unavailable_line() {
+                eprintln!("{line}");
+            }
+            state
         }
     }
 }

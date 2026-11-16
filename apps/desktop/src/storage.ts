@@ -3,11 +3,12 @@ import type {
   DbError,
   ErrorKind,
   Language,
+  SearchHit,
   Song,
   SongSummary,
 } from "./bindings";
 
-export type { DbError, ErrorKind, Language, Song, SongSummary };
+export type { DbError, ErrorKind, Language, SearchHit, Song, SongSummary };
 
 export type StorageErrorKind = ErrorKind | "Ipc";
 
@@ -77,6 +78,15 @@ export async function deleteSong(id: string): Promise<void> {
   await run(() => commands.deleteSong(id));
 }
 
-export function searchSongs(query: string): Promise<SongSummary[]> {
+export function searchSongs(query: string): Promise<SearchHit[]> {
   return run(() => commands.searchSongs(query));
+}
+
+/** Forwards a webview error to the app's stderr. Never rejects. */
+export async function logWebviewError(message: string): Promise<void> {
+  try {
+    await commands.logWebviewError(message);
+  } catch {
+    // Best effort: a missing runtime or failed invoke must not raise.
+  }
 }

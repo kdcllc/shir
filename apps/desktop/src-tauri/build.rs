@@ -15,6 +15,7 @@ fn main() {
             "list_songs",
             "delete_song",
             "search_songs",
+            "log_webview_error",
         ]));
 
     if is_windows_msvc {

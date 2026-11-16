@@ -1,0 +1,83 @@
+{
+  "license": "Original text written for the Shir repository (CC0-1.0)",
+  "cases": [
+    {
+      "name": "niqqud line kept",
+      "chordpro": "{title: A}\nשָׁלוֹם עֲלֵיכֶם\n",
+      "query": "שלום",
+      "snippet": "שָׁלוֹם עֲלֵיכֶם"
+    },
+    {
+      "name": "chords stripped",
+      "chordpro": "{title: A}\n[Am]שָׁ[G]לוֹם\n",
+      "query": "שלום",
+      "snippet": "שָׁלוֹם"
+    },
+    {
+      "name": "title-only match is null",
+      "chordpro": "{title: Lantern}\nrain falls softly\n",
+      "query": "lantern",
+      "snippet": null
+    },
+    {
+      "name": "artist-only match is null",
+      "chordpro": "{title: A}\n{artist: Marigold Quartet}\nrain falls softly\n",
+      "query": "marigold",
+      "snippet": null
+    },
+    {
+      "name": "first of two matching lines",
+      "chordpro": "{title: A}\nthe lantern glows\nanother lantern sways\n",
+      "query": "lantern",
+      "snippet": "the lantern glows"
+    },
+    {
+      "name": "prefix query",
+      "chordpro": "{title: A}\nwindowsill garden\n",
+      "query": "windows",
+      "snippet": "windowsill garden"
+    },
+    {
+      "name": "second token found only in a later line",
+      "chordpro": "{title: A}\ncalm night\nblue harbor\nred lantern\n",
+      "query": "lantern harbor",
+      "snippet": "blue harbor"
+    },
+    {
+      "name": "gershayim line found by plain query",
+      "chordpro": "{title: A}\nשיר ראשון\nחיילי צה״ל חוזרים\n",
+      "query": "צהל",
+      "snippet": "חיילי צה״ל חוזרים"
+    },
+    {
+      "name": "transliteration apostrophe",
+      "chordpro": "{title: A}\nla la\nKa’tamar bashir\n",
+      "query": "katamar",
+      "snippet": "Ka’tamar bashir"
+    },
+    {
+      "name": "long line cut before orphan mark",
+      "chordpro": "{title: A}\nשלום בֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶג\n",
+      "query": "שלום",
+      "snippet": "שלום בֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶבֶ…"
+    },
+    {
+      "name": "exactly 160 chars kept whole",
+      "chordpro": "{title: A}\nשלום אבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדה\n",
+      "query": "שלום",
+      "snippet": "שלום אבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדהוזחטיאבגדה"
+    },
+    {
+      "name": "surrounding spaces trimmed",
+      "chordpro": "{title: A}\n   spaced lantern line   \n",
+      "query": "lantern",
+      "snippet": "spaced lantern line"
+    },
+    {
+      "name": "comment directive is not a snippet",
+      "chordpro": "{title: Lantern}\n{comment: lantern chorus}\nrain falls softly\n",
+      "query": "lantern",
+      "snippet": null
+    }
+  ]
+}

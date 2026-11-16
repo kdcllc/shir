@@ -1,14 +1,46 @@
 {
   "license": "Original text written for the Shir repository (CC0-1.0)",
   "cases": [
-    { "name": "niqqud shalom", "input": "שָׁלוֹם", "expected": "שלומ" },
-    { "name": "niqqud melech final kaf", "input": "מֶלֶךְ", "expected": "מלכ" },
-    { "name": "final kaf", "input": "דרך", "expected": "דרכ" },
-    { "name": "final mem", "input": "שלום", "expected": "שלומ" },
-    { "name": "final nun", "input": "בן", "expected": "בנ" },
-    { "name": "final pe", "input": "סוף", "expected": "סופ" },
-    { "name": "final tsadi", "input": "עץ", "expected": "עצ" },
-    { "name": "all five finals", "input": "ךםןףץ", "expected": "כמנפצ" },
+    {
+      "name": "niqqud shalom",
+      "input": "שָׁלוֹם",
+      "expected": "שלומ"
+    },
+    {
+      "name": "niqqud melech final kaf",
+      "input": "מֶלֶךְ",
+      "expected": "מלכ"
+    },
+    {
+      "name": "final kaf",
+      "input": "דרך",
+      "expected": "דרכ"
+    },
+    {
+      "name": "final mem",
+      "input": "שלום",
+      "expected": "שלומ"
+    },
+    {
+      "name": "final nun",
+      "input": "בן",
+      "expected": "בנ"
+    },
+    {
+      "name": "final pe",
+      "input": "סוף",
+      "expected": "סופ"
+    },
+    {
+      "name": "final tsadi",
+      "input": "עץ",
+      "expected": "עצ"
+    },
+    {
+      "name": "all five finals",
+      "input": "ךםןףץ",
+      "expected": "כמנפצ"
+    },
     {
       "name": "cantillation marks",
       "input": "בְּרֵאשִׁ֖ית בָּרָ֣א",
@@ -19,7 +51,11 @@
       "input": "ש֑ל֯וׇם",
       "expected": "שלומ"
     },
-    { "name": "maqaf splits tokens", "input": "בֶּן־אָדָם", "expected": "בנ אדמ" },
+    {
+      "name": "maqaf splits tokens",
+      "input": "בֶּן־אָדָם",
+      "expected": "בנ אדמ"
+    },
     {
       "name": "latin lowercase",
       "input": "Shalom HELLO",
@@ -35,9 +71,21 @@
       "input": "Track 01, Fm7!",
       "expected": "track 01, fm7!"
     },
-    { "name": "whitespace kept", "input": "A  B\tC", "expected": "a  b\tc" },
-    { "name": "empty string", "input": "", "expected": "" },
-    { "name": "precomposed latin", "input": "café", "expected": "café" },
+    {
+      "name": "whitespace kept",
+      "input": "A  B\tC",
+      "expected": "a  b\tc"
+    },
+    {
+      "name": "empty string",
+      "input": "",
+      "expected": ""
+    },
+    {
+      "name": "precomposed latin",
+      "input": "café",
+      "expected": "café"
+    },
     {
       "name": "decomposed latin equals precomposed",
       "input": "café",
@@ -48,6 +96,95 @@
       "input": "שׁלום",
       "expected": "שלומ"
     },
-    { "name": "decomposed shin with dot", "input": "שׁלום", "expected": "שלומ" }
+    {
+      "name": "decomposed shin with dot",
+      "input": "שׁלום",
+      "expected": "שלומ"
+    },
+    {
+      "name": "gershayim acronym",
+      "input": "צה״ל",
+      "expected": "צהל"
+    },
+    {
+      "name": "ascii quote acronym",
+      "input": "צה\"ל",
+      "expected": "צהל"
+    },
+    {
+      "name": "plain acronym",
+      "input": "צהל",
+      "expected": "צהל"
+    },
+    {
+      "name": "ascii quote abbreviation",
+      "input": "ע\"י",
+      "expected": "עי"
+    },
+    {
+      "name": "geresh",
+      "input": "צ׳יפס",
+      "expected": "ציפס"
+    },
+    {
+      "name": "ascii apostrophe as geresh",
+      "input": "צ'יפס",
+      "expected": "ציפס"
+    },
+    {
+      "name": "niqqud next to geresh",
+      "input": "ג׳ִירָפָה",
+      "expected": "גירפה"
+    },
+    {
+      "name": "curly apostrophe",
+      "input": "Ka’tamar",
+      "expected": "katamar"
+    },
+    {
+      "name": "ascii apostrophe",
+      "input": "ka'tamar",
+      "expected": "katamar"
+    },
+    {
+      "name": "modifier letter apostrophe",
+      "input": "kaʼtamar",
+      "expected": "katamar"
+    },
+    {
+      "name": "english contraction",
+      "input": "don't",
+      "expected": "dont"
+    },
+    {
+      "name": "trailing apostrophe kept",
+      "input": "בית א'",
+      "expected": "בית א'"
+    },
+    {
+      "name": "edge quotes kept",
+      "input": "\"שלום\"",
+      "expected": "\"שלומ\""
+    },
+    {
+      "name": "apostrophe before digit kept",
+      "input": "a'1",
+      "expected": "a'1"
+    },
+    {
+      "name": "run of two ascii apostrophes kept",
+      "input": "a''b",
+      "expected": "a''b"
+    },
+    {
+      "name": "run of two modifier apostrophes kept",
+      "input": "aʼʼb",
+      "expected": "aʼʼb"
+    },
+    {
+      "name": "mixed mark run kept",
+      "input": "a'ʼb",
+      "expected": "a'ʼb"
+    }
   ]
 }

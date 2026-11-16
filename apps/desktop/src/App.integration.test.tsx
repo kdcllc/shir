@@ -4,9 +4,15 @@ import type { SongModel } from "chord-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { loadLibrary } from "./library";
+import { listSongs } from "./storage";
 import { STRINGS } from "./strings";
 
 vi.mock("./uiReady", () => ({ signalUiReady: vi.fn() }));
+vi.mock("./storage", () => ({
+  listSongs: vi.fn(),
+  getSong: vi.fn(),
+  searchSongs: vi.fn(),
+}));
 
 const library = loadLibrary();
 
@@ -30,6 +36,7 @@ describe("App integration: every bundled song", () => {
 
   beforeEach(() => {
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(listSongs).mockRejectedValue(new Error("unavailable"));
   });
   afterEach(() => {
     cleanup();
@@ -56,8 +63,9 @@ describe("App integration: every bundled song", () => {
     expect(library.some((e) => diagCount(e) === 0)).toBe(true);
   });
 
-  it.each(library.map((e) => [e.id, e] as const))("%s", (_id, entry) => {
+  it.each(library.map((e) => [e.id, e] as const))("%s", async (_id, entry) => {
     render(<App />);
+    await screen.findAllByTestId("song-item");
     const index = library.findIndex((s) => s.id === entry.id);
     fireEvent.click(screen.getAllByTestId("song-item")[index]!);
 

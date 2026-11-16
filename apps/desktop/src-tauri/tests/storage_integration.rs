@@ -74,7 +74,7 @@ fn lifecycle_survives_reopen_byte_identical() {
     let uv: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .expect("user_version");
-    assert_eq!(uv, 1);
+    assert_eq!(uv, 2);
     for (label, id, src) in &saved {
         let got = get_song(&conn, id).unwrap_or_else(|e| panic!("get {label}: {e:?}"));
         assert_eq!(got.chordpro.as_bytes(), src.as_bytes(), "{label}: bytes");
@@ -88,7 +88,7 @@ fn lifecycle_survives_reopen_byte_identical() {
         .expect("he_niqqud saved")
         .1;
     assert!(
-        hits.iter().any(|h| &h.id == niqqud_id),
+        hits.iter().any(|h| &h.song.id == niqqud_id),
         "search שלום must include he_niqqud.cho"
     );
 
@@ -101,7 +101,7 @@ fn lifecycle_survives_reopen_byte_identical() {
     assert_eq!(list_songs(&conn).expect("list").len(), songs.len() - 1);
     let hits = search_songs(&conn, "שלום").expect("search");
     assert!(
-        hits.iter().all(|h| &h.id != niqqud_id),
+        hits.iter().all(|h| &h.song.id != niqqud_id),
         "deleted song must leave the search index"
     );
     // The other songs are untouched.

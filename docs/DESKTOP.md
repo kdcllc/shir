@@ -16,8 +16,10 @@ inline-start side under the app heading `<h1>`, rendered as
 - The production CSP `style-src 'self'` forbids `<style>` elements and
   `style="…"` attribute strings. `dangerouslySetInnerHTML` is banned separately
   by project rule.
-- The app heading `<h1>`, the `<nav>`, the view controls and the diagnostics
-  panel carry the `data-ui-chrome` attribute, so the existing print CSS
+- The app heading `<h1>`, the `<nav>`, the search box, the search status
+  element, the search-unavailable
+  notice, the loading text, the view controls and the diagnostics panel carry
+  the `data-ui-chrome` attribute, so the existing print CSS
   (`docs/BIDI.md` § Print CSS) hides them.
 - Colour rule: every colour declaration that uses `color-mix()` or the `Mark`
   system colour has a fallback declaration of the same property, on the same
@@ -36,8 +38,17 @@ nothing after the first emit attempt.
 
 ## Library
 
-Sources are bundled at build time with Vite `import.meta.glob(…)`, using the
-options `{ query: "?raw", import: "default", eager: true }`:
+The sidebar lists the songs stored in the database (`listSongs`), ordered by
+title with `Intl.Collator(["he", "en"])` (sensitivity `base`, numeric), ties
+broken by `id`, as one flat list with no group headings. Selecting a song loads
+it with `getSong` and parses it with `parseSong`.
+
+The bundled library described below is only the read-only fallback, used when
+`listSongs` fails: the sidebar then shows the `searchUnavailable` notice and the
+search box is disabled.
+
+Bundled sources are loaded at build time with Vite `import.meta.glob(…)`, using
+the options `{ query: "?raw", import: "default", eager: true }`:
 
 - group `samples`: `samples/*.cho`;
 - group `test-songs`: `packages/test-fixtures/fixtures/*.cho`.
@@ -55,9 +66,32 @@ are excluded. Songs inside a group sort by `fileName` in UTF-16 code-unit order.
   value; the field is absent otherwise.
 - `song` and `diagnostics` come from `parseSong(source)`, which never throws.
 
-Selection starts on the first song of the first non-empty group. When the
-library is empty there is no selection, and the song pane shows only
+In database mode, selection starts on the first title-sorted song whose title
+equals the title of the bundled fallback's first song
+(`samples/demo-shir-bilingual.cho`); otherwise on the first title-sorted song. In the
+bundled fallback it starts on the first song of the first non-empty group. When
+the library is empty there is no selection, and the song pane shows only
 `Select a song` (`noSongSelected`).
+
+Loading state (before database mode): while `listSongs` is pending, the sidebar
+shows `loadingLibrary` and the pane shows `noSongSelected`.
+
+Database-mode states:
+
+- An empty database list shows `libraryEmpty`.
+- Once the search for a non-blank (trimmed) query completes, the results list
+  (`search-results`), `search-empty` or the `searchFailed` alert replaces the
+  library. During the debounce and the first in-flight request the library stays
+  visible, and while a newer search loads the previous results stay. Clearing
+  the box, pressing Esc or typing a whitespace-only query restores the library.
+- A persistent status element (`search-pending`, `role="status"`, carrying
+  `data-ui-chrome`) sits between the search box and the `<nav>` in database mode
+  only. It shows `searching` while a non-blank query is pending (debouncing or
+  loading) and is empty otherwise. While a query is pending, a shown results
+  list carries `aria-busy="true"` and keeps the previous results; on the first
+  in-flight request the library stays
+  visible and only the status text appears.
+- A `getSong` failure shows the `songLoadFailed` alert in the pane.
 
 ## Song pane
 
@@ -106,8 +140,22 @@ Selecting another song applies the same reset. The rendered song is
 
 Each component lives at `apps/desktop/src/components/<Name>.tsx`.
 
-- `SongList`: groups render in `SongGroup` order with their group label, and
-  empty groups are omitted. Each song is a `<button type="button">` showing the
+- `SearchBox`: an `<input type="search" dir="auto">` carrying `data-ui-chrome`.
+  Esc clears it, and it is disabled in the bundled fallback.
+- `SongIndex` (`variant: "library" | "results"`): renders the `song-index`
+  (library) or `search-results` (results) list. Each row shows the title and,
+  when present, the artist and the snippet (search hits only), each with
+  `dir="auto"`; the snippet renders as text only. The optional `busy` prop sets
+  `aria-busy="true"` on the `search-results` list; the `library` list never
+  carries it.
+- `songSource` (`apps/desktop/src/songSource.ts`): `sortByTitle` orders
+  summaries as described in § Library. `createDebouncedSearch` waits 150 ms by
+  default and trims the query; an empty or whitespace-only query goes idle with
+  no call. Stale responses and stale errors are dropped. A current error becomes
+  `{status:"error"}`, which `App` shows as the `searchFailed` alert.
+- `SongList` (bundled fallback only): groups render in `SongGroup` order with
+  their group label, and empty groups are omitted. Each song is a
+  `<button type="button">` showing the
   title (`dir="auto"`) and, when present, the artist (`dir="auto"`). Group
   labels: `samples` → `Samples`, `test-songs` → `Test songs`.
 - `SongHeader`: shows the title, artist, key and capo as described in
@@ -124,6 +172,12 @@ Props:
 ```ts
 SongList { songs: readonly LibrarySong[]; selectedId: string | undefined;
   onSelect(id: string): void }
+SearchBox { value: string; disabled?: boolean; onChange(next: string): void }
+SongIndexItem { id: string; title: string; artist?: string | null | undefined;
+  snippet?: string | null | undefined }
+SongIndex { items: readonly SongIndexItem[]; selectedId: string | undefined;
+  variant: "library" | "results"; busy?: boolean | undefined;
+  onSelect(id: string): void }
 SongHeader { title: string; artist?: string; soundingKey?: string;
   capo: number }
 ViewControls { transpose: number; capo: number;
@@ -132,6 +186,17 @@ ViewControls { transpose: number; capo: number;
   onReset(): void }
 DiagnosticsPanel { diagnostics: readonly Diagnostic[] }
 ```
+
+## Webview errors
+
+`apps/desktop/src/main.tsx` installs `installWebviewErrorForwarder(window,
+logWebviewError)` before rendering, in every build. It forwards window `error`
+events, `unhandledrejection` events and `console.error` calls (the original
+`console.error` still runs) through `logWebviewError` in `storage.ts`, which
+never rejects. The native side writes each one to stderr as
+`shir: webview: <text>`. The forwarder never throws, ignores an error raised
+while it is itself forwarding (on the same call stack), and includes the error
+message even when a JavaScriptCore stack omits it.
 
 ## Diagnostics panel
 
@@ -151,56 +216,71 @@ Coordinates have two meanings:
 
 ## Test ids
 
-| Test id           | Element             | Meaning                                                     |
-| ----------------- | ------------------- | ----------------------------------------------------------- |
-| `song-list`       | `<nav>`             | The song list                                               |
-| `song-item`       | song `<button>`     | One per song; `aria-current="true"` on the selected one     |
-| `song-header`     | header container    | Song pane header                                            |
-| `song-title`      | `<h2>`              | Song title                                                  |
-| `song-artist`     | artist element      | Song artist, present only when the song has one             |
-| `sounding-key`    | `<span>`            | Sounding key (`<bdi dir="ltr">`) or the `No key` text       |
-| `shape-key`       | `<bdi>`             | Shape key in the controls, present only when defined        |
-| `capo-value`      | header capo display | Current capo (view state), shown only when > 0              |
-| `transpose-down`  | `<button>`          | Transpose down by one semitone                              |
-| `transpose-up`    | `<button>`          | Transpose up by one semitone                                |
-| `transpose-value` | value element       | Current signed transpose (`0`, `+2`, `-3`)                  |
-| `capo-select`     | `<select>`          | Capo choice                                                 |
-| `reset-view`      | `<button>`          | Resets transpose to 0 and capo to the song's capo           |
-| `diagnostics`     | diagnostics panel   | The diagnostics panel, absent when there are no diagnostics |
-| `diagnostic-item` | list item           | One per diagnostic                                          |
-| `song-pane`       | `<main>`            | The song pane                                               |
+| Test id              | Element                 | Meaning                                                          |
+| -------------------- | ----------------------- | ---------------------------------------------------------------- |
+| `song-list`          | `<nav>`                 | The song list                                                    |
+| `song-item`          | song `<button>`         | One per song; `aria-current="true"` on the selected one          |
+| `song-header`        | header container        | Song pane header                                                 |
+| `song-title`         | `<h2>`                  | Song title                                                       |
+| `song-artist`        | artist element          | Song artist, present only when the song has one                  |
+| `sounding-key`       | `<span>`                | Sounding key (`<bdi dir="ltr">`) or the `No key` text            |
+| `shape-key`          | `<bdi>`                 | Shape key in the controls, present only when defined             |
+| `capo-value`         | header capo display     | Current capo (view state), shown only when > 0                   |
+| `transpose-down`     | `<button>`              | Transpose down by one semitone                                   |
+| `transpose-up`       | `<button>`              | Transpose up by one semitone                                     |
+| `transpose-value`    | value element           | Current signed transpose (`0`, `+2`, `-3`)                       |
+| `capo-select`        | `<select>`              | Capo choice                                                      |
+| `reset-view`         | `<button>`              | Resets transpose to 0 and capo to the song's capo                |
+| `diagnostics`        | diagnostics panel       | The diagnostics panel, absent when there are no diagnostics      |
+| `diagnostic-item`    | list item               | One per diagnostic                                               |
+| `song-pane`          | `<main>`                | The song pane                                                    |
+| `search-input`       | `<input type="search">` | The sidebar search box (disabled in bundled mode)                |
+| `search-empty`       | `<p>`                   | Shown when a search has zero hits                                |
+| `search-unavailable` | `<p>`                   | Notice shown in bundled mode: search is unavailable              |
+| `song-snippet`       | `<span>`                | Lyric line of a search hit, rendered as text, only when non-null |
+| `song-index`         | `<ul>`                  | The `SongIndex` list of all DB songs, sorted by title            |
+| `search-results`     | `<ul>`                  | The `SongIndex` list holding the ranked search hits              |
+| `search-pending`     | `<p role="status">`     | Live region: `Searching…` while a query is pending, else empty   |
 
 ## Strings
 
-| Key                  | Value            |
-| -------------------- | ---------------- |
-| `appName`            | `Shir`           |
-| `appNameHebrew`      | `שיר`            |
-| `groupSamples`       | `Samples`        |
-| `groupTestSongs`     | `Test songs`     |
-| `songList`           | `Songs`          |
-| `transpose`          | `Transpose`      |
-| `transposeDown`      | `Transpose down` |
-| `transposeUp`        | `Transpose up`   |
-| `capo`               | `Capo`           |
-| `reset`              | `Reset`          |
-| `key`                | `Key`            |
-| `shapes`             | `Shapes`         |
-| `diagnostics`        | `Diagnostics`    |
-| `noSongSelected`     | `Select a song`  |
-| `noKey`              | `No key`         |
-| `separator`          | `·`              |
-| `transposeDownGlyph` | `−`              |
-| `transposeUpGlyph`   | `+`              |
+| Key                  | Value                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `appName`            | `Shir`                                                                             |
+| `appNameHebrew`      | `שיר`                                                                              |
+| `groupSamples`       | `Samples`                                                                          |
+| `groupTestSongs`     | `Test songs`                                                                       |
+| `songList`           | `Songs`                                                                            |
+| `transpose`          | `Transpose`                                                                        |
+| `transposeDown`      | `Transpose down`                                                                   |
+| `transposeUp`        | `Transpose up`                                                                     |
+| `capo`               | `Capo`                                                                             |
+| `reset`              | `Reset`                                                                            |
+| `key`                | `Key`                                                                              |
+| `shapes`             | `Shapes`                                                                           |
+| `diagnostics`        | `Diagnostics`                                                                      |
+| `noSongSelected`     | `Select a song`                                                                    |
+| `searchLabel`        | `Search songs`                                                                     |
+| `searchPlaceholder`  | `Search title, artist or lyrics`                                                   |
+| `searchResults`      | `Search results`                                                                   |
+| `noResults`          | `No songs match`                                                                   |
+| `searchFailed`       | `Search failed`                                                                    |
+| `searchUnavailable`  | `Search unavailable: the song library could not be opened. Showing bundled songs.` |
+| `loadingLibrary`     | `Loading songs…`                                                                   |
+| `searching`          | `Searching…`                                                                       |
+| `libraryEmpty`       | `No songs in the library`                                                          |
+| `songLoadFailed`     | `Could not open this song`                                                         |
+| `noKey`              | `No key`                                                                           |
+| `separator`          | `·`                                                                                |
+| `transposeDownGlyph` | `−`                                                                                |
+| `transposeUpGlyph`   | `+`                                                                                |
 
 `diagnosticsCount(n: number): string` returns `1 problem` for n = 1 and
 `${n} problems` otherwise.
 
 ## Out of scope
 
-- Opening, importing or saving files. The storage commands and the
-  `apps/desktop/src/storage.ts` client exist (see `docs/DATA_MODEL.md`), but the
-  viewer does not call them yet.
+- Opening files, importing, editing, saving and deleting songs.
 - TanStack Router, Zustand, i18next and a Hebrew UI locale (planned G7).
 - Persistence of the last song or view settings.
 - Chord diagrams (G3).

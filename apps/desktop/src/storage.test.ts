@@ -8,9 +8,11 @@ import {
   deleteSong,
   getSong,
   listSongs,
+  logWebviewError,
   saveSong,
   searchSongs,
   type ErrorKind,
+  type SearchHit,
   type Song,
   type SongSummary,
 } from "./storage";
@@ -98,9 +100,13 @@ describe("storage client", () => {
     );
   });
 
-  it("searchSongs invokes search_songs", async () => {
-    mockInvoke.mockResolvedValue([summary]);
-    await expect(searchSongs("שלום")).resolves.toEqual([summary]);
+  it("searchSongs resolves SearchHit[] with null and string snippets", async () => {
+    const hits: SearchHit[] = [
+      { song: summary, snippet: null },
+      { song: { ...summary, id: "s2" }, snippet: "[C]שלום עולם" },
+    ];
+    mockInvoke.mockResolvedValue(hits);
+    await expect(searchSongs("שלום")).resolves.toEqual(hits);
     expect(mockInvoke).toHaveBeenCalledWith(
       "search_songs",
       { query: "שלום" },
@@ -170,5 +176,24 @@ describe("storage client", () => {
     const e = (await caught(searchSongs("q"))) as StorageError;
     expect(e.kind).toBe("Ipc");
     expect(e.message).toBe("42");
+  });
+
+  it("logWebviewError invokes log_webview_error with the message", async () => {
+    mockInvoke.mockResolvedValue(null);
+    await expect(logWebviewError("boom")).resolves.toBeUndefined();
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "log_webview_error",
+      { message: "boom" },
+      undefined,
+    );
+  });
+
+  it("logWebviewError never rejects", async () => {
+    mockInvoke.mockRejectedValue(new Error("no runtime"));
+    await expect(logWebviewError("x")).resolves.toBeUndefined();
+    mockInvoke.mockImplementation(() => {
+      throw new TypeError("invoke is not a function");
+    });
+    await expect(logWebviewError("x")).resolves.toBeUndefined();
   });
 });
