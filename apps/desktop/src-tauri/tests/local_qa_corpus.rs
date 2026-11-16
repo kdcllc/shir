@@ -51,15 +51,15 @@ fn local_qa_corpus_probe() {
             );
         }
         if q == "katamar" {
-            let want = id_of("katamar-translit.cho").expect("katamar-translit.cho present");
+            let want = id_of("qa-02.cho").expect("qa-02.cho present");
             assert!(
                 hits.iter().any(|h| &h.song.id == want),
-                "katamar -> translit"
+                "katamar -> qa-02.cho"
             );
         }
         if q == "צדיק" {
-            let want = id_of("tsadik-katamar-he.cho").expect("tsadik-katamar-he.cho present");
-            assert!(hits.iter().any(|h| &h.song.id == want), "צדיק -> he song");
+            let want = id_of("qa-03.cho").expect("qa-03.cho present");
+            assert!(hits.iter().any(|h| &h.song.id == want), "צדיק -> qa-03.cho");
         }
     }
 }

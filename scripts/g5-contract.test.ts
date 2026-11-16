@@ -133,7 +133,7 @@ describe("(b) seed corpus equals the disk set", () => {
   it("negative: a seed source including a .local/ path is reported", () => {
     const mutated = src.replace(
       "];\n\n/// The bundled",
-      '    song!(".local/qa-songs/katamar-translit.cho"),\n];\n\n/// The bundled',
+      '    song!(".local/qa-songs/qa-01.cho"),\n];\n\n/// The bundled',
     );
     expect(mutated).not.toBe(src);
     const problems = seedProblems(mutated, disk).join("\n");
@@ -175,6 +175,12 @@ describe("(c) .local/ is ignored and untracked", () => {
 const sha256 = (s: Buffer | string): string =>
   createHash("sha256").update(s).digest("hex");
 
+/** Problems with a 0001_init.sql text: CRLF checkouts (core.autocrlf) are normalised before hashing. */
+function v1HashProblems(text: string): string[] {
+  const hash = sha256(text.replace(/\r\n/g, "\n"));
+  return hash === V1_SHA256 ? [] : [`V1 hash mismatch: ${hash}`];
+}
+
 describe("(d) migrations", () => {
   const dir = "apps/desktop/src-tauri/migrations";
 
@@ -184,18 +190,29 @@ describe("(d) migrations", () => {
     );
   });
 
+  const shipped = (): string =>
+    readFileSync(path.join(repoRoot, dir, "0001_init.sql"), "utf8");
+
   it("0001_init.sql is byte-identical to the shipped V1", () => {
-    const bytes = readFileSync(path.join(repoRoot, dir, "0001_init.sql"));
-    // Normalize CRLF checkouts (core.autocrlf) before hashing.
-    expect(sha256(bytes.toString("utf8").replace(/\r\n/g, "\n"))).toBe(
-      V1_SHA256,
+    expect(v1HashProblems(shipped())).toEqual([]);
+  });
+
+  it("negative: an appended line is reported", () => {
+    expect(v1HashProblems(`${shipped()}-- x\n`).join("\n")).toContain(
+      "V1 hash mismatch",
     );
   });
 
-  it("negative: an edited 0001 changes the hash", () => {
-    const bytes = readFileSync(path.join(repoRoot, dir, "0001_init.sql"));
-    expect(sha256(Buffer.concat([bytes, Buffer.from("-- x\n")]))).not.toBe(
-      V1_SHA256,
-    );
+  it("negative: one changed character is reported", () => {
+    const text = shipped();
+    const mutated = `${text.slice(0, 10)}${text[10] === "x" ? "y" : "x"}${text.slice(11)}`;
+    expect(mutated).not.toBe(text);
+    expect(v1HashProblems(mutated).join("\n")).toContain("V1 hash mismatch");
+  });
+
+  it("a CRLF-converted copy reports no problem (normalisation)", () => {
+    const crlf = shipped().replace(/\r?\n/g, "\r\n");
+    expect(crlf).toContain("\r\n");
+    expect(v1HashProblems(crlf)).toEqual([]);
   });
 });
