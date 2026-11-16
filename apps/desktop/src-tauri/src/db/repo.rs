@@ -132,36 +132,66 @@ fn write_fts(
     Ok(())
 }
 
+/// Insert a new song inside `tx` (validation, UUIDv7 id, timestamp, INSERT, FTS row,
+/// fetch). Does not commit.
+pub(crate) fn insert_song_tx(tx: &Transaction<'_>, chordpro: &str) -> Result<Song, DbError> {
+    validate_chordpro(chordpro)?;
+    let meta = extract(chordpro);
+    let now = now_timestamp();
+    let id = Uuid::now_v7().hyphenated().to_string();
+    tx.execute(
+        "INSERT INTO songs (id, chordpro, title, artist, key, capo, language, \
+         created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+        params![
+            id,
+            chordpro,
+            meta.title,
+            meta.artist,
+            meta.key,
+            meta.capo,
+            language_str(meta.language),
+            now
+        ],
+    )?;
+    let rowid = tx.last_insert_rowid();
+    write_fts(tx, rowid, &meta.title, meta.artist.as_deref(), &meta.lyrics)?;
+    fetch_song(tx, &id)
+}
+
+/// Rebuild the whole search index: delete every `songs_fts` row, then write one row per
+/// song (rowid = `songs.rowid`) from its chordpro. Returns the number of rows written.
+pub(crate) fn rebuild_fts(tx: &Transaction<'_>) -> Result<usize, DbError> {
+    tx.execute("DELETE FROM songs_fts", [])?;
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = tx.prepare("SELECT rowid, chordpro FROM songs ORDER BY rowid")?;
+        let mapped = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        mapped.collect::<Result<Vec<_>, _>>()?
+    };
+    for (rowid, chordpro) in &rows {
+        let meta = extract(chordpro);
+        write_fts(
+            tx,
+            *rowid,
+            &meta.title,
+            meta.artist.as_deref(),
+            &meta.lyrics,
+        )?;
+    }
+    Ok(rows.len())
+}
+
 /// Create (`id: None`) or update a song; returns the stored row.
 pub fn save_song(conn: &mut Connection, input: &SaveSongInput) -> Result<Song, DbError> {
     validate_chordpro(&input.chordpro)?;
     if let Some(id) = &input.id {
         validate_id(id)?;
     }
-    let meta = extract(&input.chordpro);
-    let now = now_timestamp();
     let tx = conn.transaction()?;
-    let (id, rowid) = match &input.id {
-        None => {
-            let id = Uuid::now_v7().hyphenated().to_string();
-            tx.execute(
-                "INSERT INTO songs (id, chordpro, title, artist, key, capo, language, \
-                 created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
-                params![
-                    id,
-                    input.chordpro,
-                    meta.title,
-                    meta.artist,
-                    meta.key,
-                    meta.capo,
-                    language_str(meta.language),
-                    now
-                ],
-            )?;
-            let rowid = tx.last_insert_rowid();
-            (id, rowid)
-        }
+    let song = match &input.id {
+        None => insert_song_tx(&tx, &input.chordpro)?,
         Some(id) => {
+            let meta = extract(&input.chordpro);
+            let now = now_timestamp();
             let changed = tx.execute(
                 "UPDATE songs SET chordpro = ?2, title = ?3, artist = ?4, key = ?5, \
                  capo = ?6, language = ?7, updated_at = ?8 WHERE id = ?1",
@@ -181,17 +211,16 @@ pub fn save_song(conn: &mut Connection, input: &SaveSongInput) -> Result<Song, D
             }
             let rowid: i64 =
                 tx.query_row("SELECT rowid FROM songs WHERE id = ?1", [id], |r| r.get(0))?;
-            (id.clone(), rowid)
+            write_fts(
+                &tx,
+                rowid,
+                &meta.title,
+                meta.artist.as_deref(),
+                &meta.lyrics,
+            )?;
+            fetch_song(&tx, id)?
         }
     };
-    write_fts(
-        &tx,
-        rowid,
-        &meta.title,
-        meta.artist.as_deref(),
-        &meta.lyrics,
-    )?;
-    let song = fetch_song(&tx, &id)?;
     tx.commit()?;
     Ok(song)
 }

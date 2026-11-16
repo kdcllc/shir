@@ -1,14 +1,27 @@
 //! Hebrew search normalization (hebrew-rtl-chords rule 7).
 use unicode_normalization::UnicodeNormalization;
 
+/// Geresh, gershayim and the apostrophe/quote variants treated as intra-word marks.
+fn is_mark(c: char) -> bool {
+    matches!(
+        c,
+        '\u{05F3}' | '\u{05F4}' | '"' | '\'' | '\u{2019}' | '\u{02BC}'
+    )
+}
+
 /// Normalize text for search with the exact rule-7 pipeline, in this order:
 ///
 /// 1. maqaf (U+05BE) becomes a space, so hyphenated words stay two tokens;
 /// 2. NFD;
 /// 3. strip every code point in U+0591-U+05C7 (cantillation and niqqud);
 /// 4. NFC;
-/// 5. fold the final letters (ך ם ן ף ץ to כ מ נ פ צ);
-/// 6. `str::to_lowercase`.
+/// 5. delete intra-word marks: each of U+05F3, U+05F4, `"`, `'`, U+2019 and U+02BC is
+///    deleted when the code points immediately before and after it (in the step-4
+///    output) are both alphabetic and neither is itself one of those marks; every other
+///    occurrence (string edge, next to a space, digit or punctuation, or in a run of
+///    marks) is kept;
+/// 6. fold the final letters (ך ם ן ף ץ to כ מ נ פ צ);
+/// 7. `str::to_lowercase`.
 ///
 /// Stored text and search queries must both go through this same function.
 pub fn normalize_he(input: &str) -> String {
@@ -20,8 +33,22 @@ pub fn normalize_he(input: &str) -> String {
         .nfd()
         .filter(|c| !('\u{0591}'..='\u{05C7}').contains(c))
         .collect();
-    let folded: String = stripped
-        .nfc()
+    let composed: Vec<char> = stripped.nfc().collect();
+    let is_word_char = |c: char| c.is_alphabetic() && !is_mark(c);
+    let unmarked: String = composed
+        .iter()
+        .enumerate()
+        .filter(|&(i, &c)| {
+            let inside = i > 0
+                && is_mark(c)
+                && is_word_char(composed[i - 1])
+                && composed.get(i + 1).copied().is_some_and(is_word_char);
+            !inside
+        })
+        .map(|(_, &c)| c)
+        .collect();
+    let folded: String = unmarked
+        .chars()
         .map(|c| match c {
             'ך' => 'כ',
             'ם' => 'מ',
@@ -65,7 +92,7 @@ mod tests {
     fn every_case_matches_expected() {
         let file = load();
         assert!(file.license.contains("CC0-1.0"));
-        assert!(file.cases.len() >= 12);
+        assert!(file.cases.len() >= 30);
         for case in &file.cases {
             assert_eq!(
                 normalize_he(&case.input),

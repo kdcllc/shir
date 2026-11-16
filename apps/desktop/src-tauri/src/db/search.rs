@@ -104,7 +104,7 @@ mod tests {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../packages/test-fixtures/search/query.cases.json");
         let file: CaseFile = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        assert!(file.cases.len() >= 8);
+        assert!(file.cases.len() >= 19);
         for case in file.cases {
             let mut c = db();
             let mut text = String::new();
@@ -349,8 +349,12 @@ mod tests {
     fn match_expression_quotes_each_token() {
         assert_eq!(
             match_expression("Don't  sing-along"),
-            Some("\"don\"* \"t\"* \"sing\"* \"along\"*".to_owned())
+            Some("\"dont\"* \"sing\"* \"along\"*".to_owned())
         );
         assert_eq!(match_expression("  - "), None);
+        assert_eq!(
+            match_expression("צה״ל ka’tamar"),
+            Some("\"צהל\"* \"katamar\"*".to_owned())
+        );
     }
 }

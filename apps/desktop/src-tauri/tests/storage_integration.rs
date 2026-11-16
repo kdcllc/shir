@@ -74,7 +74,7 @@ fn lifecycle_survives_reopen_byte_identical() {
     let uv: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .expect("user_version");
-    assert_eq!(uv, 1);
+    assert_eq!(uv, 2);
     for (label, id, src) in &saved {
         let got = get_song(&conn, id).unwrap_or_else(|e| panic!("get {label}: {e:?}"));
         assert_eq!(got.chordpro.as_bytes(), src.as_bytes(), "{label}: bytes");
