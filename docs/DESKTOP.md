@@ -16,8 +16,9 @@ inline-start side under the app heading `<h1>`, rendered as
 - The production CSP `style-src 'self'` forbids `<style>` elements and
   `style="…"` attribute strings. `dangerouslySetInnerHTML` is banned separately
   by project rule.
-- The app heading `<h1>`, the `<nav>`, the view controls and the diagnostics
-  panel carry the `data-ui-chrome` attribute, so the existing print CSS
+- The app heading `<h1>`, the `<nav>`, the search box, the search-unavailable
+  notice, the loading text, the view controls and the diagnostics panel carry
+  the `data-ui-chrome` attribute, so the existing print CSS
   (`docs/BIDI.md` § Print CSS) hides them.
 - Colour rule: every colour declaration that uses `color-mix()` or the `Mark`
   system colour has a fallback declaration of the same property, on the same
@@ -36,8 +37,17 @@ nothing after the first emit attempt.
 
 ## Library
 
-Sources are bundled at build time with Vite `import.meta.glob(…)`, using the
-options `{ query: "?raw", import: "default", eager: true }`:
+The sidebar lists the songs stored in the database (`listSongs`), ordered by
+title with `Intl.Collator(["he", "en"])` (sensitivity `base`, numeric), ties
+broken by `id`, as one flat list with no group headings. Selecting a song loads
+it with `getSong` and parses it with `parseSong`.
+
+The bundled library described below is only the read-only fallback, used when
+`listSongs` fails: the sidebar then shows the `searchUnavailable` notice and the
+search box is disabled.
+
+Bundled sources are loaded at build time with Vite `import.meta.glob(…)`, using
+the options `{ query: "?raw", import: "default", eager: true }`:
 
 - group `samples`: `samples/*.cho`;
 - group `test-songs`: `packages/test-fixtures/fixtures/*.cho`.
@@ -55,9 +65,22 @@ are excluded. Songs inside a group sort by `fileName` in UTF-16 code-unit order.
   value; the field is absent otherwise.
 - `song` and `diagnostics` come from `parseSong(source)`, which never throws.
 
-Selection starts on the first song of the first non-empty group. When the
-library is empty there is no selection, and the song pane shows only
+In database mode, selection starts on the first title-sorted song. In the
+bundled fallback it starts on the first song of the first non-empty group. When
+the library is empty there is no selection, and the song pane shows only
 `Select a song` (`noSongSelected`).
+
+Database-mode states:
+
+- While `listSongs` is pending, the sidebar shows `loadingLibrary` and the pane
+  shows `noSongSelected`.
+- An empty database list shows `libraryEmpty`.
+- Once the search for a non-blank (trimmed) query completes, the results list
+  (`search-results`), `search-empty` or the `searchFailed` alert replaces the
+  library. During the debounce and the first in-flight request the library stays
+  visible, and while a newer search loads the previous results stay. Clearing
+  the box, pressing Esc or typing a whitespace-only query restores the library.
+- A `getSong` failure shows the `songLoadFailed` alert in the pane.
 
 ## Song pane
 
@@ -106,8 +129,20 @@ Selecting another song applies the same reset. The rendered song is
 
 Each component lives at `apps/desktop/src/components/<Name>.tsx`.
 
-- `SongList`: groups render in `SongGroup` order with their group label, and
-  empty groups are omitted. Each song is a `<button type="button">` showing the
+- `SearchBox`: an `<input type="search" dir="auto">` carrying `data-ui-chrome`.
+  Esc clears it, and it is disabled in the bundled fallback.
+- `SongIndex` (`variant: "library" | "results"`): renders the `song-index`
+  (library) or `search-results` (results) list. Each row shows the title and,
+  when present, the artist and the snippet (search hits only), each with
+  `dir="auto"`; the snippet renders as text only.
+- `songSource` (`apps/desktop/src/songSource.ts`): `sortByTitle` orders
+  summaries as described in § Library. `createDebouncedSearch` waits 150 ms by
+  default and trims the query; an empty or whitespace-only query goes idle with
+  no call. Stale responses and stale errors are dropped. A current error becomes
+  `{status:"error"}`, which `App` shows as the `searchFailed` alert.
+- `SongList` (bundled fallback only): groups render in `SongGroup` order with
+  their group label, and empty groups are omitted. Each song is a
+  `<button type="button">` showing the
   title (`dir="auto"`) and, when present, the artist (`dir="auto"`). Group
   labels: `samples` → `Samples`, `test-songs` → `Test songs`.
 - `SongHeader`: shows the title, artist, key and capo as described in
@@ -124,6 +159,11 @@ Props:
 ```ts
 SongList { songs: readonly LibrarySong[]; selectedId: string | undefined;
   onSelect(id: string): void }
+SearchBox { value: string; disabled?: boolean; onChange(next: string): void }
+SongIndexItem { id: string; title: string; artist?: string | null | undefined;
+  snippet?: string | null | undefined }
+SongIndex { items: readonly SongIndexItem[]; selectedId: string | undefined;
+  variant: "library" | "results"; onSelect(id: string): void }
 SongHeader { title: string; artist?: string; soundingKey?: string;
   capo: number }
 ViewControls { transpose: number; capo: number;
@@ -213,9 +253,7 @@ Coordinates have two meanings:
 
 ## Out of scope
 
-- Opening, importing or saving files. The storage commands and the
-  `apps/desktop/src/storage.ts` client exist (see `docs/DATA_MODEL.md`), but the
-  viewer does not call them yet.
+- Opening files, importing, editing, saving and deleting songs.
 - TanStack Router, Zustand, i18next and a Hebrew UI locale (planned G7).
 - Persistence of the last song or view settings.
 - Chord diagrams (G3).

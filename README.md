@@ -44,7 +44,7 @@ __libc_pthread_init`. The snap terminal leaks `GTK_PATH`, `LOCPATH`, `GIO_MODULE
 
 ## Repository layout
 
-- `apps/desktop` — Tauri 2 + React 19 + Vite desktop app (Rust side in `apps/desktop/src-tauri`). The frontend is the desktop song viewer: a bundled library of every `.cho` song in `samples/` and the test fixtures, a transpose/capo view and a diagnostics panel; file open is not supported yet. Spec in [`docs/DESKTOP.md`](docs/DESKTOP.md).
+- `apps/desktop` — Tauri 2 + React 19 + Vite desktop app (Rust side in `apps/desktop/src-tauri`). The frontend is the desktop song viewer: a searchable SQLite library seeded on first run from the bundled `.cho` songs (`samples/` plus the test fixtures), with niqqud-insensitive search and a read-only bundled fallback when the database cannot be opened, a transpose/capo view and a diagnostics panel; file open is not supported yet. Spec in [`docs/DESKTOP.md`](docs/DESKTOP.md).
 - `packages/chord-core` — shared chord logic package (text-direction and grapheme helpers, ChordPro parse and canonical save, chord transpose and capo view; spec in [`docs/CHORDPRO.md`](docs/CHORDPRO.md)).
 - `packages/chord-render` — shared React chord-sheet rendering package (`ChordSymbol`, `ChordLine`, `SongView`, `computeOverlapPadding`).
 - `packages/test-fixtures` — shared fixture package.
@@ -97,7 +97,8 @@ Every file under `samples/` must be original work written for this repository, o
 public domain with its source recorded in [`samples/LICENSES.md`](samples/LICENSES.md).
 Copyrighted lyrics and chord charts are never committed. A new song under `samples/` also
 needs an entry in `apps/desktop/src-tauri/tests/golden/extract.json`, derived from chord-core
-(see [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)).
+(see [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)), and an entry in
+`apps/desktop/src-tauri/src/db/seed.rs`, which tests enforce.
 
 ## More documentation
 

@@ -7,8 +7,9 @@ stored verbatim; everything else is derived from it on every save.
 
 ## Schema
 
-One migration, `apps/desktop/src-tauri/migrations/0001_init.sql`. It is
-forward-only: never edit a shipped migration, append a new one.
+Two migrations in `apps/desktop/src-tauri/migrations/`: `0001_init.sql` (V1) and
+`0002_app_meta_fts_rebuild.sql` (V2). They are forward-only: never edit a
+shipped migration, append a new one.
 
 `songs` is a `STRICT` table:
 
@@ -32,10 +33,16 @@ There is an index `idx_songs_updated_at` on `songs (updated_at)`.
 columns are the only place niqqud-stripped text is stored. There are no
 triggers: Rust writes the FTS row, because normalization happens in Rust.
 
+V2 adds `app_meta`, a `STRICT` key-value table: `key` TEXT primary key not
+null, `value` TEXT not null.
+
 ## Migrations and opening
 
-`src/db/migrations.rs` uses `rusqlite_migration` and embeds `0001_init.sql`
-with `include_str!`. `open(path)`:
+`src/db/migrations.rs` uses `rusqlite_migration` and embeds `0001_init.sql` and
+`0002_app_meta_fts_rebuild.sql` with `include_str!`. V2 is an
+`M::up_with_hook` migration: its hook runs `repo::rebuild_fts` inside the
+migration transaction, so a failed rebuild rolls back and leaves
+`user_version` at 1. The latest `user_version` is 2. `open(path)`:
 
 1. Creates the parent directories.
 2. Opens the file and sets `journal_mode = WAL`.
@@ -54,11 +61,19 @@ function (hebrew-rtl-chords rule 7). It runs these steps in order:
 2. NFD.
 3. Strip every code point in U+0591 to U+05C7 (cantillation and niqqud).
 4. NFC.
-5. Fold the final letters: ך to כ, ם to מ, ן to נ, ף to פ, ץ to צ.
-6. `str::to_lowercase`.
+5. Delete the marks ׳ U+05F3, ״ U+05F4, `"` U+0022, `'` U+0027, ’ U+2019 and
+   ʼ U+02BC when both neighbours, in that step's input, are alphabetic
+   (`char::is_alphabetic`) and not themselves one of these marks.
+6. Fold the final letters: ך to כ, ם to מ, ן to נ, ף to פ, ץ to צ.
+7. `str::to_lowercase`.
 
 Stored text and search queries both go through this same function. Shared
 cases live in `packages/test-fixtures/search/normalize_he.cases.json`.
+
+Known limitations: `Ka’tamar` indexes as `katamar`, so `tamar` no longer
+prefix-matches it; Hebrew prefix particles (ו ה ב ל מ ש כ) are not stripped
+(`חול` does not find `וחול`); there is no cross-script matching (`tamar` does
+not find `צדיק כתמר`).
 
 ## Metadata extraction
 
@@ -77,7 +92,12 @@ Rust: `parseSong(src).song.{title,key,capo}` plus the first non-empty trimmed
 must equal exactly every `.cho` file that is not `.canonical.cho` in both
 `packages/test-fixtures/fixtures/` and `samples/`, so adding a sample or
 fixture song needs a matching golden entry that matches chord-core output.
-`scripts/g4-contract.test.ts` checks both rules.
+`scripts/g4-contract.test.ts` checks both rules. A new bundled song also needs
+an entry in `apps/desktop/src-tauri/src/db/seed.rs`, and
+`scripts/g5-contract.test.ts` checks that the bindings carry the `SearchHit`
+shape, that the embedded seed set equals the songs on disk, that `.local/` is
+ignored and untracked, that 0002 creates `app_meta`, and that the sha256 of
+`0001_init.sql` is unchanged.
 
 ## Repository rules
 
@@ -102,7 +122,8 @@ fixture song needs a matching golden entry that matches chord-core output.
 
 ## Search
 
-`src/db/search.rs` turns the query into an FTS5 expression:
+`src/db/search.rs` has one shared tokenizer, used for both the `MATCH`
+expression and the snippet. It turns the query into an FTS5 expression:
 
 1. Run `normalize_he` on the query.
 2. Turn every non-alphanumeric character into a space.
@@ -113,6 +134,27 @@ A query with no tokens returns no results. The expression is a bound `MATCH`
 parameter. Results are ordered by `bm25`, then `updated_at DESC`, then
 `id DESC`, and limited to 100 (`SEARCH_LIMIT`). Shared cases live in
 `packages/test-fixtures/search/query.cases.json`.
+
+Each result is `SearchHit { song: SongSummary, snippet: string | null }`. The
+snippet is the first line of `extract(chordpro).lyrics` that holds a token
+starting with any query token, trimmed. It is the original text, so chords are
+stripped and niqqud is kept. It is cut to 160 characters without separating a
+base letter from its combining marks, with `…` appended only when cut. It is
+null when only the title or artist matched. Cases live in
+`packages/test-fixtures/search/snippet.cases.json`.
+
+## Seeding
+
+`src/db/seed.rs` embeds every `samples/*.cho` and every non-canonical
+`packages/test-fixtures/fixtures/*.cho` (17 today) with `include_str!`.
+`DbState::open` (file database only; in-memory states never seed) migrates,
+then seeds once in one transaction. The flag `app_meta.bundled_seeded` holds
+the count. Once it is present, seeding is a no-op, so deleted songs stay
+deleted and bundled updates never reach an existing database. Seeding depends
+only on the flag, not on existing rows, so an upgraded G4 database receives the
+bundled songs once, alongside its existing songs. A failure logs
+`shir: seeding failed: …`, rolls back, keeps the database usable and retries on
+the next launch.
 
 ## Errors
 
@@ -127,7 +169,8 @@ one of `NotFound`, `Invalid`, `Storage`, `Migration` or `Unavailable`.
 
 The database file is `<app_data_dir>/shir.db` (app identifier
 `com.kdcllc.shir`). If it cannot be opened, startup logs one line,
-`shir: database unavailable: …`, and every command returns `Unavailable`. A
+`shir: database unavailable: …`, and every command returns `Unavailable`.
+`DbState::open` opens, migrates, then seeds (see Seeding). A
 poisoned lock returns `Storage`.
 
 `build.rs` lists the five commands, and `capabilities/default.json` grants
@@ -149,9 +192,11 @@ Debug builds also rewrite the file at startup, only when the content differs.
 ## TypeScript client
 
 `apps/desktop/src/storage.ts` wraps the generated commands as `saveSong`,
-`getSong`, `listSongs`, `deleteSong` and `searchSongs`. A failure throws a
+`getSong`, `listSongs`, `deleteSong` and `searchSongs`; `searchSongs` returns
+`SearchHit[]`. A failure throws a
 `StorageError` whose `kind` is an `ErrorKind` or `"Ipc"` (the call itself
-failed). No UI uses the client yet.
+failed). The desktop sidebar calls `listSongs`, `getSong` and `searchSongs`
+(see [`DESKTOP.md`](DESKTOP.md)).
 
 ## Invariants
 
@@ -163,5 +208,9 @@ failed). No UI uses the client yet.
 - Never use `REPLACE` or `INSERT OR REPLACE` on `songs`; updates use `UPDATE`.
   Rowid reuse after a delete is safe only because the song row and its FTS row
   are deleted in one transaction.
+- After V2 a G4 build refuses the database (newer `user_version`), so there is
+  no downgrade.
+- The V2 rebuild keeps the rowid link: it runs DELETE plus INSERT per rowid,
+  never `REPLACE`.
 - A future migration that rebuilds the `songs` table must also rebuild
   `songs_fts`.
