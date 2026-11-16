@@ -16,7 +16,8 @@ inline-start side under the app heading `<h1>`, rendered as
 - The production CSP `style-src 'self'` forbids `<style>` elements and
   `style="…"` attribute strings. `dangerouslySetInnerHTML` is banned separately
   by project rule.
-- The app heading `<h1>`, the `<nav>`, the search box, the search-unavailable
+- The app heading `<h1>`, the `<nav>`, the search box, the search status
+  element, the search-unavailable
   notice, the loading text, the view controls and the diagnostics panel carry
   the `data-ui-chrome` attribute, so the existing print CSS
   (`docs/BIDI.md` § Print CSS) hides them.
@@ -65,21 +66,31 @@ are excluded. Songs inside a group sort by `fileName` in UTF-16 code-unit order.
   value; the field is absent otherwise.
 - `song` and `diagnostics` come from `parseSong(source)`, which never throws.
 
-In database mode, selection starts on the first title-sorted song. In the
+In database mode, selection starts on the first title-sorted song whose title
+equals the title of the bundled fallback's first song
+(`samples/demo-shir-bilingual.cho`); otherwise on the first title-sorted song. In the
 bundled fallback it starts on the first song of the first non-empty group. When
 the library is empty there is no selection, and the song pane shows only
 `Select a song` (`noSongSelected`).
 
+Loading state (before database mode): while `listSongs` is pending, the sidebar
+shows `loadingLibrary` and the pane shows `noSongSelected`.
+
 Database-mode states:
 
-- While `listSongs` is pending, the sidebar shows `loadingLibrary` and the pane
-  shows `noSongSelected`.
 - An empty database list shows `libraryEmpty`.
 - Once the search for a non-blank (trimmed) query completes, the results list
   (`search-results`), `search-empty` or the `searchFailed` alert replaces the
   library. During the debounce and the first in-flight request the library stays
   visible, and while a newer search loads the previous results stay. Clearing
   the box, pressing Esc or typing a whitespace-only query restores the library.
+- A persistent status element (`search-pending`, `role="status"`, carrying
+  `data-ui-chrome`) sits between the search box and the `<nav>` in database mode
+  only. It shows `searching` while a non-blank query is pending (debouncing or
+  loading) and is empty otherwise. While a query is pending, a shown results
+  list carries `aria-busy="true"` and keeps the previous results; on the first
+  in-flight request the library stays
+  visible and only the status text appears.
 - A `getSong` failure shows the `songLoadFailed` alert in the pane.
 
 ## Song pane
@@ -134,7 +145,9 @@ Each component lives at `apps/desktop/src/components/<Name>.tsx`.
 - `SongIndex` (`variant: "library" | "results"`): renders the `song-index`
   (library) or `search-results` (results) list. Each row shows the title and,
   when present, the artist and the snippet (search hits only), each with
-  `dir="auto"`; the snippet renders as text only.
+  `dir="auto"`; the snippet renders as text only. The optional `busy` prop sets
+  `aria-busy="true"` on the `search-results` list; the `library` list never
+  carries it.
 - `songSource` (`apps/desktop/src/songSource.ts`): `sortByTitle` orders
   summaries as described in § Library. `createDebouncedSearch` waits 150 ms by
   default and trims the query; an empty or whitespace-only query goes idle with
@@ -163,7 +176,8 @@ SearchBox { value: string; disabled?: boolean; onChange(next: string): void }
 SongIndexItem { id: string; title: string; artist?: string | null | undefined;
   snippet?: string | null | undefined }
 SongIndex { items: readonly SongIndexItem[]; selectedId: string | undefined;
-  variant: "library" | "results"; onSelect(id: string): void }
+  variant: "library" | "results"; busy?: boolean | undefined;
+  onSelect(id: string): void }
 SongHeader { title: string; artist?: string; soundingKey?: string;
   capo: number }
 ViewControls { transpose: number; capo: number;
@@ -172,6 +186,17 @@ ViewControls { transpose: number; capo: number;
   onReset(): void }
 DiagnosticsPanel { diagnostics: readonly Diagnostic[] }
 ```
+
+## Webview errors
+
+`apps/desktop/src/main.tsx` installs `installWebviewErrorForwarder(window,
+logWebviewError)` before rendering, in every build. It forwards window `error`
+events, `unhandledrejection` events and `console.error` calls (the original
+`console.error` still runs) through `logWebviewError` in `storage.ts`, which
+never rejects. The native side writes each one to stderr as
+`shir: webview: <text>`. The forwarder never throws, ignores an error raised
+while it is itself forwarding (on the same call stack), and includes the error
+message even when a JavaScriptCore stack omits it.
 
 ## Diagnostics panel
 
@@ -215,6 +240,7 @@ Coordinates have two meanings:
 | `song-snippet`       | `<span>`                | Lyric line of a search hit, rendered as text, only when non-null |
 | `song-index`         | `<ul>`                  | The `SongIndex` list of all DB songs, sorted by title            |
 | `search-results`     | `<ul>`                  | The `SongIndex` list holding the ranked search hits              |
+| `search-pending`     | `<p role="status">`     | Live region: `Searching…` while a query is pending, else empty   |
 
 ## Strings
 
@@ -241,6 +267,7 @@ Coordinates have two meanings:
 | `searchFailed`       | `Search failed`                                                                    |
 | `searchUnavailable`  | `Search unavailable: the song library could not be opened. Showing bundled songs.` |
 | `loadingLibrary`     | `Loading songs…`                                                                   |
+| `searching`          | `Searching…`                                                                       |
 | `libraryEmpty`       | `No songs in the library`                                                          |
 | `songLoadFailed`     | `Could not open this song`                                                         |
 | `noKey`              | `No key`                                                                           |

@@ -72,7 +72,7 @@ Each item is a command or an assertion the evaluator checks; a missing item for 
 4. **Mixed word order** — in `mixed_he_en`, "rock and roll" is visually LTR (word boxes increase in x).
 5. **Wrap** — after wrapping `long_wrap_line`, each chord sits on the same visual line as its anchor grapheme.
 6. **Print CSS** — print stylesheet keeps chords above lyrics and hides UI chrome (snapshot).
-7. **normalize_he unit tests** — maqaf U+05BE → space → NFD → strip U+0591–U+05C7 → NFC → delete ׳ ״ " ' ’ ʼ between two alphabetic characters that are not themselves marks → final letters ך→כ ם→מ ן→נ ף→פ ץ→צ → casefold; same fn on queries; "שלום" matches "שָׁלוֹם", "מלך" matches "מֶלֶךְ"; "צה״ל" / "צה"ל" match "צהל" and "Ka’tamar" matches "katamar".
+7. **normalize_he unit tests** — maqaf U+05BE → space → NFD → strip U+0591–U+05C7 → NFC → delete ׳ ״ " ' ’ ʼ between two alphabetic characters that are not themselves marks → final letters ך→כ ם→מ ן→נ ף→פ ץ→צ → casefold; same fn on queries; "שלום" matches "שָׁלוֹם", "מלך" matches "מֶלֶךְ"; `צה״ל` / `צה"ל` match `צהל` and "Ka’tamar" matches "katamar".
 8. **Importer golden files both directions** — chords-over-lyrics → ChordPro for RTL and LTR inputs; flip-alignment toggle covered (B9).
 9. **No physical CSS** — `pnpm stylelint` exits 0.
 

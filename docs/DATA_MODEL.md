@@ -1,6 +1,6 @@
 # Data model
 
-Normative spec for the desktop song storage (G4). Code lives in
+Normative spec for the desktop song storage (G4) and its G5 search and seeding additions. Code lives in
 `apps/desktop/src-tauri/` (Rust: `src/db/`, `src/commands/`, `migrations/`) and
 `apps/desktop/src/storage.ts` (typed TypeScript client). The ChordPro source is
 stored verbatim; everything else is derived from it on every save.
@@ -95,9 +95,10 @@ fixture song needs a matching golden entry that matches chord-core output.
 `scripts/g4-contract.test.ts` checks both rules. A new bundled song also needs
 an entry in `apps/desktop/src-tauri/src/db/seed.rs`, and
 `scripts/g5-contract.test.ts` checks that the bindings carry the `SearchHit`
-shape, that the embedded seed set equals the songs on disk, that `.local/` is
-ignored and untracked, that 0002 creates `app_meta`, and that the sha256 of
-`0001_init.sql` is unchanged.
+shape, that the embedded seed set equals the songs on disk, that the local QA
+directory is ignored and untracked, that 0002 creates `app_meta`, and that the sha256 of
+`0001_init.sql` is unchanged. `scripts/g5b-contract.test.ts` pins the `log_webview_error`
+wiring.
 
 ## Repository rules
 
@@ -154,7 +155,8 @@ deleted and bundled updates never reach an existing database. Seeding depends
 only on the flag, not on existing rows, so an upgraded G4 database receives the
 bundled songs once, alongside its existing songs. A failure logs
 `shir: seeding failed: …`, rolls back, keeps the database usable and retries on
-the next launch.
+the next launch. `DbState::open` writes this line to stderr through
+`DbState::open_with_log`, which takes the writer.
 
 ## Errors
 
@@ -166,16 +168,22 @@ one of `NotFound`, `Invalid`, `Storage`, `Migration` or `Unavailable`.
 `src/commands/mod.rs` defines five async Tauri commands: `save_song`,
 `get_song`, `list_songs`, `delete_song` and `search_songs`. They share one
 `DbState` (`src/commands/state.rs`), a `Mutex<Result<Connection, DbError>>`.
+A sixth command, `log_webview_error`, is synchronous: it writes one line
+`shir: webview: <text>` to stderr, returns nothing and does not use `DbState`.
+Control characters in the text become spaces, and the text is capped at 2000
+characters with `…` appended when cut.
 
 The database file is `<app_data_dir>/shir.db` (app identifier
 `com.kdcllc.shir`). If it cannot be opened, startup logs one line,
-`shir: database unavailable: …`, and every command returns `Unavailable`.
+`shir: database unavailable: <cause>`, and the five storage commands return
+`Unavailable`; `log_webview_error` is unaffected because it does not use
+`DbState`.
 `DbState::open` opens, migrates, then seeds (see Seeding). A
 poisoned lock returns `Storage`.
 
-`build.rs` lists the five commands, and `capabilities/default.json` grants
-`allow-save-song`, `allow-get-song`, `allow-list-songs`, `allow-delete-song` and
-`allow-search-songs` to the main window.
+`build.rs` lists the six commands, and `capabilities/default.json` grants
+`allow-save-song`, `allow-get-song`, `allow-list-songs`, `allow-delete-song`,
+`allow-search-songs` and `allow-log-webview-error` to the main window.
 
 ## Bindings
 
@@ -193,9 +201,11 @@ Debug builds also rewrite the file at startup, only when the content differs.
 
 `apps/desktop/src/storage.ts` wraps the generated commands as `saveSong`,
 `getSong`, `listSongs`, `deleteSong` and `searchSongs`; `searchSongs` returns
-`SearchHit[]`. A failure throws a
+`SearchHit[]`. A failure of one of these five throws a
 `StorageError` whose `kind` is an `ErrorKind` or `"Ipc"` (the call itself
-failed). The desktop sidebar calls `listSongs`, `getSong` and `searchSongs`
+failed). It also exports `logWebviewError(message)`, which forwards a webview
+error to the app's stderr and never rejects; the webview error forwarder uses
+it. The desktop sidebar calls `listSongs`, `getSong` and `searchSongs`
 (see [`DESKTOP.md`](DESKTOP.md)).
 
 ## Invariants
