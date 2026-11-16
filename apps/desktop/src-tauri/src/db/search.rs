@@ -470,6 +470,20 @@ mod tests {
     }
 
     #[test]
+    fn truncation_never_leaves_space_before_ellipsis() {
+        // The 160-char cut ends on a space (index 159); it must be trimmed off.
+        let spaced = format!("{} bcd", "a".repeat(159));
+        let out = truncate_snippet(&spaced);
+        assert_eq!(out, format!("{}\u{2026}", "a".repeat(159)));
+        assert!(!out.trim_end_matches('\u{2026}').ends_with(' '));
+        // A space followed by marks that are backed off also leaves no trailing space.
+        let marked = format!("{} \u{05B8}\u{05BC}ב", "a".repeat(158));
+        let out = truncate_snippet(&marked);
+        assert_eq!(out, format!("{}\u{2026}", "a".repeat(158)));
+        assert!(!out.contains(" \u{2026}"));
+    }
+
+    #[test]
     fn snippet_scans_lines_in_order_and_ignores_empty() {
         assert_eq!(
             snippet_for("a b\n\nc d", &["c".to_owned()]),

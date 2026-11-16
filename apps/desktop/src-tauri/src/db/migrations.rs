@@ -200,6 +200,8 @@ mod tests {
         assert_eq!(user_version(&c), 2);
         assert_eq!(count(&c, "songs"), 1);
         assert_eq!(count(&c, "app_meta"), 0);
+        // The V2 hook does not run again: the song added after V2 stays without an FTS row.
+        assert_eq!(count(&c, "songs_fts"), 0);
     }
 
     #[test]

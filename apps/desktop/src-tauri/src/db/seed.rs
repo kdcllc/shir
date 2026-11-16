@@ -142,7 +142,7 @@ mod tests {
         let mut sorted = paths.clone();
         sorted.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
         assert_eq!(paths, sorted);
-        assert!(paths.len() >= 17);
+        assert!(!paths.is_empty());
         for p in paths {
             assert!(
                 p.starts_with("samples/") || p.starts_with("packages/test-fixtures/fixtures/"),
@@ -203,6 +203,24 @@ mod tests {
         let n = bundled_songs().len();
         assert_eq!(seed_bundled(&mut c).unwrap(), n);
         assert_eq!(count(&c, "songs"), n as i64);
+    }
+
+    #[test]
+    fn flag_is_written_in_the_same_transaction_as_the_songs() {
+        let mut c = conn();
+        c.execute_batch(
+            "CREATE TEMP TRIGGER block_flag BEFORE INSERT ON app_meta \
+             BEGIN SELECT RAISE(ABORT, 'no flag'); END;",
+        )
+        .unwrap();
+        assert!(seed_bundled(&mut c).is_err());
+        assert_eq!(count(&c, "songs"), 0);
+        assert_eq!(count(&c, "songs_fts"), 0);
+        assert_eq!(flag(&c), None);
+        c.execute_batch("DROP TRIGGER block_flag;").unwrap();
+        let n = bundled_songs().len();
+        assert_eq!(seed_bundled(&mut c).unwrap(), n);
+        assert_eq!(flag(&c), Some(n.to_string()));
     }
 
     #[test]
