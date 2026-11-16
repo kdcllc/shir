@@ -13,6 +13,7 @@ export default tseslint.config(
       "**/target/**",
       "**/node_modules/**",
       "apps/desktop/src-tauri/gen/**",
+      "apps/desktop/src/bindings.ts",
       ".agents/**",
       ".claude/**",
       "_kit/**",
