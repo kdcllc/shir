@@ -103,5 +103,19 @@
     "artist": "Shir demo",
     "key": "Am",
     "capo": null
+  },
+  {
+    "file": "samples/demo-twin-he.cho",
+    "title": "מגדלור בערפל",
+    "artist": "להקת גלי נחל",
+    "key": "Am",
+    "capo": null
+  },
+  {
+    "file": "samples/demo-twin-translit.cho",
+    "title": "Migdalor Ba’arafel",
+    "artist": "Galei Nachal Band",
+    "key": "Am",
+    "capo": null
   }
 ]
