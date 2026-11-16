@@ -296,9 +296,22 @@ describe("round-trip fixtures", () => {
 //   "Open the door" n=13: C s=0, G/B s=5, Fmaj7 s=16 > n -> 13 + chord-past-end
 //   chord-only line "Am  G  C  F" -> "[Am] [G] [C] [F]" (followed by a blank line)
 //   "Quiet rivers carry me home" n=26: C 0, Em 6, F 13
-// derivation mixed_over_lyrics
-//   "אני שר blues בלילה" n=18 (first strong = Hebrew -> rtl): G s=4 e=5, Dm s=9 e=11, F s=13 e=14, Am s=16 e=18
-//     mirror : G 13, Dm 7 (before "b"), F 4, Am 0;  logical: G 4, Dm 9 (mid "blues"), F 13, Am 16
+// derivation mixed_over_lyrics (mirror = bidi-run visual map, R6 as amended by Q&A row 13)
+//   "אני שר blues בלילה" n=18 (first strong = Hebrew -> rtl). Indices: אני 0-2, sp 3, שר 4-5,
+//     sp 6, blues 7-11, sp 12, בלילה 13-17.
+//   types : R x3, N(3), R x2, N(6), L x5, N(12), R x5; N3 sits between R and R -> R;
+//           N6 (R before, L after) and N12 (L before, R after) -> L (paragraph direction)
+//   levels: 0-5 -> 1, 6-12 -> 0, 13-17 -> 1 (no EN, so no level 2)
+//   L2    : reverse [0..5] and [13..17]
+//   vis   : [5,4,3,2,1,0, 6,7,8,9,10,11,12, 17,16,15,14,13]
+//   chord line "G Em Dm7 Dm   F Am": G s=0 e=1, Em s=2 e=4, Dm7 s=5 e=8, Dm s=9 e=11, F s=14 e=15, Am s=16 e=18
+//     mirror : G   vis[0]=5 odd -> rule 2 vis[0]=5   -> i=5  (ש[G]ר)
+//              Em  vis[2]=3 odd -> rule 2 vis[3]=2   -> i=2  (אנ[Em]י)
+//              Dm7 vis[5]=0 odd -> rule 2 vis[7]=7   -> i=7  ([Dm7]blues; straddles the RTL->LTR boundary)
+//              Dm  vis[9]=9 even -> rule 1           -> i=9  (bl[Dm]ues)
+//              F   vis[14]=16 odd -> rule 2 vis[14]  -> i=16 (בלי[F]לה)
+//              Am  vis[16]=14 odd -> rule 2 vis[17]=13 -> i=13 ([Am]בלילה)
+//     logical: i = s: G 0, Em 2, Dm7 5 (mid שר), Dm 9, F 14, Am 16
 //   English line n=26 (ltr): C s=0, G s=6, Am s=13, F s=22 in both modes
 // derivation header_he_over_lyrics (directives and the inline-chord line pass through)
 //   "שיר קטן לערב" n=12: C s=3 e=4, G s=7 e=8, Am s=10 e=12
