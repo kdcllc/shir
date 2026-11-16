@@ -1,23 +1,35 @@
 //! Full-text song search over the normalized `songs_fts` index.
 use super::error::DbError;
+use super::extract::extract;
 use super::model::{SearchHit, SongSummary};
 use super::normalize::normalize_he;
 use super::repo::summary_from_row;
 use rusqlite::Connection;
+use unicode_normalization::char::is_combining_mark;
 
 /// Maximum number of search results returned.
 pub const SEARCH_LIMIT: usize = 100;
+
+/// Maximum snippet length in `char`s before truncation.
+const SNIPPET_MAX_CHARS: usize = 160;
+
+/// Split text into search tokens: `normalize_he`, every non-alphanumeric character
+/// becomes a separator, then split on whitespace. Shared by the MATCH expression and
+/// the snippet so both agree on what a query word is.
+fn tokenize(text: &str) -> Vec<String> {
+    let spaced: String = normalize_he(text)
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    spaced.split_whitespace().map(str::to_owned).collect()
+}
 
 /// Turn a user query into an FTS5 MATCH expression of quoted prefix terms (implicit
 /// AND), or `None` when it has no tokens. Every non-alphanumeric character becomes a
 /// separator, so no FTS5 syntax can survive.
 fn match_expression(query: &str) -> Option<String> {
-    let spaced: String = normalize_he(query)
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
-        .collect();
-    let terms: Vec<String> = spaced
-        .split_whitespace()
+    let terms: Vec<String> = tokenize(query)
+        .iter()
         .map(|t| format!("\"{}\"*", t.replace('"', "\"\"")))
         .collect();
     if terms.is_empty() {
@@ -27,28 +39,68 @@ fn match_expression(query: &str) -> Option<String> {
     }
 }
 
+/// Niqqud, cantillation and other Hebrew points (U+0591-U+05C7) plus general-category
+/// combining marks.
+fn is_mark(c: char) -> bool {
+    ('\u{0591}'..='\u{05C7}').contains(&c) || is_combining_mark(c)
+}
+
+/// Trim a snippet line and cut it to `SNIPPET_MAX_CHARS`, never separating a base
+/// letter from its marks; a cut line ends with `…`.
+fn truncate_snippet(line: &str) -> String {
+    let line = line.trim();
+    let chars: Vec<char> = line.chars().collect();
+    if chars.len() <= SNIPPET_MAX_CHARS {
+        return line.to_owned();
+    }
+    let mut cut = SNIPPET_MAX_CHARS;
+    while cut > 0 && is_mark(chars[cut]) {
+        cut -= 1;
+    }
+    let kept: String = chars[..cut].iter().collect();
+    format!("{}\u{2026}", kept.trim_end())
+}
+
+/// The first lyric line (chords stripped, original text) with a word starting with any
+/// query token, or `None` when only the title or artist matched.
+fn snippet_for(chordpro: &str, query_tokens: &[String]) -> Option<String> {
+    if query_tokens.is_empty() {
+        return None;
+    }
+    extract(chordpro)
+        .lyrics
+        .split('\n')
+        .find(|line| {
+            tokenize(line)
+                .iter()
+                .any(|w| query_tokens.iter().any(|q| w.starts_with(q.as_str())))
+        })
+        .map(truncate_snippet)
+}
+
 /// Search songs by normalized query, at most `SEARCH_LIMIT` results.
 pub fn search_songs(conn: &Connection, query: &str) -> Result<Vec<SearchHit>, DbError> {
     let Some(expr) = match_expression(query) else {
         return Ok(Vec::new());
     };
+    let query_tokens = tokenize(query);
     let mut stmt = conn.prepare(
-        "SELECT s.id, s.title, s.artist, s.key, s.language, s.updated_at \
+        "SELECT s.id, s.title, s.artist, s.key, s.language, s.updated_at, s.chordpro \
          FROM songs_fts JOIN songs s ON s.rowid = songs_fts.rowid \
          WHERE songs_fts MATCH ?1 \
          ORDER BY bm25(songs_fts), s.updated_at DESC, s.id DESC \
          LIMIT ?2",
     )?;
     let limit = i64::try_from(SEARCH_LIMIT).unwrap_or(100);
-    let rows = stmt.query_map(rusqlite::params![expr, limit], summary_from_row)?;
-    let songs: Vec<SongSummary> = rows.collect::<Result<Vec<_>, _>>()?;
-    Ok(songs
-        .into_iter()
-        .map(|song| SearchHit {
+    let rows = stmt.query_map(rusqlite::params![expr, limit], |row| {
+        let song: SongSummary = summary_from_row(row)?;
+        let chordpro: String = row.get(6)?;
+        Ok(SearchHit {
+            snippet: snippet_for(&chordpro, &query_tokens),
             song,
-            snippet: None,
         })
-        .collect())
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 #[cfg(test)]
@@ -356,5 +408,73 @@ mod tests {
             match_expression("צה״ל ka’tamar"),
             Some("\"צהל\"* \"katamar\"*".to_owned())
         );
+    }
+
+    #[derive(Deserialize)]
+    struct SnippetCase {
+        name: String,
+        chordpro: String,
+        query: String,
+        snippet: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    struct SnippetFile {
+        cases: Vec<SnippetCase>,
+    }
+
+    #[test]
+    fn snippet_fixture_cases_behave() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../packages/test-fixtures/search/snippet.cases.json");
+        let file: SnippetFile =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert!(file.cases.len() >= 13);
+        for case in file.cases {
+            let mut c = db();
+            add(&mut c, &case.chordpro);
+            let hits = search_songs(&c, &case.query).unwrap();
+            assert!(!hits.is_empty(), "case {:?} must be a hit", case.name);
+            assert_eq!(hits[0].snippet, case.snippet, "case {:?}", case.name);
+        }
+    }
+
+    #[test]
+    fn truncation_boundaries() {
+        let l160 = "א".repeat(160);
+        assert_eq!(truncate_snippet(&l160), l160);
+        let l161 = "א".repeat(161);
+        assert_eq!(
+            truncate_snippet(&l161),
+            format!("{}\u{2026}", "א".repeat(160))
+        );
+        // Mark is the first dropped char (index 160): cut backs off past its base letter.
+        let marked = format!("{}\u{05B8}ב", "א".repeat(160));
+        assert_eq!(
+            truncate_snippet(&marked),
+            format!("{}\u{2026}", "א".repeat(159))
+        );
+        // Mark at index 160 but marks also at 159: both are dropped with their base.
+        let two = format!("{}\u{05B8}\u{05BC}ב", "א".repeat(159));
+        assert_eq!(
+            truncate_snippet(&two),
+            format!("{}\u{2026}", "א".repeat(158))
+        );
+        // Mn mark outside the Hebrew range (combining acute) also backs off.
+        let acute = format!("{}\u{0301}b", "e".repeat(160));
+        assert_eq!(
+            truncate_snippet(&acute),
+            format!("{}\u{2026}", "e".repeat(159))
+        );
+        assert_eq!(truncate_snippet("  hi  "), "hi");
+    }
+
+    #[test]
+    fn snippet_scans_lines_in_order_and_ignores_empty() {
+        assert_eq!(
+            snippet_for("a b\n\nc d", &["c".to_owned()]),
+            Some("c d".to_owned())
+        );
+        assert_eq!(snippet_for("a b", &[]), None);
     }
 }
