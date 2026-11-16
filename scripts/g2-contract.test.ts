@@ -76,9 +76,13 @@ describe("G2 contract: line kinds", () => {
 });
 
 describe("G2 contract: API names documented", () => {
-  const files = ["chord.ts", "serialize.ts", "transpose.ts", "song.ts"].map(
-    (f) => `packages/chord-core/src/${f}`,
-  );
+  const files = [
+    "chord.ts",
+    "serialize.ts",
+    "transpose.ts",
+    "song.ts",
+    "import.ts",
+  ].map((f) => `packages/chord-core/src/${f}`);
 
   it("finds the expected exported functions", () => {
     const names = files.flatMap(exportedFunctions);
@@ -92,6 +96,7 @@ describe("G2 contract: API names documented", () => {
       "transposeChord",
       "transposeSong",
       "viewSong",
+      "importText",
     ]) {
       expect(names).toContain(n);
     }

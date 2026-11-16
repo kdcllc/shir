@@ -28,7 +28,45 @@ section name, `tab` as `<p data-line="tab" dir="ltr">`, and `raw` as `<p data-li
 all as plain text. `meta`, `remark`, `directive` and section ends render nothing. Chord symbols
 (`<bdi dir="ltr">`) appear only in lyric and chord-only lines.
 
-B7–B9 (editor, UI chrome, importer) are not part of the G1 rendering spike.
+B7 (editor input direction) and B9 (importer) are implemented as described below. B8 (UI chrome) is
+not covered by this page.
+
+## Editor input (B7)
+
+The editor is a plain `<textarea dir="auto">` (`apps/desktop/src/components/Editor.tsx`).
+
+## Importer column mapping (B9)
+
+`importText` (`packages/chord-core/src/import.ts`, rules in `docs/CHORDPRO.md` `## Import`) merges a chord
+line into the lyric line below it by column. LTR lyric lines always use logical columns: the chord at
+code-point column `s` anchors at grapheme `s`. For RTL lyric lines (first-strong direction `rtl`) the
+`rtlColumns` option picks the model:
+
+- `logical`: the same as LTR, anchor grapheme index = start column.
+- `mirror` (default): columns are read against the order an LTR-paragraph plain-text editor shows, so
+  the chord goes over the grapheme visibly under it (a visual bidi map, Q&A row 13, rather than a plain
+  right-edge measurement). The visual map is a simplified UAX #9: W7 (digits
+  after Latin or with no strong before become L), N1/N2 (a neutral run takes the surrounding direction
+  when both sides agree, else L), I1 levels, and L2 reordering. RTL runs are reversed, while embedded
+  Latin and digit runs keep their LTR order.
+  1. If the chord's start column shows an LTR-level grapheme, anchor on it.
+  2. Otherwise anchor on the grapheme shown at the chord's last column. A chord straddling an RTL to
+     LTR boundary therefore anchors on the LTR end (`[Dm7]blues` in the `mixed_over_lyrics` fixture).
+  3. When neither rule applies because the chord's last column lies beyond the line (its start column not showing an LTR-level grapheme), it clamps: to the grapheme shown at the line's last column when that grapheme is
+     RTL-level, else to the end of the line (index 0 for an empty lyric), with a `chord-past-end`
+     warning.
+- In both models an anchor on whitespace snaps forward to the next non-whitespace grapheme (or to the end of the line when only whitespace follows) (not to the
+  nearest, unlike B9's wording), and in `logical` a column past the end clamps to the end of line with
+  `chord-past-end`.
+
+Documented gaps of the simplified map (`import.ts`):
+
+- W4/W5 number separators and terminators (`1,000`, `5%` inside RTL text) are plain neutrals, resolved
+  by N1/N2 rather than joining the digit run.
+- Arabic-Indic digits are classed R like all Hebrew and Arabic script graphemes, not AN.
+
+The editor shows a Flip control when the last import has `hasRtlChords` (`Editor.tsx`), and opened files
+whose import has `hasRtlChords` are queued for review (`apps/desktop/src/importFiles.ts`).
 
 ## Overlap pass (B4)
 

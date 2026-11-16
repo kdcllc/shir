@@ -1,0 +1,13 @@
+# Original text written for the Shir repository (CC0-1.0)
+{title: Morning Road}
+{key: G}
+
+[G]Walking down the [C]road
+[Am]Singing a [D]song
+
+{start_of_tab}
+   Am      C
+e|---0---|---1---|
+{end_of_tab}
+
+[F]Sunlight on the [C]hill

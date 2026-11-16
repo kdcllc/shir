@@ -145,6 +145,22 @@ Every exported function of chord-core:
 | `viewSong`             | `viewSong(song: SongModel, options?: ViewOptions): ViewResult`                                                  | Build the view-only transposed and capo-shaped song.                      |
 | `firstStrongDirection` | `firstStrongDirection(text: string): TextDirection \| null`                                                     | First-strong direction of a text (G1).                                    |
 | `splitGraphemes`       | `splitGraphemes(text: string): string[]`                                                                        | Split text into grapheme clusters (G1).                                   |
+| `importText`           | `importText(text: string, options?: ImportOptions): ImportResult`                                               | Convert pasted ChordPro or chords-over-lyrics text to ChordPro.           |
+
+## Import
+
+`importText(text, options?)` (`packages/chord-core/src/import.ts`) turns pasted text into ChordPro. It never throws. `options.rtlColumns` is `'mirror'` (default) or `'logical'`; see `BIDI.md` `## Importer column mapping (B9)`. The result is `{ chordpro, format, hasRtlChords, warnings }`.
+
+- Input is normalized first: one leading U+FEFF is dropped, and CRLF and lone CR become LF. The trailing-newline state is kept.
+- Detection is per line, not per file. These lines pass through unchanged: empty or whitespace-only lines, lines starting with `#`, whole-line `{…}` directives, and lines that already hold an inline `[chord]` (a bracket whose text `parseChord` accepts).
+- Literal sections (`tab`, `grid`, `abc`, `ly`, `textblock`, `svg`, plus the `sot`/`sog` start aliases) pass through from the start tag to the first matching end tag, which must be the same kind. An unterminated section passes through to the end of the text.
+- A chord line is a non-empty line whose whitespace-separated tokens all parse as chords (`parseChord`); tabs are expanded to 8-column stops first. A chord line followed by a lyric line (a line that is not passthrough and not itself a chord line) is merged: each chord becomes an inline `[chord]` anchor at the lyric grapheme under its column. A chord line with no such following line becomes a chord-only line, `[Am] [G]`.
+- Chord columns are counted in code points of the chord line; anchors are placed at grapheme indices of the lyric line, so a chord never lands inside a grapheme cluster. A column that falls on whitespace snaps forward to the next non-whitespace grapheme (or to the end of the line when only whitespace follows), never backward. Chords at the same index keep their source order.
+- `format` is `"chords-over-lyrics"` when at least one chord line was converted (mixed input included), else `"chordpro"`, in which case the text is returned as normalized and `hasRtlChords` is `false`.
+- `hasRtlChords` is `true` when a merged lyric line has first-strong direction `rtl`.
+- Warnings are `{ line, code, message }` with a 1-based source line:
+  - `chord-past-end`: a chord column lies beyond the end of its lyric line (the chord is clamped).
+  - `no-chords`: nothing was converted and no non-directive line holds an inline chord. It fires at line 1. Inline chords that sit only in directives or literal sections do not count, so such a text still gets `no-chords`.
 
 ## Unicode
 

@@ -286,6 +286,7 @@ describe("STACK.md consistency with pnpm and cargo", () => {
         "specta-typescript",
         "tauri",
         "tauri-build",
+        "tauri-plugin-dialog",
         "tauri-specta",
         "tempfile",
         "thiserror",

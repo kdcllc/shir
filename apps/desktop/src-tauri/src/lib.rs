@@ -37,6 +37,7 @@ pub fn run() {
     let smoke_mode = smoke::is_smoke_mode(std::env::var("SHIR_SMOKE").ok().as_deref());
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(commands::specta_builder().invoke_handler())
         .setup(move |app| {
             app.manage(open_db_state(app));

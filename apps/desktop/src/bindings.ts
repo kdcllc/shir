@@ -12,6 +12,8 @@ export const commands = {
 	listSongs: (options?: InvokeOptions) => typedError<SongSummary_Serialize[], DbError>(__TAURI_INVOKE("list_songs", undefined, options)),
 	deleteSong: (id: string, options?: InvokeOptions) => typedError<null, DbError>(__TAURI_INVOKE("delete_song", { id }, options)),
 	searchSongs: (query: string, options?: InvokeOptions) => typedError<SearchHit_Serialize[], DbError>(__TAURI_INVOKE("search_songs", { query }, options)),
+	/**  Read a text file picked by the user. */
+	readTextFile: (path: string, options?: InvokeOptions) => typedError<string, FileError>(__TAURI_INVOKE("read_text_file", { path }, options)),
 	/**  Forward a webview error to stderr. Never fails. */
 	logWebviewError: (message: string, options?: InvokeOptions) => __TAURI_INVOKE<void>("log_webview_error", { message }, options),
 };
@@ -25,6 +27,15 @@ export type DbError = {
 
 /**  Category of a storage failure. */
 export type ErrorKind = "NotFound" | "Invalid" | "Storage" | "Migration" | "Unavailable";
+
+/**  A file-read error: serializes as `{"kind":"<Kind>","message":"<text>"}`. */
+export type FileError = {
+	kind: FileErrorKind,
+	message: string,
+};
+
+/**  Category of a file-read failure. */
+export type FileErrorKind = "TooLarge" | "NotUtf8" | "Io";
 
 /**  Dominant script of a song's lyrics. */
 export type Language = "he" | "en" | "mixed";

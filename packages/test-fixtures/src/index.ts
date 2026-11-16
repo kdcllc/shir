@@ -92,3 +92,68 @@ export function readDiagnostics(name: FixtureName): unknown[] {
   if (!existsSync(p)) return [];
   return JSON.parse(readFileSync(p, "utf8")) as unknown[];
 }
+
+/**
+ * Importer fixtures (`import/<name>.txt` input, `<name>.cho` golden for the
+ * default `rtlColumns: "mirror"`, `<name>.logical.cho` golden for `"logical"`
+ * on RTL fixtures). Kept apart from {@link ALL_FIXTURE_NAMES} on purpose.
+ */
+export const IMPORT_FIXTURE_NAMES = [
+  "he_over_lyrics",
+  "he_niqqud_over_lyrics",
+  "en_over_lyrics",
+  "mixed_over_lyrics",
+  "chordpro_passthrough",
+  "header_he_over_lyrics",
+] as const;
+
+export type ImportFixtureName = (typeof IMPORT_FIXTURE_NAMES)[number];
+
+const LOGICAL_GOLDEN_NAMES: ReadonlySet<string> = new Set([
+  "he_over_lyrics",
+  "he_niqqud_over_lyrics",
+  "mixed_over_lyrics",
+  "header_he_over_lyrics",
+]);
+
+function assertImportName(name: string): void {
+  if (!(IMPORT_FIXTURE_NAMES as readonly string[]).includes(name)) {
+    throw new TypeError(`Unknown import fixture name: ${String(name)}`);
+  }
+}
+
+function importFile(file: string): string {
+  return fileURLToPath(new URL(`../import/${file}`, import.meta.url));
+}
+
+/** True when the fixture is RTL and has a `<name>.logical.cho` golden. */
+export function hasLogicalGolden(name: ImportFixtureName): boolean {
+  assertImportName(name);
+  return LOGICAL_GOLDEN_NAMES.has(name);
+}
+
+/** UTF-8 input text (`<name>.txt`) of an import fixture. */
+export function readImportInput(name: ImportFixtureName): string {
+  assertImportName(name);
+  return readFileSync(importFile(`${name}.txt`), "utf8");
+}
+
+/**
+ * Expected `importText` output. Omitted variant is the default `mirror`
+ * golden (`<name>.cho`); `"logical"` reads `<name>.logical.cho`.
+ */
+export function readImportGolden(
+  name: ImportFixtureName,
+  variant?: "logical",
+): string {
+  assertImportName(name);
+  if (variant === undefined) {
+    return readFileSync(importFile(`${name}.cho`), "utf8");
+  }
+  if (variant !== "logical" || !LOGICAL_GOLDEN_NAMES.has(name)) {
+    throw new TypeError(
+      `No ${String(variant)} golden for import fixture: ${name}`,
+    );
+  }
+  return readFileSync(importFile(`${name}.logical.cho`), "utf8");
+}

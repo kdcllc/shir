@@ -1,0 +1,94 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file {
+  margin-block: 0;
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.status {
+  margin-block: 0;
+  min-block-size: 1.25rem;
+  font-size: 0.85rem;
+  color: GrayText;
+}
+
+.warnings {
+  padding-block: 0.5rem;
+  padding-inline: 0.75rem;
+  border: 1px solid GrayText;
+  border-radius: 0.375rem;
+  color-scheme: light dark;
+}
+
+.warnings-heading {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.warning-items {
+  margin-block: 0.4rem 0;
+  margin-inline: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (width <= 50rem) {
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.input-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-inline-size: 0;
+}
+
+.label {
+  font-size: 0.85rem;
+}
+
+.input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 20rem;
+  padding-block: 0.5rem;
+  padding-inline: 0.6rem;
+  border: 1px solid GrayText;
+  border-radius: 0.375rem;
+  background: Canvas;
+  color: CanvasText;
+  color-scheme: light dark;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  text-align: start;
+  resize: vertical;
+}
+
+.input:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 1px;
+}
+
+.preview {
+  min-inline-size: 0;
+  overflow-x: auto;
+}

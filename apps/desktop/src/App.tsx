@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parseSong, viewSong } from "chord-core";
+import { importText, parseSong, viewSong } from "chord-core";
 import type { Diagnostic, SongModel } from "chord-core";
 import { SongView } from "chord-render";
 import styles from "./App.module.css";
+import { ConfirmDiscard } from "./components/ConfirmDiscard";
 import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
+import { Editor } from "./components/Editor";
+import type { ImportSeed } from "./components/Editor";
 import { SearchBox } from "./components/SearchBox";
 import { SongHeader } from "./components/SongHeader";
 import { SongIndex } from "./components/SongIndex";
 import type { SongIndexItem } from "./components/SongIndex";
 import { SongList } from "./components/SongList";
 import { ViewControls } from "./components/ViewControls";
+import { pickSongFiles, readTextFile } from "./files";
+import { fileNameOf, importSongFiles } from "./importFiles";
+import type { FileImportReport, QueuedFile } from "./importFiles";
 import { capoOptions, loadLibrary } from "./library";
 import { createDebouncedSearch, sortByTitle } from "./songSource";
 import type {
@@ -18,9 +24,9 @@ import type {
   SummaryIndex,
   SummaryList,
 } from "./songSource";
-import { getSong, listSongs, searchSongs } from "./storage";
-import type { SongSummary } from "./storage";
-import { STRINGS } from "./strings";
+import { getSong, listSongs, saveSong, searchSongs } from "./storage";
+import type { Song, SongSummary } from "./storage";
+import { STRINGS, importQueued, importSummary } from "./strings";
 import { signalUiReady } from "./uiReady";
 
 type Mode = "loading" | "db" | "bundled";
@@ -31,6 +37,28 @@ interface Current {
   song: SongModel;
   diagnostics: Diagnostic[];
 }
+
+interface Session {
+  key: number;
+  /** Song being edited; absent for a new song. */
+  id?: string | undefined;
+  text: string;
+  baseline: string;
+  seed?: ImportSeed | undefined;
+  /** Source path of a queued file under review. */
+  path?: string | undefined;
+}
+
+function messageOf(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
+const noSession = (): Session | undefined => undefined;
+const noQueue = (): QueuedFile[] => [];
+const noPaths = (): string[] => [];
+const noReport = (): FileImportReport | undefined => undefined;
+const noMessage = (): string | undefined => undefined;
+const noAction = (): (() => void) | undefined => undefined;
 
 const loadingMode = (): Mode => "loading";
 const noSummaries = (): SongSummary[] => [];
@@ -56,6 +84,15 @@ export function App() {
   const [capo, setCapo] = useState(0);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState(idle);
+  const [session, setSession] = useState(noSession);
+  const [dirty, setDirty] = useState(false);
+  const [queue, setQueue] = useState(noQueue);
+  const [skipped, setSkipped] = useState(noPaths);
+  const [report, setReport] = useState(noReport);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState(noMessage);
+  const [confirming, setConfirming] = useState(noAction);
+  const sessionKey = useRef(0);
   const request = useRef(0);
   const listing = useRef(noList());
   const debounced = useRef(noSearch());
@@ -85,11 +122,132 @@ export function App() {
       });
   }, []);
 
+  /** Runs `action` now, or after the user discards a dirty editor. */
+  const guard = (action: () => void) => {
+    if (session !== undefined && dirty) setConfirming(() => action);
+    else action();
+  };
+
+  const endSession = () => {
+    setSession(undefined);
+    setQueue([]);
+    setDirty(false);
+  };
+
+  /** Leaves the editor without saving; a queued file and the rest of the queue are skipped. */
+  const abandon = () => {
+    if (session === undefined) return;
+    const left = [
+      ...(session.path ? [session.path] : []),
+      ...queue.map((q) => q.path),
+    ];
+    if (left.length > 0) setSkipped((prev) => [...prev, ...left]);
+    endSession();
+  };
+
+  const openQueued = (list: readonly QueuedFile[]) => {
+    const [head, ...rest] = list;
+    if (head === undefined) {
+      endSession();
+      return;
+    }
+    setQueue(rest);
+    setSession({
+      key: ++sessionKey.current,
+      text: head.result.chordpro,
+      baseline: "",
+      seed: { source: head.source, result: head.result },
+      path: head.path,
+    });
+  };
+
+  const openNew = () =>
+    guard(() => {
+      abandon();
+      setQueue([]);
+      setSession({ key: ++sessionKey.current, text: "", baseline: "" });
+    });
+
+  const openEdit = () => {
+    const id = selectedId;
+    if (id === undefined) return;
+    guard(() => {
+      getSong(id)
+        .then((stored) => {
+          abandon();
+          setQueue([]);
+          setNotice(undefined);
+          setSession({
+            key: ++sessionKey.current,
+            id,
+            text: stored.chordpro,
+            baseline: stored.chordpro,
+          });
+        })
+        .catch(() => setNotice(STRINGS.songLoadFailed));
+    });
+  };
+
   const pickDb = (id: string) =>
-    selectDb(
-      id,
-      summaries.find((s) => s.id === id) ?? knownHits.current.get(id),
-    );
+    guard(() => {
+      abandon();
+      selectDb(
+        id,
+        summaries.find((s) => s.id === id) ?? knownHits.current.get(id),
+      );
+    });
+
+  const refreshList = async (select: Song) => {
+    let summary: SongSummary | undefined;
+    try {
+      const sorted = sortByTitle(await listSongs());
+      setSummaries(sorted);
+      summary = sorted.find((s) => s.id === select.id);
+    } catch {
+      setNotice(STRINGS.libraryReloadFailed);
+    }
+    selectDb(select.id, summary);
+  };
+
+  const saveEditor = async (text: string) => {
+    const saved = await saveSong(text, session?.id);
+    setNotice(undefined);
+    await refreshList(saved);
+    if (session?.path !== undefined) openQueued(queue);
+    else endSession();
+  };
+
+  const cancelEditor = () =>
+    guard(() => {
+      if (session?.path === undefined) {
+        abandon();
+        return;
+      }
+      setSkipped((prev) => [...prev, session.path!]);
+      openQueued(queue);
+    });
+
+  const runImport = () =>
+    guard(() => {
+      setImporting(true);
+      setNotice(undefined);
+      importSongFiles({ pickSongFiles, readTextFile, saveSong, importText })
+        .then(async (result) => {
+          const total =
+            result.saved.length + result.queued.length + result.failed.length;
+          if (total === 0) return;
+          abandon();
+          setSkipped([]);
+          setReport(result);
+          const last = result.saved[result.saved.length - 1];
+          if (last !== undefined) await refreshList(last.song);
+          if (result.queued.length > 0) openQueued(result.queued);
+        })
+        .catch((reason: unknown) =>
+          setNotice(`${STRINGS.importPickFailed}: ${messageOf(reason)}`),
+        )
+        .finally(() => setImporting(false));
+    });
 
   useEffect(() => {
     void signalUiReady();
@@ -186,8 +344,9 @@ export function App() {
   const showSongs = showLibrary && !showNoSongs;
   const showPane =
     entry !== undefined && song !== undefined && view !== undefined;
-  const showLoadFailed = !showPane && loadFailed;
-  const showNoSelection = !showPane && !loadFailed;
+  const editing = showDb && session !== undefined;
+  const showLoadFailed = !editing && !showPane && loadFailed;
+  const showNoSelection = !editing && !showPane && !loadFailed;
 
   return (
     <div className={styles.root}>
@@ -216,6 +375,76 @@ export function App() {
         )}
         {showDb && (
           <>
+            <div className={styles.actions} data-ui-chrome>
+              <button type="button" data-testid="new-song" onClick={openNew}>
+                {STRINGS.newSong}
+              </button>
+              <button
+                type="button"
+                data-testid="open-files"
+                disabled={importing}
+                onClick={runImport}
+              >
+                {STRINGS.openFiles}
+              </button>
+            </div>
+            {report !== undefined && (
+              <section
+                className={styles.report}
+                data-testid="import-report"
+                data-ui-chrome
+              >
+                <p role="status" data-testid="import-summary">
+                  {importSummary(
+                    report.saved.length,
+                    report.saved.length +
+                      report.queued.length +
+                      report.failed.length,
+                  )}
+                </p>
+                {report.queued.length > 0 && (
+                  <p role="status" data-testid="import-queued">
+                    {importQueued(report.queued.length)}
+                  </p>
+                )}
+                {report.saved.some((f) => f.converted) && (
+                  <div data-testid="import-converted">
+                    <p>{STRINGS.importConverted}</p>
+                    <ul className={styles["report-items"]}>
+                      {report.saved
+                        .filter((f) => f.converted)
+                        .map((f) => (
+                          <li key={f.path} dir="auto">
+                            {fileNameOf(f.path)}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+                {skipped.length > 0 && (
+                  <div data-testid="import-skipped">
+                    <p>{STRINGS.importSkipped}</p>
+                    <ul className={styles["report-items"]}>
+                      {skipped.map((path, i) => (
+                        <li key={i} dir="auto">
+                          {fileNameOf(path)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {report.failed.map((f) => (
+                  <p key={f.path} role="alert" data-testid="import-failed">
+                    <bdi dir="auto">{fileNameOf(f.path)}</bdi>: {f.message}
+                  </p>
+                ))}
+              </section>
+            )}
+            {notice !== undefined && (
+              <p role="alert" data-testid="app-notice" data-ui-chrome>
+                {notice}
+              </p>
+            )}
             <SearchBox value={query} onChange={onQuery} />
             <p
               role="status"
@@ -258,14 +487,41 @@ export function App() {
         )}
       </div>
       <main data-testid="song-pane" className={styles.pane}>
-        {entry && song && view && (
+        {editing && session && (
+          <Editor
+            key={session.key}
+            initialText={session.text}
+            baseline={session.baseline}
+            seed={session.seed}
+            titlePath={session.path}
+            fileName={
+              session.path === undefined ? undefined : fileNameOf(session.path)
+            }
+            onSave={saveEditor}
+            onCancel={cancelEditor}
+            onDirtyChange={setDirty}
+          />
+        )}
+        {!editing && entry && song && view && (
           <>
-            <SongHeader
-              title={entry.title}
-              artist={entry.artist}
-              soundingKey={view.soundingKey}
-              capo={capo}
-            />
+            <div className={styles["header-row"]}>
+              <SongHeader
+                title={entry.title}
+                artist={entry.artist}
+                soundingKey={view.soundingKey}
+                capo={capo}
+              />
+              {showDb && (
+                <button
+                  type="button"
+                  data-testid="edit-song"
+                  data-ui-chrome
+                  onClick={openEdit}
+                >
+                  {STRINGS.editSong}
+                </button>
+              )}
+            </div>
             <ViewControls
               transpose={transpose}
               capo={capo}
@@ -284,6 +540,16 @@ export function App() {
         {showLoadFailed && <p role="alert">{STRINGS.songLoadFailed}</p>}
         {showNoSelection && <p>{STRINGS.noSongSelected}</p>}
       </main>
+      {confirming !== undefined && (
+        <ConfirmDiscard
+          onKeep={() => setConfirming(undefined)}
+          onDiscard={() => {
+            const action = confirming;
+            setConfirming(undefined);
+            action();
+          }}
+        />
+      )}
     </div>
   );
 }

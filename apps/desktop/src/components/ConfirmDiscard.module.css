@@ -1,0 +1,41 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 40%);
+}
+
+.dialog {
+  box-sizing: border-box;
+  max-inline-size: 26rem;
+  padding-block: 1rem;
+  padding-inline: 1.25rem;
+  border: 1px solid GrayText;
+  border-radius: 0.5rem;
+  background: Canvas;
+  color: CanvasText;
+  color-scheme: light dark;
+}
+
+.dialog:focus-visible {
+  outline: 2px solid Highlight;
+}
+
+.title {
+  margin-block: 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.body {
+  margin-block: 0 1rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}

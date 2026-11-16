@@ -4,9 +4,11 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+pub mod files;
 pub mod state;
 
 use crate::db::{repo, search, DbError, ErrorKind, SaveSongInput, SearchHit, Song, SongSummary};
+use files::{FileError, FileErrorKind};
 use state::DbState;
 use std::io::Write;
 use std::path::Path;
@@ -94,7 +96,7 @@ pub fn log_webview_error(message: String) {
     let _ = writeln!(std::io::stderr(), "{}", webview_log_line(&message));
 }
 
-/// The tauri-specta builder: the five storage commands plus `log_webview_error`, `Result` error handling, and the
+/// The tauri-specta builder: the five storage commands plus `read_text_file` and `log_webview_error`, `Result` error handling, and the
 /// error types (so `ErrorKind` is present in TS even where only nested).
 pub fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
@@ -104,11 +106,14 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             list_songs,
             delete_song,
             search_songs,
+            files::read_text_file,
             log_webview_error
         ])
         .error_handling(ErrorHandlingMode::Result)
         .typ::<ErrorKind>()
         .typ::<DbError>()
+        .typ::<FileErrorKind>()
+        .typ::<FileError>()
 }
 
 /// Write the TypeScript bindings to `path`.
@@ -257,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn exported_ts_has_exactly_the_six_commands() {
+    fn exported_ts_has_exactly_the_seven_commands() {
         let ts = exported_ts();
         let mut fields = command_fields(&ts);
         fields.sort();
@@ -268,6 +273,7 @@ mod tests {
                 "getSong",
                 "listSongs",
                 "logWebviewError",
+                "readTextFile",
                 "saveSong",
                 "searchSongs"
             ],
@@ -282,6 +288,8 @@ mod tests {
             "Language",
             "ErrorKind",
             "DbError",
+            "FileError",
+            "FileErrorKind",
         ] {
             assert!(ts.contains(&format!("type {t} ")), "missing type {t}");
         }

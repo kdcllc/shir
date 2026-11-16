@@ -172,18 +172,26 @@ A sixth command, `log_webview_error`, is synchronous: it writes one line
 `shir: webview: <text>` to stderr, returns nothing and does not use `DbState`.
 Control characters in the text become spaces, and the text is capped at 2000
 characters with `…` appended when cut.
+A seventh command, `read_text_file` (`src/commands/files.rs`), is also
+synchronous and does not use `DbState`: it reads a user-picked file as UTF-8
+text with plain `std::fs`. Only regular files up to 1 MiB (1,048,576 bytes)
+are accepted, one leading BOM is removed and line endings are untouched. A
+failure is a `FileError` `{kind, message}` whose `kind` is `TooLarge`,
+`NotUtf8` or `Io`.
 
 The database file is `<app_data_dir>/shir.db` (app identifier
 `com.kdcllc.shir`). If it cannot be opened, startup logs one line,
 `shir: database unavailable: <cause>`, and the five storage commands return
-`Unavailable`; `log_webview_error` is unaffected because it does not use
-`DbState`.
+`Unavailable`; `log_webview_error` and `read_text_file` are unaffected because
+they do not use `DbState`.
 `DbState::open` opens, migrates, then seeds (see Seeding). A
 poisoned lock returns `Storage`.
 
-`build.rs` lists the six commands, and `capabilities/default.json` grants
-`allow-save-song`, `allow-get-song`, `allow-list-songs`, `allow-delete-song`,
-`allow-search-songs` and `allow-log-webview-error` to the main window.
+`build.rs` lists the seven commands, and `capabilities/default.json` grants
+`core:default`, `dialog:allow-open` (the `tauri-plugin-dialog` file picker,
+registered in `src/lib.rs`), `allow-save-song`, `allow-get-song`,
+`allow-list-songs`, `allow-delete-song`, `allow-search-songs`,
+`allow-read-text-file` and `allow-log-webview-error` to the main window.
 
 ## Bindings
 
@@ -205,8 +213,14 @@ Debug builds also rewrite the file at startup, only when the content differs.
 `StorageError` whose `kind` is an `ErrorKind` or `"Ipc"` (the call itself
 failed). It also exports `logWebviewError(message)`, which forwards a webview
 error to the app's stderr and never rejects; the webview error forwarder uses
-it. The desktop sidebar calls `listSongs`, `getSong` and `searchSongs`
-(see [`DESKTOP.md`](DESKTOP.md)).
+it. The desktop app calls `listSongs`, `getSong` and `searchSongs` for the
+sidebar and `saveSong` for the editor and file import (see
+[`DESKTOP.md`](DESKTOP.md)).
+
+`apps/desktop/src/files.ts` wraps the generated `readTextFile` command as
+`readTextFile(path)` and the dialog plugin as `pickSongFiles()`. A failure of
+`readTextFile` throws a `FileReadError` whose `kind` is a `FileErrorKind`
+(`TooLarge`, `NotUtf8`, `Io`) or `"Ipc"` (the call itself failed).
 
 ## Invariants
 
