@@ -15,3 +15,4 @@ samples/**/*.cho
 **/playwright-report/**
 **/test-results/**
 packages/chord-render/bidi/__screenshots__/**
+apps/desktop/src/bindings.ts

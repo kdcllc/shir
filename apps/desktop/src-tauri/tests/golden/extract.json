@@ -1,0 +1,107 @@
+[
+  {
+    "file": "packages/test-fixtures/fixtures/aliases_input.cho",
+    "title": "שיר כינויים",
+    "artist": "Someone Else",
+    "key": "Am",
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/chord_only_line.cho",
+    "title": "פתיחה",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/dense_chords.cho",
+    "title": "צפוף",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/en_plain.cho",
+    "title": "Morning Light",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/he_niqqud.cho",
+    "title": "שיר השלום",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/he_plain.cho",
+    "title": "שיר הבוקר",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/long_wrap_line.cho",
+    "title": "שורה ארוכה",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/malformed_input.cho",
+    "title": "שורות שבורות",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/mixed_he_en.cho",
+    "title": "רוק בבוקר",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/sections_he.cho",
+    "title": "שיר הערב",
+    "artist": "להקת הדוגמה",
+    "key": "Am",
+    "capo": 2
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/sharp_flat_extensions.cho",
+    "title": "אקורדים מורחבים",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/slash_chords_key.cho",
+    "title": "Slash Chords",
+    "artist": null,
+    "key": "Bb",
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/tab_block.cho",
+    "title": "Tab Block",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "packages/test-fixtures/fixtures/unknown_directives.cho",
+    "title": "מעורב Mixed",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
+    "file": "samples/demo-shir-bilingual.cho",
+    "title": "שיר הדגמה / Demo Song",
+    "artist": "Shir demo",
+    "key": "Am",
+    "capo": null
+  }
+]

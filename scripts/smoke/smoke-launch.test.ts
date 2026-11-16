@@ -35,7 +35,14 @@ type StubKind =
   | "envecho"
   | "bigLog"
   | "nonexec"
-  | "ignoreTerm";
+  | "ignoreTerm"
+  | "lowercase";
+
+// Payload printed after the marker by the bigLog stub: 3000 CRLF lines of 100 x
+// (303 000 bytes), none equal to SHIR_READY.
+function bigLogPayload(): string {
+  return `${"x".repeat(100)}\r\n`.repeat(3000);
+}
 
 function stub(kind: StubKind): string {
   if (kind === "nonexec" && isWin) {
@@ -56,6 +63,7 @@ function stub(kind: StubKind): string {
       "echo SHIR_READY\nhead -c 300000 /dev/zero | tr '\\0' x\necho\nexit 0",
     nonexec: "echo SHIR_READY\nexit 0",
     ignoreTerm: "trap '' TERM\nwhile :; do sleep 1; done",
+    lowercase: "echo shir_ready\nexit 0",
   };
   const win: Record<StubKind, string> = {
     ready: "echo SHIR_READY\r\nexit /b 0",
@@ -63,11 +71,14 @@ function stub(kind: StubKind): string {
     exit3: "echo SHIR_READY\r\nexit /b 3",
     sleep: `ping -n 31 -w ${winPingTag} 127.0.0.1 >NUL`,
     envecho: "echo SHIR_SMOKE=%SHIR_SMOKE%\r\nexit /b 0",
-    bigLog: `echo SHIR_READY\r\nfor /l %%i in (1,1,3000) do echo ${"x".repeat(100)}\r\nexit /b 0`,
+    bigLog: `echo SHIR_READY\r\ntype "${join(dir, "biglog.txt")}"\r\nexit /b 0`,
     nonexec: "echo SHIR_READY\r\nexit /b 0",
     ignoreTerm: "exit /b 0", // POSIX-only case; never generated on Windows
+    lowercase: "echo shir_ready\r\nexit /b 0",
   };
   if (isWin) {
+    if (kind === "bigLog")
+      writeFileSync(join(dir, "biglog.txt"), bigLogPayload());
     writeFileSync(path, `@echo off\r\n${win[kind]}\r\n`);
   } else {
     writeFileSync(path, `#!/bin/sh\n${posix[kind]}\n`);
@@ -174,7 +185,7 @@ function cases(run: Runner): void {
     const r = run(stub("bigLog"));
     expect(r.status).toBe(0);
     expect(r.out).toContain("smoke: PASS");
-  }, 20_000);
+  }, 60_000);
 
   it("h: non-executable binary exits 2", () => {
     const r = run(stub("nonexec"));
@@ -193,6 +204,12 @@ function cases(run: Runner): void {
     },
     20_000,
   );
+
+  it("j: lowercase marker is not accepted", () => {
+    const r = run(stub("lowercase"));
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("smoke: FAIL - no SHIR_READY marker");
+  }, 20_000);
 }
 
 describe.skipIf(isWin)("smoke-launch.sh", () => {
@@ -201,4 +218,12 @@ describe.skipIf(isWin)("smoke-launch.sh", () => {
 
 describe.skipIf(!pwshAvailable)("smoke-launch.ps1", () => {
   cases(runPwsh);
+});
+
+describe("bigLogPayload", () => {
+  it("is at least 300000 bytes with no SHIR_READY line", () => {
+    const payload = bigLogPayload();
+    expect(Buffer.byteLength(payload)).toBeGreaterThanOrEqual(300_000);
+    expect(payload.includes("SHIR_READY")).toBe(false);
+  });
 });

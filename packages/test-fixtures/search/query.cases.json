@@ -1,0 +1,81 @@
+{
+  "license": "Original text written for the Shir repository (CC0-1.0)",
+  "cases": [
+    {
+      "name": "niqqud-insensitive",
+      "stored": { "title": "", "artist": "", "lyrics": "שָׁלוֹם עֲלֵיכֶם" },
+      "query": "שלום",
+      "matches": true
+    },
+    {
+      "name": "final letters",
+      "stored": { "title": "", "artist": "", "lyrics": "מֶלֶךְ הַיָּם" },
+      "query": "מלך",
+      "matches": true
+    },
+    {
+      "name": "prefix",
+      "stored": { "title": "", "artist": "", "lyrics": "גשם חלון הישן" },
+      "query": "חלו",
+      "matches": true
+    },
+    {
+      "name": "multi-token AND positive",
+      "stored": { "title": "", "artist": "", "lyrics": "ים כחול וחול זהוב" },
+      "query": "ים זהוב",
+      "matches": true
+    },
+    {
+      "name": "multi-token AND negative",
+      "stored": { "title": "", "artist": "", "lyrics": "ים כחול וחול זהוב" },
+      "query": "ים אדום",
+      "matches": false
+    },
+    {
+      "name": "english contraction",
+      "stored": { "title": "", "artist": "", "lyrics": "we don't stop" },
+      "query": "don't",
+      "matches": true
+    },
+    {
+      "name": "hyphenated word",
+      "stored": { "title": "", "artist": "", "lyrics": "a sing-along tune" },
+      "query": "sing-along",
+      "matches": true
+    },
+    {
+      "name": "hebrew word with geresh",
+      "stored": { "title": "", "artist": "", "lyrics": "צ׳יפס חם" },
+      "query": "צ׳יפס",
+      "matches": true
+    },
+    {
+      "name": "fts syntax is literal words",
+      "stored": { "title": "", "artist": "", "lyrics": "not sing" },
+      "query": "NOT sing",
+      "matches": true
+    },
+    {
+      "name": "fts syntax does not act as an operator",
+      "stored": { "title": "", "artist": "", "lyrics": "red lantern" },
+      "query": "red OR zebra",
+      "matches": false
+    },
+    {
+      "name": "artist case-insensitive",
+      "stored": {
+        "title": "Plain Tune",
+        "artist": "Yonatan Testman",
+        "lyrics": "la la"
+      },
+      "query": "TESTMAN",
+      "matches": true
+    },
+    {
+      "name": "absent term",
+      "stored": { "title": "", "artist": "", "lyrics": "red lantern" },
+      "query": "zebra",
+      "matches": false
+    }
+  ]
+}

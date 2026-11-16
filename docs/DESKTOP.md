@@ -198,11 +198,10 @@ Coordinates have two meanings:
 
 ## Out of scope
 
-- Opening, importing or saving files, because Tauri commands need tauri-specta
-  bindings (planned G4).
+- Opening, importing or saving files. The storage commands and the
+  `apps/desktop/src/storage.ts` client exist (see `docs/DATA_MODEL.md`), but the
+  viewer does not call them yet.
 - TanStack Router, Zustand, i18next and a Hebrew UI locale (planned G7).
 - Persistence of the last song or view settings.
-- No npm or Rust dependency changes and no change under
-  `apps/desktop/src-tauri/`.
 - Chord diagrams (G3).
 - Print layout.
