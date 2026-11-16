@@ -145,6 +145,7 @@ Every exported function of chord-core:
 | `viewSong`             | `viewSong(song: SongModel, options?: ViewOptions): ViewResult`                                                  | Build the view-only transposed and capo-shaped song.                      |
 | `firstStrongDirection` | `firstStrongDirection(text: string): TextDirection \| null`                                                     | First-strong direction of a text (G1).                                    |
 | `splitGraphemes`       | `splitGraphemes(text: string): string[]`                                                                        | Split text into grapheme clusters (G1).                                   |
+| `importText`           | `importText(text: string, options?: ImportOptions): ImportResult`                                               | Convert pasted ChordPro or chords-over-lyrics text to ChordPro.           |
 
 ## Unicode
 
