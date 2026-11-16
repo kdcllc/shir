@@ -1,4 +1,5 @@
 import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,12 +9,17 @@ import {
   canonicalPath,
   fixturePath,
   goldenPath,
+  hasLogicalGolden,
+  IMPORT_FIXTURE_NAMES,
   isFixtureName,
+  readImportGolden,
+  readImportInput,
   readCanonical,
   readDiagnostics,
   readFixture,
   readGolden,
   type FixtureName,
+  type ImportFixtureName,
 } from "./index";
 
 describe("test-fixtures", () => {
@@ -262,5 +268,133 @@ describe("round-trip fixtures", () => {
       golden(n).lines.some((l) => l.kind === "raw"),
     );
     expect(rawOwners).toEqual(["malformed_input"]);
+  });
+});
+
+// import fixtures: every golden is hand-derived from Import rules R1-R10
+// (02-chord-core-importer.md). Chord column spans [s, e) count code points of
+// the chord line; lyric indices count graphemes (niqqud never takes a column).
+// mirror (RTL): i = n - e, clamped to 0 when e > n. logical / LTR: i = s,
+// clamped to n when s > n. Then forward snap off whitespace.
+//
+// derivation he_over_lyrics (n = graphemes of the lyric)
+//   "שלום לכם בבית" n=13: C s=1 e=2, G s=7 e=8, Am s=11 e=13
+//     mirror : C i=13-2=11 (mid-word), G i=13-8=5, Am i=13-13=0
+//     logical: C i=1, G i=7, Am i=11
+//   "לילה" n=4: Dm7 s=5 e=8 (past the lyric)
+//     mirror : i=4-8<0 -> clamp 0 + chord-past-end;  logical: i=5>4 -> n=4 + chord-past-end
+//   "הים שקט" n=7: F s=2 e=3, Em s=5 e=7
+//     mirror : F i=7-3=4, Em i=7-7=0;  logical: F i=2, Em i=5
+// derivation he_niqqud_over_lyrics (marks stay in their grapheme)
+//   "שָׁלוֹם לכָם בַּבַּיִת" n=13: Em s=2 e=4, G s=7 e=8, Am s=11 e=13
+//     mirror : Em i=13-4=9 (בַּ with dagesh), G i=5, Am i=0 (שָׁ with shin dot)
+//     logical: Em i=2 (וֹ with holam), G i=7, Am i=11
+//   "שִׁיר קָטָן" n=7: D s=2 e=3, Bm s=5 e=7
+//     mirror : D i=4, Bm i=0;  logical: D i=2, Bm i=5
+// derivation en_over_lyrics (LTR: i = s in both modes)
+//   "Walking down the lane" n=21: Am s=0 -> 0; G s=7 is the space -> snap forward to 8
+//   "Open the door" n=13: C s=0, G/B s=5, Fmaj7 s=16 > n -> 13 + chord-past-end
+//   chord-only line "Am  G  C  F" -> "[Am] [G] [C] [F]" (followed by a blank line)
+//   "Quiet rivers carry me home" n=26: C 0, Em 6, F 13
+// derivation mixed_over_lyrics
+//   "אני שר blues בלילה" n=18 (first strong = Hebrew -> rtl): G s=4 e=5, Dm s=9 e=11, F s=13 e=14, Am s=16 e=18
+//     mirror : G 13, Dm 7 (before "b"), F 4, Am 0;  logical: G 4, Dm 9 (mid "blues"), F 13, Am 16
+//   English line n=26 (ltr): C s=0, G s=6, Am s=13, F s=22 in both modes
+// derivation header_he_over_lyrics (directives and the inline-chord line pass through)
+//   "שיר קטן לערב" n=12: C s=3 e=4, G s=7 e=8, Am s=10 e=12
+//     mirror : C 8, G 4, Am 0;  logical: C s=3 is a space -> snap 4, G s=7 space -> 8, Am 10
+//   "חלום ורוד" n=9: E s=3 e=4, Dm s=7 e=9
+//     mirror : E 5, Dm 0;  logical: E 3, Dm 7
+// chordpro_passthrough: golden == input (no chord line outside {start_of_tab}).
+
+const IMPORT_LICENCE = LICENCE;
+const IMPORT_DIR = fileURLToPath(new URL("../import/", import.meta.url));
+const RTL_IMPORT = IMPORT_FIXTURE_NAMES.filter((n) => hasLogicalGolden(n));
+
+function importFileNames(): string[] {
+  return [
+    ...IMPORT_FIXTURE_NAMES.flatMap((n) => [`${n}.txt`, `${n}.cho`]),
+    ...RTL_IMPORT.map((n) => `${n}.logical.cho`),
+  ].sort();
+}
+
+function importVariants(n: ImportFixtureName): string[] {
+  return [
+    readImportInput(n),
+    readImportGolden(n),
+    ...(hasLogicalGolden(n) ? [readImportGolden(n, "logical")] : []),
+  ];
+}
+
+describe("import fixtures", () => {
+  it("freezes the six import names in order", () => {
+    expect([...IMPORT_FIXTURE_NAMES]).toEqual([
+      "he_over_lyrics",
+      "he_niqqud_over_lyrics",
+      "en_over_lyrics",
+      "mixed_over_lyrics",
+      "chordpro_passthrough",
+      "header_he_over_lyrics",
+    ]);
+    expect(RTL_IMPORT).toEqual([
+      "he_over_lyrics",
+      "he_niqqud_over_lyrics",
+      "mixed_over_lyrics",
+      "header_he_over_lyrics",
+    ]);
+  });
+  it("directory holds exactly the expected files", () => {
+    expect(readdirSync(IMPORT_DIR).sort()).toEqual(importFileNames());
+  });
+  it.each([...IMPORT_FIXTURE_NAMES])(
+    "%s: licence line, one trailing newline",
+    (n) => {
+      for (const src of importVariants(n)) {
+        expect(src.split("\n")[0]).toBe(IMPORT_LICENCE);
+        expect(src.endsWith("\n")).toBe(true);
+        expect(src.endsWith("\n\n")).toBe(false);
+        expect(src).not.toContain("\r");
+      }
+    },
+  );
+  it.each([...IMPORT_FIXTURE_NAMES])(
+    "%s: Hebrew final-form discipline",
+    (n) => {
+      for (const src of importVariants(n)) {
+        for (const line of src.split("\n")) {
+          // drop inline chord tokens so a chord between letters cannot hide a form
+          expect(finalFormErrors(line.replace(/\[[^\]]*\]/g, ""))).toEqual([]);
+        }
+      }
+    },
+  );
+  it.each(RTL_IMPORT)("%s: mirror and logical goldens differ", (n) => {
+    expect(readImportGolden(n, "logical")).not.toBe(readImportGolden(n));
+  });
+  it("non-RTL fixtures have no logical golden", () => {
+    expect(hasLogicalGolden("en_over_lyrics")).toBe(false);
+    expect(hasLogicalGolden("chordpro_passthrough")).toBe(false);
+    expect(() => readImportGolden("en_over_lyrics", "logical")).toThrow(
+      TypeError,
+    );
+  });
+  it("chordpro_passthrough golden equals its input", () => {
+    expect(readImportGolden("chordpro_passthrough")).toBe(
+      readImportInput("chordpro_passthrough"),
+    );
+  });
+  it("niqqud fixture has dagesh, shin dot and holam", () => {
+    const s = readImportInput("he_niqqud_over_lyrics");
+    for (const cp of ["\u05BC", "\u05C1", "\u05B9"]) expect(s).toContain(cp);
+  });
+  it("helpers throw TypeError on unknown names", () => {
+    const bad = "nope" as ImportFixtureName;
+    expect(() => readImportInput(bad)).toThrow(TypeError);
+    expect(() => readImportGolden(bad)).toThrow(TypeError);
+    expect(() => readImportGolden(bad, "logical")).toThrow(TypeError);
+    expect(() => hasLogicalGolden(bad)).toThrow(TypeError);
+    expect(() => readImportInput("__proto__" as ImportFixtureName)).toThrow(
+      TypeError,
+    );
   });
 });
