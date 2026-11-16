@@ -52,3 +52,34 @@
   font-size: 0.85rem;
   color: GrayText;
 }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-end: 0.75rem;
+}
+
+.report {
+  margin-block-end: 0.75rem;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.report p {
+  margin-block: 0.25rem;
+}
+
+.report-items {
+  margin-block: 0;
+  margin-inline: 0;
+  padding-inline-start: 1.25rem;
+}
+
+.header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}

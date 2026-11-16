@@ -7,10 +7,11 @@ import {
 } from "@testing-library/react";
 import { parseSong, viewSong } from "chord-core";
 import type { SongModel } from "chord-core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { loadLibrary } from "./library";
-import { getSong, listSongs, searchSongs } from "./storage";
+import { pickSongFiles, readTextFile } from "./files";
+import { getSong, listSongs, saveSong, searchSongs } from "./storage";
 import type { SearchHit, Song, SongSummary } from "./storage";
 import { STRINGS } from "./strings";
 import { signalUiReady } from "./uiReady";
@@ -20,6 +21,11 @@ vi.mock("./storage", () => ({
   listSongs: vi.fn(),
   getSong: vi.fn(),
   searchSongs: vi.fn(),
+  saveSong: vi.fn(),
+}));
+vi.mock("./files", () => ({
+  pickSongFiles: vi.fn(),
+  readTextFile: vi.fn(),
 }));
 
 /** Bundled mode: the library cannot be listed. Resolves once the list is shown. */
@@ -607,3 +613,242 @@ describe("App database mode", () => {
 function parseFor(id: string) {
   return parseSong(DB_SONGS[id]!).song;
 }
+
+describe("App editor", () => {
+  const HE_SHEET = "Am      G\nשלום עולם יפה";
+  const HE_MIRROR = "שלום [G]עולם י[Am]פה";
+  const HE_LOGICAL = "[Am]שלום עול[G]ם יפה";
+
+  beforeEach(() => {
+    vi.mocked(listSongs).mockReset();
+    vi.mocked(getSong).mockReset();
+    vi.mocked(searchSongs).mockReset();
+    vi.mocked(saveSong).mockReset();
+    vi.mocked(pickSongFiles).mockReset();
+    vi.mocked(readTextFile).mockReset();
+    DB_SONGS.n = "{title: Saved}\n[C]x";
+    useDb();
+  });
+
+  afterEach(() => {
+    delete DB_SONGS.n;
+    vi.restoreAllMocks();
+  });
+
+  async function renderDb() {
+    render(<App />);
+    await screen.findByTestId("song-index");
+    await screen.findByTestId("song-title");
+  }
+
+  const editor = () =>
+    screen.getByTestId("editor-input") as HTMLTextAreaElement;
+  const withSaved = () =>
+    vi.mocked(listSongs).mockResolvedValue([...DB_LIST, summary("n", "Saved")]);
+
+  function saveReturns(chordpro: string) {
+    withSaved();
+    vi.mocked(saveSong).mockResolvedValue(stored("n", chordpro) as never);
+  }
+
+  it("renders none of the editor entry points in bundled mode", async () => {
+    await renderBundled();
+    expect(screen.queryByTestId("new-song")).toBeNull();
+    expect(screen.queryByTestId("open-files")).toBeNull();
+    expect(screen.queryByTestId("edit-song")).toBeNull();
+  });
+
+  it("New song, type, Save calls saveSong and shows the saved song", async () => {
+    await renderDb();
+    saveReturns("{title: Saved}\n[C]x");
+    fireEvent.click(screen.getByTestId("new-song"));
+    expect(editor().value).toBe("");
+    fireEvent.change(editor(), { target: { value: "{title: Saved}\n[C]x" } });
+    fireEvent.click(screen.getByTestId("editor-save"));
+    await waitFor(() =>
+      expect(screen.getByTestId("song-title").textContent).toBe("Saved"),
+    );
+    expect(saveSong).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(saveSong).mock.calls[0]![0]).toBe("{title: Saved}\n[C]x");
+    expect(vi.mocked(saveSong).mock.calls[0]![1]).toBeUndefined();
+    expect(screen.queryByTestId("editor")).toBeNull();
+    expect(titles()).toContain("Saved");
+    expect(getSong).toHaveBeenLastCalledWith("n");
+  });
+
+  it("Edit loads the selected song's chordpro and saves with its id", async () => {
+    await renderDb();
+    fireEvent.click(screen.getByTestId("edit-song"));
+    await waitFor(() => expect(editor().value).toBe(DB_SONGS.c));
+    vi.mocked(saveSong).mockResolvedValue(
+      stored("c", "{title: שיר}\n[C]x") as never,
+    );
+    fireEvent.change(editor(), { target: { value: "{title: שיר}\n[C]x" } });
+    fireEvent.click(screen.getByTestId("editor-save"));
+    await waitFor(() => expect(screen.queryByTestId("editor")).toBeNull());
+    expect(vi.mocked(saveSong).mock.calls[0]).toEqual([
+      "{title: שיר}\n[C]x",
+      "c",
+    ]);
+  });
+
+  it("a save failure shows the message and keeps the editor open and dirty", async () => {
+    await renderDb();
+    vi.mocked(saveSong).mockRejectedValue(new Error("disk full"));
+    fireEvent.click(screen.getByTestId("new-song"));
+    fireEvent.change(editor(), { target: { value: "abc" } });
+    fireEvent.click(screen.getByTestId("editor-save"));
+    const alert = await screen.findByTestId("editor-save-error");
+    expect(alert.textContent).toBe(`${STRINGS.saveFailed}: disk full`);
+    expect(editor().value).toBe("abc");
+    fireEvent.click(screen.getByText("Alpha"));
+    expect(screen.getByTestId("confirm-discard")).toBeInTheDocument();
+  });
+
+  it("dirty editor asks before switching songs", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    await renderDb();
+    fireEvent.click(screen.getByTestId("new-song"));
+    fireEvent.change(editor(), { target: { value: "typed" } });
+    fireEvent.click(screen.getByText("Alpha"));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("confirm-keep"));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(editor().value).toBe("typed");
+
+    fireEvent.click(screen.getByText("Alpha"));
+    fireEvent.click(screen.getByTestId("confirm-discard-yes"));
+    await waitFor(() =>
+      expect(screen.getByTestId("song-title").textContent).toBe("Alpha"),
+    );
+    expect(screen.queryByTestId("editor")).toBeNull();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("a clean editor leaves without a confirm", async () => {
+    await renderDb();
+    fireEvent.click(screen.getByTestId("new-song"));
+    fireEvent.click(screen.getByText("Alpha"));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByTestId("song-title").textContent).toBe("Alpha"),
+    );
+  });
+
+  it("Cancel and New song also ask when dirty", async () => {
+    await renderDb();
+    fireEvent.click(screen.getByTestId("new-song"));
+    fireEvent.change(editor(), { target: { value: "typed" } });
+    fireEvent.click(screen.getByTestId("editor-cancel"));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("confirm-keep"));
+    fireEvent.click(screen.getByTestId("new-song"));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("imports ChordPro files at once and summarises", async () => {
+    await renderDb();
+    withSaved();
+    vi.mocked(pickSongFiles).mockResolvedValue(["/a/one.cho", "/a/bad.cho"]);
+    vi.mocked(readTextFile).mockImplementation((path) =>
+      path.endsWith("bad.cho")
+        ? Promise.reject(new Error("not utf8"))
+        : Promise.resolve("{title: Saved}\n[C]x"),
+    );
+    vi.mocked(saveSong).mockResolvedValue(stored("n", "x") as never);
+    fireEvent.click(screen.getByTestId("open-files"));
+    const summary = await screen.findByTestId("import-summary");
+    expect(summary.textContent).toBe("Imported 1 of 2 files");
+    expect(screen.getByTestId("import-failed").textContent).toContain(
+      "bad.cho",
+    );
+    expect(screen.getByTestId("import-failed").textContent).toContain(
+      "not utf8",
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("song-title").textContent).toBe("Saved"),
+    );
+    expect(screen.queryByTestId("editor")).toBeNull();
+  });
+
+  it("an empty pick shows nothing", async () => {
+    await renderDb();
+    vi.mocked(pickSongFiles).mockResolvedValue([]);
+    fireEvent.click(screen.getByTestId("open-files"));
+    await waitFor(() => expect(pickSongFiles).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId("open-files")).toBeEnabled());
+    expect(screen.queryByTestId("import-report")).toBeNull();
+    expect(screen.queryByTestId("editor")).toBeNull();
+  });
+
+  it("review queue: queued Hebrew file saves only on Save with flipped text and fallback title", async () => {
+    await renderDb();
+    saveReturns("x");
+    vi.mocked(pickSongFiles).mockResolvedValue(["C:\\songs\\shalom.txt"]);
+    vi.mocked(readTextFile).mockResolvedValue(HE_SHEET);
+    fireEvent.click(screen.getByTestId("open-files"));
+    await screen.findByTestId("editor");
+    expect(editor().value).toBe(`{title: shalom}\n${HE_MIRROR}`);
+    expect(screen.getByTestId("reviewing-file").textContent).toContain(
+      "shalom.txt",
+    );
+    expect(screen.getByTestId("import-queued").textContent).toBe(
+      "1 file needs alignment review",
+    );
+    expect(saveSong).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("editor-flip"));
+    expect(editor().value).toBe(`{title: shalom}\n${HE_LOGICAL}`);
+    expect(saveSong).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("editor-save"));
+    await waitFor(() => expect(screen.queryByTestId("editor")).toBeNull());
+    expect(saveSong).toHaveBeenCalledTimes(1);
+    const text = vi.mocked(saveSong).mock.calls[0]![0];
+    expect(text).toBe(`{title: shalom}\n${HE_LOGICAL}`);
+    expect(text.startsWith("{title: shalom}")).toBe(true);
+  });
+
+  it("review queue: Cancel skips a file, lists it and opens the next", async () => {
+    await renderDb();
+    saveReturns("x");
+    vi.mocked(pickSongFiles).mockResolvedValue([
+      "/a/first.txt",
+      "/a/second.txt",
+    ]);
+    vi.mocked(readTextFile).mockResolvedValue(HE_SHEET);
+    fireEvent.click(screen.getByTestId("open-files"));
+    await screen.findByTestId("editor");
+    expect(screen.getByTestId("reviewing-file").textContent).toContain(
+      "first.txt",
+    );
+
+    fireEvent.click(screen.getByTestId("editor-cancel"));
+    fireEvent.click(screen.getByTestId("confirm-discard-yes"));
+    await waitFor(() =>
+      expect(screen.getByTestId("reviewing-file").textContent).toContain(
+        "second.txt",
+      ),
+    );
+    expect(screen.getByTestId("import-skipped").textContent).toContain(
+      "first.txt",
+    );
+
+    fireEvent.click(screen.getByTestId("editor-save"));
+    await waitFor(() => expect(screen.queryByTestId("editor")).toBeNull());
+    expect(saveSong).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists converted LTR files that were saved at once", async () => {
+    await renderDb();
+    withSaved();
+    vi.mocked(pickSongFiles).mockResolvedValue(["/a/eng.txt"]);
+    vi.mocked(readTextFile).mockResolvedValue("Am      G\nhello big world");
+    vi.mocked(saveSong).mockResolvedValue(stored("n", "x") as never);
+    fireEvent.click(screen.getByTestId("open-files"));
+    const converted = await screen.findByTestId("import-converted");
+    expect(converted.textContent).toContain("eng.txt");
+    expect(screen.queryByTestId("import-queued")).toBeNull();
+  });
+});
