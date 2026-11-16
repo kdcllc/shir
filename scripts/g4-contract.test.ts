@@ -18,6 +18,7 @@ const COMMANDS = [
   "listSongs",
   "deleteSong",
   "searchSongs",
+  "logWebviewError",
 ];
 const ERROR_KINDS = [
   "NotFound",
@@ -32,6 +33,7 @@ const SNAKE = [
   "list_songs",
   "delete_song",
   "search_songs",
+  "log_webview_error",
 ];
 const STACK_PKGS = [
   "rusqlite",
@@ -168,11 +170,11 @@ function bindingsCommands(src: string): string[] {
 describe("(b) bindings.ts commands", () => {
   const src = read("apps/desktop/src/bindings.ts");
 
-  it("exports exactly the five storage commands", () => {
+  it("exports exactly the five storage commands plus logWebviewError", () => {
     expect(sorted(bindingsCommands(src))).toEqual(sorted(COMMANDS));
   });
 
-  it("negative: a sixth command is detected", () => {
+  it("negative: a seventh command is detected", () => {
     const mutated = src.replace(
       "export const commands = {\n",
       "export const commands = {\n\tpurgeAll: () => 1,\n",
@@ -240,7 +242,7 @@ describe("(d) build.rs and capability", () => {
   const build = read("apps/desktop/src-tauri/build.rs");
   const cap = read("apps/desktop/src-tauri/capabilities/default.json");
 
-  it("build.rs lists exactly the five snake_case commands", () => {
+  it("build.rs lists exactly the five storage commands plus log_webview_error", () => {
     expect(sorted(buildRsCommands(build))).toEqual(sorted(SNAKE));
   });
 
@@ -250,7 +252,7 @@ describe("(d) build.rs and capability", () => {
     );
   });
 
-  it("negative: a sixth build.rs command is detected", () => {
+  it("negative: a seventh build.rs command is detected", () => {
     const mutated = build.replace(
       '"search_songs",',
       '"search_songs",\n"purge_all",',

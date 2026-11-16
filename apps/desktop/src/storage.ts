@@ -81,3 +81,12 @@ export async function deleteSong(id: string): Promise<void> {
 export function searchSongs(query: string): Promise<SearchHit[]> {
   return run(() => commands.searchSongs(query));
 }
+
+/** Forwards a webview error to the app's stderr. Never rejects. */
+export async function logWebviewError(message: string): Promise<void> {
+  try {
+    await commands.logWebviewError(message);
+  } catch {
+    // Best effort: a missing runtime or failed invoke must not raise.
+  }
+}

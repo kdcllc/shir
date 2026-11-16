@@ -9,6 +9,7 @@
     "allow-get-song",
     "allow-list-songs",
     "allow-delete-song",
-    "allow-search-songs"
+    "allow-search-songs",
+    "allow-log-webview-error"
   ]
 }

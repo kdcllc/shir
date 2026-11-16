@@ -12,6 +12,8 @@ export const commands = {
 	listSongs: (options?: InvokeOptions) => typedError<SongSummary_Serialize[], DbError>(__TAURI_INVOKE("list_songs", undefined, options)),
 	deleteSong: (id: string, options?: InvokeOptions) => typedError<null, DbError>(__TAURI_INVOKE("delete_song", { id }, options)),
 	searchSongs: (query: string, options?: InvokeOptions) => typedError<SearchHit_Serialize[], DbError>(__TAURI_INVOKE("search_songs", { query }, options)),
+	/**  Forward a webview error to stderr. Never fails. */
+	logWebviewError: (message: string, options?: InvokeOptions) => __TAURI_INVOKE<void>("log_webview_error", { message }, options),
 };
 
 /* Types */

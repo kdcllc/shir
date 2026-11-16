@@ -8,6 +8,7 @@ import {
   deleteSong,
   getSong,
   listSongs,
+  logWebviewError,
   saveSong,
   searchSongs,
   type ErrorKind,
@@ -175,5 +176,24 @@ describe("storage client", () => {
     const e = (await caught(searchSongs("q"))) as StorageError;
     expect(e.kind).toBe("Ipc");
     expect(e.message).toBe("42");
+  });
+
+  it("logWebviewError invokes log_webview_error with the message", async () => {
+    mockInvoke.mockResolvedValue(null);
+    await expect(logWebviewError("boom")).resolves.toBeUndefined();
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "log_webview_error",
+      { message: "boom" },
+      undefined,
+    );
+  });
+
+  it("logWebviewError never rejects", async () => {
+    mockInvoke.mockRejectedValue(new Error("no runtime"));
+    await expect(logWebviewError("x")).resolves.toBeUndefined();
+    mockInvoke.mockImplementation(() => {
+      throw new TypeError("invoke is not a function");
+    });
+    await expect(logWebviewError("x")).resolves.toBeUndefined();
   });
 });
