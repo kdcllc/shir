@@ -30,3 +30,18 @@
   padding-block: 1rem;
   padding-inline: 1.5rem;
 }
+
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-block-start: 0.75rem;
+  color-scheme: light dark;
+}
+
+.notice {
+  margin-block: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: GrayText;
+  overflow-wrap: anywhere;
+}

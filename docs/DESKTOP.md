@@ -151,47 +151,62 @@ Coordinates have two meanings:
 
 ## Test ids
 
-| Test id           | Element             | Meaning                                                     |
-| ----------------- | ------------------- | ----------------------------------------------------------- |
-| `song-list`       | `<nav>`             | The song list                                               |
-| `song-item`       | song `<button>`     | One per song; `aria-current="true"` on the selected one     |
-| `song-header`     | header container    | Song pane header                                            |
-| `song-title`      | `<h2>`              | Song title                                                  |
-| `song-artist`     | artist element      | Song artist, present only when the song has one             |
-| `sounding-key`    | `<span>`            | Sounding key (`<bdi dir="ltr">`) or the `No key` text       |
-| `shape-key`       | `<bdi>`             | Shape key in the controls, present only when defined        |
-| `capo-value`      | header capo display | Current capo (view state), shown only when > 0              |
-| `transpose-down`  | `<button>`          | Transpose down by one semitone                              |
-| `transpose-up`    | `<button>`          | Transpose up by one semitone                                |
-| `transpose-value` | value element       | Current signed transpose (`0`, `+2`, `-3`)                  |
-| `capo-select`     | `<select>`          | Capo choice                                                 |
-| `reset-view`      | `<button>`          | Resets transpose to 0 and capo to the song's capo           |
-| `diagnostics`     | diagnostics panel   | The diagnostics panel, absent when there are no diagnostics |
-| `diagnostic-item` | list item           | One per diagnostic                                          |
-| `song-pane`       | `<main>`            | The song pane                                               |
+| Test id              | Element                 | Meaning                                                          |
+| -------------------- | ----------------------- | ---------------------------------------------------------------- |
+| `song-list`          | `<nav>`                 | The song list                                                    |
+| `song-item`          | song `<button>`         | One per song; `aria-current="true"` on the selected one          |
+| `song-header`        | header container        | Song pane header                                                 |
+| `song-title`         | `<h2>`                  | Song title                                                       |
+| `song-artist`        | artist element          | Song artist, present only when the song has one                  |
+| `sounding-key`       | `<span>`                | Sounding key (`<bdi dir="ltr">`) or the `No key` text            |
+| `shape-key`          | `<bdi>`                 | Shape key in the controls, present only when defined             |
+| `capo-value`         | header capo display     | Current capo (view state), shown only when > 0                   |
+| `transpose-down`     | `<button>`              | Transpose down by one semitone                                   |
+| `transpose-up`       | `<button>`              | Transpose up by one semitone                                     |
+| `transpose-value`    | value element           | Current signed transpose (`0`, `+2`, `-3`)                       |
+| `capo-select`        | `<select>`              | Capo choice                                                      |
+| `reset-view`         | `<button>`              | Resets transpose to 0 and capo to the song's capo                |
+| `diagnostics`        | diagnostics panel       | The diagnostics panel, absent when there are no diagnostics      |
+| `diagnostic-item`    | list item               | One per diagnostic                                               |
+| `song-pane`          | `<main>`                | The song pane                                                    |
+| `search-input`       | `<input type="search">` | The sidebar search box (disabled in bundled mode)                |
+| `search-empty`       | `<p>`                   | Shown when a search has zero hits                                |
+| `search-unavailable` | `<p>`                   | Notice shown in bundled mode: search is unavailable              |
+| `song-snippet`       | `<span>`                | Lyric line of a search hit, rendered as text, only when non-null |
+| `song-index`         | `<ul>`                  | The `SongIndex` list of all DB songs, sorted by title            |
+| `search-results`     | `<ul>`                  | The `SongIndex` list holding the ranked search hits              |
 
 ## Strings
 
-| Key                  | Value            |
-| -------------------- | ---------------- |
-| `appName`            | `Shir`           |
-| `appNameHebrew`      | `שיר`            |
-| `groupSamples`       | `Samples`        |
-| `groupTestSongs`     | `Test songs`     |
-| `songList`           | `Songs`          |
-| `transpose`          | `Transpose`      |
-| `transposeDown`      | `Transpose down` |
-| `transposeUp`        | `Transpose up`   |
-| `capo`               | `Capo`           |
-| `reset`              | `Reset`          |
-| `key`                | `Key`            |
-| `shapes`             | `Shapes`         |
-| `diagnostics`        | `Diagnostics`    |
-| `noSongSelected`     | `Select a song`  |
-| `noKey`              | `No key`         |
-| `separator`          | `·`              |
-| `transposeDownGlyph` | `−`              |
-| `transposeUpGlyph`   | `+`              |
+| Key                  | Value                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `appName`            | `Shir`                                                                             |
+| `appNameHebrew`      | `שיר`                                                                              |
+| `groupSamples`       | `Samples`                                                                          |
+| `groupTestSongs`     | `Test songs`                                                                       |
+| `songList`           | `Songs`                                                                            |
+| `transpose`          | `Transpose`                                                                        |
+| `transposeDown`      | `Transpose down`                                                                   |
+| `transposeUp`        | `Transpose up`                                                                     |
+| `capo`               | `Capo`                                                                             |
+| `reset`              | `Reset`                                                                            |
+| `key`                | `Key`                                                                              |
+| `shapes`             | `Shapes`                                                                           |
+| `diagnostics`        | `Diagnostics`                                                                      |
+| `noSongSelected`     | `Select a song`                                                                    |
+| `searchLabel`        | `Search songs`                                                                     |
+| `searchPlaceholder`  | `Search title, artist or lyrics`                                                   |
+| `searchResults`      | `Search results`                                                                   |
+| `noResults`          | `No songs match`                                                                   |
+| `searchFailed`       | `Search failed`                                                                    |
+| `searchUnavailable`  | `Search unavailable: the song library could not be opened. Showing bundled songs.` |
+| `loadingLibrary`     | `Loading songs…`                                                                   |
+| `libraryEmpty`       | `No songs in the library`                                                          |
+| `songLoadFailed`     | `Could not open this song`                                                         |
+| `noKey`              | `No key`                                                                           |
+| `separator`          | `·`                                                                                |
+| `transposeDownGlyph` | `−`                                                                                |
+| `transposeUpGlyph`   | `+`                                                                                |
 
 `diagnosticsCount(n: number): string` returns `1 problem` for n = 1 and
 `${n} problems` otherwise.
