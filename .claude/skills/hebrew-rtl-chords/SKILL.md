@@ -32,8 +32,10 @@ Normative rules for Shir. Code, tests and evaluator verdicts cite rule ids (B1�
   `dir="auto"` (first strong char). Song container uses `unicode-bidi:isolate`.
 - **B6** Chord-only lines (instrumental) follow the song direction for ordering of
   bars but each chord is LTR (B1).
-- **B7** Inputs/textarea use dir="auto"; the ChordPro editor is a code-style LTR
-  editor whose lyric preview pane applies B1–B5.
+- **B7** Inputs/textarea use dir="auto", except chord, key and tempo inputs, which are
+  `dir="ltr"`. The editor's Visual tab renders lyric rows with chord-render `ChordLine`
+  in editing mode, so B1–B5 apply there; its Source tab is a `dir="auto"` textarea next
+  to a `SongView` preview that applies B1–B5.
 - **B8** UI chrome mirrors via `<html dir>` from UI language; only logical CSS props;
   directional icons flip; numbers/times/keys stay LTR.
 - **B9** Importer: for RTL lyric lines in chords-over-lyrics text, chord columns are

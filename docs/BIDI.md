@@ -18,6 +18,28 @@ implemented in `packages/chord-core` and `packages/chord-render`. The normative 
 - **B4** See "Overlap pass" below.
 - **B5** Line base direction is `line.direction`, else the song direction, else `dir="auto"`
   (`ChordLine.tsx`). The song container uses `unicode-bidi: isolate` (`SongView.module.css`).
+- **Editing mode** (B2, B3, B5 for the visual editor). `ChordLine` takes an optional `editing` prop
+  (`ChordLineEditing`: `caret`, `onPosition(index)`, `onChord(anchor)`), used for lyric lines only;
+  without it the read-only DOM above is unchanged. With it the line element also carries
+  `data-editing` and keeps the same `dir` (source: `ChordLine.tsx`, `ChordLine.module.css`):
+  - Every grapheme is its own inline element with `data-pos` set to its grapheme index, in logical
+    order. After the last one an end slot is always rendered: an element with no lyric text, with `data-pos` set to
+    the grapheme count and `data-end-slot`.
+  - A position that carries chords also has `data-anchor` and `data-index` and holds the
+    `[data-chord-box]`, positioned and given its `dir` as in B3. Each chord in the box is a
+    `<button type="button" data-chord-button>` around the chord symbol; its `data-anchor-index` is the
+    chord's index in `line.chords`.
+  - The caret is the `data-caret` attribute on the position at `editing.caret`, drawn as an outline
+    with a background tint. When a chord is anchored at the end of the line, the end slot holds the
+    chord box.
+  - Position elements are `display: inline` with no inline margin, padding or border; only the end
+    slot has `padding-inline-end: 0.75em`.
+    Under `@media print` the hover background, the caret outline and the end slot padding are removed.
+  - One click handler on the line: a click inside a chord button calls `onChord` with its
+    `data-anchor-index`, any other click inside a position calls `onPosition` with its `data-pos`.
+  - `lineDirection(line, songDirection)` (`lineDirection.ts`, exported from `chord-render`) returns
+    `line.direction ?? songDirection ?? firstStrongDirection(line.lyric) ?? "ltr"`. `ChordLine` uses it
+    as the `dir` of the chord box on a neutral grapheme and on the end slot.
 - **B6** Chord-only lines order bars in the song direction; each chord stays LTR.
 - **B10** Niqqud stays with its base letter (the anchor wraps the whole grapheme cluster); the font
   stack is Noto Sans Hebrew, Heebo, sans-serif.
@@ -33,7 +55,36 @@ not covered by this page.
 
 ## Editor input (B7)
 
-The editor is a plain `<textarea dir="auto">` (`apps/desktop/src/components/Editor.tsx`).
+The editor (`apps/desktop/src/components/Editor.tsx`) has two tabs, Visual (the default) and Source.
+
+Source tab: the ChordPro text is a plain `<textarea dir="auto">`, next to a `SongView` preview.
+
+Visual tab (`apps/desktop/src/components/VisualEditor.tsx`):
+
+- The root has `dir={song.direction ?? "auto"}` and `unicode-bidi: isolate`
+  (`VisualEditor.module.css`). Lyric rows are rendered by `ChordLine` in editing mode with the song
+  direction.
+- The lyric text input and the comment input are `dir="auto"`. The input of a chords-only line is
+  `dir="ltr"`. Lines shown as source text are `dir="ltr"` for `tab` lines, else `dir="auto"`.
+- The chord picker input (`ChordPicker.tsx`) is `dir="ltr"`. The section label input
+  (`SectionControls.tsx`) is `dir="auto"`. In `MetaForm.tsx` the title and artist inputs are
+  `dir="auto"`, the key and tempo inputs are `dir="ltr"`; the capo is a `<select>` with no `dir`.
+- Positions are logical grapheme indices (B2): the caret, a clicked position and the index of an added
+  or moved chord are all indices `0..n` into the lyric, `n` being the end of the line. Splitting a line
+  at the text caret converts its code-unit offset to a grapheme index (`graphemeIndexAt`).
+- Moves are visual (`apps/desktop/src/visualKeys.ts`). ArrowLeft and ArrowRight on a focused row move
+  the caret one step to the visual left or right (`caretMove`), and moving a chord left or right from
+  the chord picker moves its index the same way (`visualStep`); at the visual end of the line the
+  position stays. Home sets the caret to index 0 and End to index `n`. The line direction for these
+  steps is `lineDirection(line, song.direction)`.
+- `visualOrder` gives every position `0..n` once, from visual left to visual right, with a simplified
+  bidi model. A grapheme with a strong character has its own direction; a neutral one takes the
+  direction of its nearest strong neighbours when they agree, otherwise the line's (the line start and
+  end count as the line's). Runs of equal direction are laid out in line order (reversed on an `rtl`
+  line), an `rtl` run reads right to left, and the end position sits at the line's inline end.
+
+Documented limits of the simplified visual order (`visualKeys.ts`): number runs and nested embeddings
+are not modelled.
 
 ## Importer column mapping (B9)
 
@@ -81,6 +132,11 @@ whose import has `hasRtlChords` are queued for review (`apps/desktop/src/importF
 - `useChordOverlap` re-runs the pass when the root's inline size changes (ResizeObserver), on
   `loadingdone` and on `document.fonts.ready`. The song root exposes the completed-pass count as
   `data-overlap-pass`.
+- `useChordOverlap(rootRef, dep)` is exported from `chord-render` and returns the completed-pass count.
+  A change of its `dep` argument also re-runs the pass. The visual editor
+  (`apps/desktop/src/components/VisualEditor.tsx`) runs it on its own root with a `dep` that changes
+  with the song and with entering or leaving lyric-edit mode, and exposes the count as
+  `data-overlap-pass` too.
 - `computeOverlapPadding` is the pure logical-axis form of the same math.
 
 ## Direction detection
@@ -105,7 +161,7 @@ woff2 files from `@fontsource` packages: Noto Sans Hebrew (400, 700), Noto Serif
 
 Under `@media print` in `SongView.module.css`: black text on no background, `break-inside: avoid`
 on lines, chord boxes stay absolutely positioned above their lyric (`inset-block-end: 100%`), and
-`[data-ui-chrome]` is hidden. Checklist item 6 covers it.
+`[data-ui-chrome]` is hidden with `display: none !important`. Checklist item 6 covers it.
 
 ## Verifying
 
@@ -119,6 +175,15 @@ pnpm --filter chord-render test:bidi
   are `packages/chord-render/bidi/*.bidi.ts`.
 - Checklist items 1–6 (textContent equality, anchor edge within 2px, no overlap including resize
   re-runs, mixed word order, wrap, print CSS), plus B1, B6 and B10 checks and harness self-tests.
+- Editing mode has its own spec, `packages/chord-render/bidi/editing.bidi.ts`. It opens the harness
+  with `/?fixture=<name>&editing=1`, which renders `harness/EditingSong.tsx` (the song with interactive lyric lines)
+  instead of `SongView` and records the last editing callback on `window.__lastEdit`. On the
+  `he_plain`, `he_niqqud`, `mixed_he_en` and `en_plain` fixtures it checks chord text equality and
+  chord buttons, anchor edge within 2px, no overlap at widths 360 and 720, the position order of
+  Hebrew, English and mixed lines, that clicks report logical positions and chord anchors, the end
+  slot, niqqud integrity (one whole grapheme per position) and print. A `dense_chords` check at width
+  360 requires the overlap pass to have padded editing-mode positions and then finds no overlapping
+  chord boxes.
 - Screenshot snapshots are named per platform; baselines are Linux-only. CI runs this step on
   `ubuntu-22.04` only and uploads `playwright-report/` on failure.
 - Unit and render tests (jsdom) run with `pnpm --filter chord-render test`.
