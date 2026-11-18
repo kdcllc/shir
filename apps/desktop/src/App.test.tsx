@@ -22,6 +22,7 @@ vi.mock("./storage", () => ({
   getSong: vi.fn(),
   searchSongs: vi.fn(),
   saveSong: vi.fn(),
+  deleteSong: vi.fn(),
 }));
 vi.mock("./files", () => ({
   pickSongFiles: vi.fn(),
@@ -641,8 +642,11 @@ describe("App editor", () => {
     await screen.findByTestId("song-title");
   }
 
-  const editor = () =>
-    screen.getByTestId("editor-input") as HTMLTextAreaElement;
+  /** The ChordPro text area; the editor opens on the Visual tab, so this selects the Source tab first. */
+  const editor = () => {
+    fireEvent.click(screen.getByTestId("editor-tab-source"));
+    return screen.getByTestId("editor-input") as HTMLTextAreaElement;
+  };
   const withSaved = () =>
     vi.mocked(listSongs).mockResolvedValue([...DB_LIST, summary("n", "Saved")]);
 
@@ -789,6 +793,11 @@ describe("App editor", () => {
     vi.mocked(readTextFile).mockResolvedValue(HE_SHEET);
     fireEvent.click(screen.getByTestId("open-files"));
     await screen.findByTestId("editor");
+    expect(screen.getByTestId("editor-tab-visual")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("editor-visual")).toBeInTheDocument();
     expect(editor().value).toBe(`{title: shalom}\n${HE_MIRROR}`);
     expect(screen.getByTestId("reviewing-file").textContent).toContain(
       "shalom.txt",

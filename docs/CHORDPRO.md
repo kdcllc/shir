@@ -146,6 +146,79 @@ Every exported function of chord-core:
 | `firstStrongDirection` | `firstStrongDirection(text: string): TextDirection \| null`                                                     | First-strong direction of a text (G1).                                    |
 | `splitGraphemes`       | `splitGraphemes(text: string): string[]`                                                                        | Split text into grapheme clusters (G1).                                   |
 | `importText`           | `importText(text: string, options?: ImportOptions): ImportResult`                                               | Convert pasted ChordPro or chords-over-lyrics text to ChordPro.           |
+| `isValidChordText`     | `isValidChordText(chord: string): boolean`                                                                      | Whether a text is accepted as a chord by the edit operations.             |
+| `listSections`         | `listSections(song: SongModel): SectionSpan[]`                                                                  | List the well-formed sections of a song, in line order.                   |
+| `applyEdit`            | `applyEdit(song: SongModel, op: EditOp): EditResult`                                                            | Apply one edit and reparse the result; never throws.                      |
+| `applyEdits`           | `applyEdits(song: SongModel, ops: readonly EditOp[]): EditResult`                                               | Apply edits in order, each to the previous result's song.                 |
+| `songChords`           | `songChords(song: SongModel): string[]`                                                                         | The distinct chords a song uses, in order of first appearance.            |
+| `suggestChords`        | `suggestChords(song: SongModel, prefix: string, limit?: number): string[]`                                      | Suggest chords for a prefix: used chords, then the key's triads.          |
+
+### Editing
+
+The edit functions live in `packages/chord-core/src/edit.ts`. An edit is an `EditOp` value applied with `applyEdit` or `applyEdits`. In an op, `line` is an index into `song.lines`, `anchor` is an index into that line's `chords` array, and `index` is a grapheme index.
+
+`EditOp` has 17 op types:
+
+| Op type         | Fields                              | Effect                                                                                   |
+| --------------- | ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `setLyric`      | `line`, `text`                      | Set the lyric text of a `lyric`, `empty` or `chords` line.                               |
+| `addChord`      | `line`, `index`, `chord`            | Add a chord at a grapheme index of a `lyric` or `empty` line.                            |
+| `setChord`      | `line`, `anchor`, `chord`           | Replace the text of one chord of a `lyric` line.                                         |
+| `removeChord`   | `line`, `anchor`                    | Remove one chord of a `lyric` line.                                                      |
+| `moveChord`     | `line`, `anchor`, `index`           | Move one chord of a `lyric` line to another grapheme index.                              |
+| `insertLine`    | `at`                                | Insert an `empty` line.                                                                  |
+| `removeLine`    | `line`                              | Remove a line of any kind except `section`.                                              |
+| `splitLine`     | `line`, `index`                     | Split a `lyric` line in two at a grapheme index.                                         |
+| `joinLines`     | `line`                              | Join a line with the next one; each must be `lyric` or `empty`.                          |
+| `setChordsLine` | `line`, `chords`                    | Replace the chord list of a `chords` line.                                               |
+| `setComment`    | `line`, `text`                      | Set the text of a `comment` line; its style is kept.                                     |
+| `setMeta`       | `name`, `value`                     | Set or remove a `meta` line; `name` is one of `EDIT_META_NAMES`.                         |
+| `addSection`    | `at`, `section`, optional `label`   | Insert a start tag, an `empty` line and an end tag; `section` is one of `SECTION_KINDS`. |
+| `renameSection` | `line`, `section`, optional `label` | Rewrite both tags of a section; `section` is one of `SECTION_KINDS`.                     |
+| `moveSection`   | `line`, `direction`                 | Exchange a section with the previous (`"up"`) or next (`"down"`) one.                    |
+| `removeSection` | `line`                              | Remove a section: its start tag, body and end tag.                                       |
+| `transpose`     | `semitones`                         | Transpose the song with `transposeSong`.                                                 |
+
+`SECTION_KINDS` is `verse`, `chorus`, `bridge`. `EDIT_META_NAMES` is `title`, `artist`, `key`, `capo`, `tempo`.
+
+Result and reparse guarantee:
+
+- `EditResult` is `{ song, text, changed }`.
+- For a valid edit, `text` is `serializeSong` of the edited song, and `song` is `parseSong(text).song`. So the returned song always has the line kinds and song fields of a fresh parse. Example: `addChord` on an `empty` line gives the text `[Am]`, and the returned line is a `chords` line.
+- `changed` is `true` when `text` differs from `serializeSong` of the input song. The text is always the canonical form, so the first edit of a non-canonical source also applies `## Normalizations`: `insertLine` at 2 on `{t: A}\r\n[Am][G]\r\n` gives `{title: A}\n[Am] [G]\n\n`.
+- An invalid edit returns the input song itself, `text` as `serializeSong` of the input, and `changed: false`. A `null` or non-object op is invalid. `applyEdit` never throws and never mutates its input.
+- `applyEdits` applies each op to the previous result's song; an invalid op is skipped and the rest still apply. `changed` compares the final text with the input song's text. With no ops, or an `ops` value that is not an array, it returns the input song itself with `changed: false` and never throws.
+
+Clamping:
+
+- A grapheme `index` (`addChord`, `moveChord`, `splitLine`) is truncated to an integer and clamped to 0 to the line's grapheme count. `NaN` or a non-number is invalid.
+- `insertLine` needs an integer `at`, clamped to 0 to the line count. `addSection` truncates and clamps `at` the same way; an `at` inside a well-formed section moves to just after that section's end tag.
+- `setLyric` and `addChord` accept `line` from 0 to the line count; `line` equal to the line count appends a line. Every other `line` must be the integer index of an existing line.
+- Chord text is trimmed. Line breaks are removed from `setLyric` text. Comment text, meta values and section labels lose line breaks, `{` and `}`, and are trimmed; an empty label is omitted.
+
+Rejection (the edit is invalid):
+
+- The line has the wrong kind for the op (see the table), or `line` or `anchor` is out of range or not an integer.
+- The chord fails `isValidChordText`: it is empty after trimming, or contains `[`, `]` or a line break. A `setChordsLine` entry that contains whitespace after trimming, or is not a string, is also rejected; empty entries are dropped.
+- `setMeta` with a `name` outside `EDIT_META_NAMES`; `addSection` or `renameSection` with a `section` outside `SECTION_KINDS`; `transpose` with non-integer `semitones`; a `text` or `value` that is not a string.
+- `setChordsLine` with a `chords` value that is not an array; `moveSection` with a `direction` other than `"up"` or `"down"`; an op whose `type` is not one of the 17 op types.
+- `addSection` with an `at` that is `NaN` or not a number.
+- `renameSection`, `moveSection` and `removeSection` when `line` is not the start line of a well-formed section (see `listSections` below). `renameSection` also rejects a literal section. `moveSection` is rejected when there is no previous or next well-formed section.
+
+Other rules:
+
+- `setLyric` keeps chords in place. With `p` the common grapheme prefix of the old and new text, `s` the common suffix of the remainders and `oldCount` the grapheme count of the old text, an anchor at `index <= p` stays, one at `index >= oldCount - s` shifts by the length change, and any other moves to `p`. On a `chords` line, non-empty text gives a `lyric` line with every chord at index 0, in order. On an `empty` line, text that is whitespace only (after line breaks are removed) changes nothing; this includes `line` equal to the line count, which appends nothing. Empty text on a `chords` line changes nothing.
+- A lyric line left with no text and no chords becomes an `empty` line. A `chords` line left with no chords becomes an `empty` line.
+- An added or moved chord goes after every anchor of the line whose index is less than or equal to its own.
+- `splitLine` keeps the anchors with an index below the split index on the first line; the others move to the second line, shifted. `joinLines` shifts the second line's anchors by the first line's grapheme count.
+- `setMeta` with an empty value removes every `meta` line of that name. Otherwise it replaces the first `meta` line of that name, or inserts a new line after the leading run of `meta` lines.
+- `moveSection` keeps the lines between the two sections in place.
+
+`listSections` returns one `SectionSpan` (`{ start, end, section, label?, literal }`) per well-formed section: a start tag whose next section tag is the matching end tag. `start` and `end` are the indices of the two tag lines. `literal` is `true` for the literal sections of `## Tags` (`LITERAL_SECTIONS` in `song.ts`). Unclosed, unopened and mismatched tags give no span. A start tag inside an open section drops the outer section: only the inner one can give a span.
+
+`suggestChords` lists the chords the song uses (`songChords`), then the six diatonic triads of `song.key`, and keeps those that start with the trimmed `prefix`, ignoring ASCII case. It returns at most `limit` chords; the default is 12, and a non-integer `limit` or one below 1 also means 12. When `song.key` is absent or not a key, only the used chords are offered. The triads follow the accidental in the key name: a tonic with `b` is spelled with flats and a tonic with `#` with sharps (key `Gb` gives `Gb`, `Abm`, `Bbm`, `B`, `Db`, `Ebm`); a key without an accidental is unchanged. The spellings come from the sharp and flat note tables (see `## Chords and transpose`).
+
+Shared edit cases live in `packages/test-fixtures/edit/cases.json` (`EDIT_CASES_PATH`, read with `readEditCases`). Each case is `{ name, fixture, ops, expected }`: the `ops` applied to the parsed `fixture` give the ChordPro text `expected`.
 
 ## Import
 

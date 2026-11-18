@@ -23,6 +23,6 @@
   }
 
   :global([data-ui-chrome]) {
-    display: none;
+    display: none !important;
   }
 }

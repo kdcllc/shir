@@ -214,8 +214,10 @@ Debug builds also rewrite the file at startup, only when the content differs.
 failed). It also exports `logWebviewError(message)`, which forwards a webview
 error to the app's stderr and never rejects; the webview error forwarder uses
 it. The desktop app calls `listSongs`, `getSong` and `searchSongs` for the
-sidebar and `saveSong` for the editor and file import (see
-[`DESKTOP.md`](DESKTOP.md)).
+sidebar, `saveSong` for the editor and file import, and `deleteSong` for song
+deletion: once the delete confirmation dialog is confirmed, `deleteMany`
+(`apps/desktop/src/deleteSongs.ts`) calls it once per song, one after another
+(see [`DESKTOP.md`](DESKTOP.md)).
 
 `apps/desktop/src/files.ts` wraps the generated `readTextFile` command as
 `readTextFile(path)` and the dialog plugin as `pickSongFiles()`. A failure of

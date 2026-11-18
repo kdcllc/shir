@@ -4,6 +4,7 @@ import { dirname, isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ALL_FIXTURE_NAMES,
+  EDIT_CASES_PATH,
   FIXTURE_NAMES,
   ROUNDTRIP_FIXTURE_NAMES,
   canonicalPath,
@@ -16,6 +17,7 @@ import {
   readImportInput,
   readCanonical,
   readDiagnostics,
+  readEditCases,
   readFixture,
   readGolden,
   type FixtureName,
@@ -409,5 +411,69 @@ describe("import fixtures", () => {
     expect(() => readImportInput("__proto__" as ImportFixtureName)).toThrow(
       TypeError,
     );
+  });
+});
+
+describe("edit cases", () => {
+  const EDIT_DIR = fileURLToPath(new URL("../edit/", import.meta.url));
+
+  it("EDIT_CASES_PATH is the absolute path of edit/cases.json", () => {
+    expect(isAbsolute(EDIT_CASES_PATH)).toBe(true);
+    expect(
+      EDIT_CASES_PATH.replaceAll("\\", "/").endsWith(
+        "test-fixtures/edit/cases.json",
+      ),
+    ).toBe(true);
+    expect(readdirSync(EDIT_DIR)).toEqual(["cases.json"]);
+  });
+  it("the file parses to at least 12 well-formed cases", () => {
+    const cases = readEditCases();
+    expect(Array.isArray(cases)).toBe(true);
+    expect(cases.length).toBeGreaterThanOrEqual(12);
+    for (const c of cases) {
+      expect(Object.keys(c).sort()).toEqual([
+        "expected",
+        "fixture",
+        "name",
+        "ops",
+      ]);
+      expect(c.name).toBeTypeOf("string");
+      expect(c.name.trim()).not.toBe("");
+      expect(Array.isArray(c.ops)).toBe(true);
+      expect(c.ops.length).toBeGreaterThan(0);
+      for (const op of c.ops) {
+        expect((op as { type?: unknown }).type).toBeTypeOf("string");
+      }
+      expect(c.expected).toBeTypeOf("string");
+      expect(c.expected).not.toContain("\r");
+    }
+  });
+  it("every case names a known fixture and differs from its source", () => {
+    for (const c of readEditCases()) {
+      expect(isFixtureName(c.fixture)).toBe(true);
+      expect(c.expected).not.toBe(readFixture(c.fixture));
+    }
+  });
+  it("case names are unique", () => {
+    const names = readEditCases().map((c) => c.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+  it("covers the Hebrew, niqqud, mixed and structural fixtures", () => {
+    const count = (name: FixtureName): number =>
+      readEditCases().filter((c) => c.fixture === name).length;
+    expect(count("he_plain")).toBeGreaterThanOrEqual(3);
+    expect(count("he_niqqud")).toBeGreaterThanOrEqual(2);
+    expect(count("mixed_he_en")).toBeGreaterThanOrEqual(2);
+    expect(count("sections_he")).toBeGreaterThanOrEqual(2);
+    expect(count("en_plain")).toBeGreaterThanOrEqual(1);
+    expect(count("tab_block")).toBeGreaterThanOrEqual(1);
+    expect(count("chord_only_line")).toBeGreaterThanOrEqual(1);
+  });
+  it("edit cases add no Hebrew final-form errors", () => {
+    for (const c of readEditCases()) {
+      for (const line of c.expected.split("\n")) {
+        expect(finalFormErrors(line.replace(/\[[^\]]*\]/g, ""))).toEqual([]);
+      }
+    }
   });
 });

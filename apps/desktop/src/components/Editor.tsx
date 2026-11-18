@@ -1,11 +1,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { importText, parseSong } from "chord-core";
-import type { ImportResult, RtlColumns } from "chord-core";
+import type { KeyboardEvent } from "react";
+import { applyEdits, importText, parseSong } from "chord-core";
+import type { EditOp, ImportResult, RtlColumns, SongModel } from "chord-core";
 import { SongView } from "chord-render";
 import { withTitleFallback } from "../importFiles";
+import { songMeta } from "../library";
 import { STRINGS } from "../strings";
+import { useHistory } from "../useHistory";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import styles from "./Editor.module.css";
+import { MetaForm } from "./MetaForm";
+import type { MetaFormValues } from "./MetaForm";
+import { VisualEditor } from "./VisualEditor";
 
 const PREVIEW_DEBOUNCE_MS = 300;
 
@@ -30,15 +36,112 @@ export interface EditorProps {
   onDirtyChange?(dirty: boolean): void;
 }
 
+type EditorTab = "visual" | "source";
+
 function messageOf(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
 
 const mirrorMode = (): RtlColumns => "mirror";
 const noMessage = (): string | undefined => undefined;
+const visualTab = (): EditorTab => "visual";
+const noButton = (): HTMLButtonElement | null => null;
 
 const otherMode = (mode: RtlColumns): RtlColumns =>
   mode === "mirror" ? "logical" : "mirror";
+
+/** The song-details values of `song`: the `songMeta` rule, `""` when absent. */
+const metaValues = (song: SongModel): MetaFormValues => ({
+  title: songMeta(song, "title") ?? "",
+  artist: songMeta(song, "artist") ?? "",
+  key: songMeta(song, "key") ?? "",
+  capo: songMeta(song, "capo") ?? "",
+  tempo: songMeta(song, "tempo") ?? "",
+});
+
+// Arrow components below: the desktop contract's JSX text scan reads a
+// `function` declaration between two components as text.
+interface VisualPanelProps {
+  /** DOM id of the visual editor root (the Visual tab's `aria-controls`). */
+  id: string;
+  text: string;
+  /** One user action on `song`, the parse of `text`. */
+  onApply(song: SongModel, ops: readonly EditOp[]): void;
+}
+
+/** The Visual tab: diagnostics, song details and the song as editable rows. */
+const VisualPanel = ({ id, text, onApply }: VisualPanelProps) => {
+  // Memoized: the visual editor reads a new song object as "the edit arrived".
+  const parsed = useMemo(() => parseSong(text), [text]);
+  const song = parsed.song;
+  return (
+    <div className={styles.visual}>
+      <DiagnosticsPanel diagnostics={parsed.diagnostics} />
+      <MetaForm
+        values={metaValues(song)}
+        onChange={(name, value) =>
+          onApply(song, [{ type: "setMeta", name, value }])
+        }
+      />
+      <VisualEditor id={id} song={song} onEdit={(ops) => onApply(song, ops)} />
+    </div>
+  );
+};
+
+interface SourcePanelProps {
+  id: string;
+  /** DOM id of the Source tab, the panel's accessible name. */
+  labelledBy: string;
+  text: string;
+  onType(next: string): void;
+}
+
+/** The Source tab: the ChordPro text area and its debounced preview. */
+const SourcePanel = ({ id, labelledBy, text, onType }: SourcePanelProps) => {
+  const inputId = useId();
+  const [previewText, setPreviewText] = useState(text);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPreviewText(text), PREVIEW_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  const parsed = useMemo(() => parseSong(previewText), [previewText]);
+
+  return (
+    <div
+      id={id}
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      className={styles.panes}
+      data-testid="editor-source"
+    >
+      <div className={styles["input-pane"]} data-ui-chrome>
+        <label htmlFor={inputId} className={styles.label}>
+          {STRINGS.editorLabel}
+        </label>
+        <textarea
+          id={inputId}
+          dir="auto"
+          spellCheck={false}
+          className={styles.input}
+          data-testid="editor-input"
+          value={text}
+          onChange={(e) => onType(e.target.value)}
+        />
+      </div>
+      <div
+        className={styles.preview}
+        role="region"
+        aria-label={STRINGS.previewLabel}
+        data-testid="editor-preview"
+      >
+        <DiagnosticsPanel diagnostics={parsed.diagnostics} />
+        <SongView song={parsed.song} />
+      </div>
+    </div>
+  );
+};
 
 export function Editor({
   initialText,
@@ -50,9 +153,14 @@ export function Editor({
   onCancel,
   onDirtyChange,
 }: EditorProps) {
-  const inputId = useId();
-  const [text, setText] = useState(initialText);
-  const [previewText, setPreviewText] = useState(initialText);
+  const id = useId();
+  const visualId = `${id}-visual`;
+  const sourceId = `${id}-source`;
+  const sourceTabId = `${id}-tab-source`;
+  const transposeId = `${id}-transpose`;
+  const history = useHistory(initialText);
+  const text = history.value;
+  const [tab, setTab] = useState(visualTab);
   const [lastImport, setLastImport] = useState(seed);
   const [columns, setColumns] = useState(mirrorMode);
   const [warnings, setWarnings] = useState(seed?.result.warnings ?? []);
@@ -61,6 +169,8 @@ export function Editor({
   const [saveError, setSaveError] = useState(noMessage);
   const [saving, setSaving] = useState(false);
   const mounted = useRef(true);
+  const visualTabRef = useRef(noButton());
+  const sourceTabRef = useRef(noButton());
 
   const dirty = text !== (baseline ?? initialText);
 
@@ -75,29 +185,45 @@ export function Editor({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setPreviewText(text), PREVIEW_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
+  /** The text is no longer the last import's result: Flip has nothing to flip. */
+  const forgetImport = () => {
+    setLastImport(undefined);
+    setAlreadyChordPro(false);
+  };
 
-  const parsed = useMemo(() => parseSong(previewText), [previewText]);
-
-  const apply = (
-    source: string,
-    result: ImportResult,
-    mode: RtlColumns,
-    keepText = false,
-  ) => {
-    if (!keepText) setText(result.chordpro);
+  const apply = (source: string, result: ImportResult, mode: RtlColumns) => {
+    history.set(result.chordpro);
     setLastImport({ source, result });
     setColumns(mode);
     setWarnings(result.warnings);
   };
 
   const onType = (next: string) => {
-    setText(next);
-    setLastImport(undefined);
-    setAlreadyChordPro(false);
+    history.set(next, { coalesce: true });
+    forgetImport();
+  };
+
+  /** A structured edit of `song` (the parse of the text) as one history entry. */
+  const onApply = (song: SongModel, ops: readonly EditOp[]) => {
+    const result = applyEdits(song, ops);
+    if (!result.changed || result.text === text) return;
+    history.set(result.text);
+    forgetImport();
+  };
+
+  const onTranspose = (semitones: -1 | 1) =>
+    onApply(parseSong(text).song, [{ type: "transpose", semitones }]);
+
+  const onUndo = () => {
+    if (!history.canUndo) return;
+    history.undo();
+    forgetImport();
+  };
+
+  const onRedo = () => {
+    if (!history.canRedo) return;
+    history.redo();
+    forgetImport();
   };
 
   const onPaste = async () => {
@@ -150,42 +276,126 @@ export function Editor({
     }
   };
 
+  /** Undo / redo shortcuts; inside an input element the browser's own undo stays. */
+  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.target instanceof HTMLInputElement) return;
+    const key = e.key.toLowerCase();
+    if (key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      onUndo();
+    } else if (
+      (key === "z" && e.shiftKey) ||
+      (key === "y" && e.ctrlKey && !e.shiftKey)
+    ) {
+      e.preventDefault();
+      onRedo();
+    }
+  };
+
+  const onTabKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const visual = tab === "source";
+    setTab(visual ? "visual" : "source");
+    (visual ? visualTabRef : sourceTabRef).current?.focus();
+  };
+
   const showFlip = lastImport?.result.hasRtlChords === true;
 
   return (
-    <section className={styles.editor} data-testid="editor">
+    <section
+      className={styles.editor}
+      data-testid="editor"
+      onKeyDown={onKeyDown}
+    >
       {fileName !== undefined && (
         <p className={styles.file} data-testid="reviewing-file" data-ui-chrome>
           {STRINGS.reviewingFile} <bdi dir="auto">{fileName}</bdi>
         </p>
       )}
       <div className={styles.toolbar} data-ui-chrome>
-        <button
-          type="button"
-          data-testid="editor-save"
-          disabled={saving}
-          onClick={() => void onSaveClick()}
-        >
-          {STRINGS.save}
-        </button>
-        <button type="button" data-testid="editor-cancel" onClick={onCancel}>
-          {STRINGS.cancel}
-        </button>
-        <button
-          type="button"
-          data-testid="editor-paste"
-          onClick={() => void onPaste()}
-        >
-          {STRINGS.paste}
-        </button>
-        <button type="button" data-testid="editor-convert" onClick={onConvert}>
-          {STRINGS.convert}
-        </button>
-        {showFlip && (
-          <button type="button" data-testid="editor-flip" onClick={onFlip}>
-            {STRINGS.flipAlignment}
+        <div className={styles.group}>
+          <button
+            type="button"
+            data-testid="editor-save"
+            disabled={saving}
+            onClick={() => void onSaveClick()}
+          >
+            {STRINGS.save}
           </button>
-        )}
+          <button type="button" data-testid="editor-cancel" onClick={onCancel}>
+            {STRINGS.cancel}
+          </button>
+        </div>
+        <div className={styles.group}>
+          <button
+            type="button"
+            data-testid="editor-undo"
+            disabled={!history.canUndo}
+            onClick={onUndo}
+          >
+            {STRINGS.undo}
+          </button>
+          <button
+            type="button"
+            data-testid="editor-redo"
+            disabled={!history.canRedo}
+            onClick={onRedo}
+          >
+            {STRINGS.redo}
+          </button>
+        </div>
+        <div
+          className={styles.group}
+          role="group"
+          aria-labelledby={transposeId}
+        >
+          <span id={transposeId} className={styles.label}>
+            {STRINGS.transpose}
+          </span>
+          <button
+            type="button"
+            className={styles.step}
+            data-testid="editor-transpose-down"
+            aria-label={STRINGS.transposeSongDown}
+            onClick={() => onTranspose(-1)}
+          >
+            {STRINGS.transposeDownGlyph}
+          </button>
+          <button
+            type="button"
+            className={styles.step}
+            data-testid="editor-transpose-up"
+            aria-label={STRINGS.transposeSongUp}
+            onClick={() => onTranspose(1)}
+          >
+            {STRINGS.transposeUpGlyph}
+          </button>
+        </div>
+        <div className={styles.group}>
+          <button
+            type="button"
+            data-testid="editor-paste"
+            onClick={() => void onPaste()}
+          >
+            {STRINGS.paste}
+          </button>
+          {tab === "source" && (
+            <button
+              type="button"
+              data-testid="editor-convert"
+              onClick={onConvert}
+            >
+              {STRINGS.convert}
+            </button>
+          )}
+          {showFlip && (
+            <button type="button" data-testid="editor-flip" onClick={onFlip}>
+              {STRINGS.flipAlignment}
+            </button>
+          )}
+        </div>
       </div>
       <p
         role="status"
@@ -224,31 +434,51 @@ export function Editor({
           </ul>
         </section>
       )}
-      <div className={styles.panes}>
-        <div className={styles["input-pane"]}>
-          <label htmlFor={inputId} className={styles.label} data-ui-chrome>
-            {STRINGS.editorLabel}
-          </label>
-          <textarea
-            id={inputId}
-            dir="auto"
-            spellCheck={false}
-            className={styles.input}
-            data-testid="editor-input"
-            value={text}
-            onChange={(e) => onType(e.target.value)}
-          />
-        </div>
-        <div
-          className={styles.preview}
-          role="region"
-          aria-label={STRINGS.previewLabel}
-          data-testid="editor-preview"
+      <div
+        className={styles.tabs}
+        role="tablist"
+        aria-label={STRINGS.editorTabs}
+        data-ui-chrome
+        onKeyDown={onTabKey}
+      >
+        <button
+          ref={visualTabRef}
+          type="button"
+          role="tab"
+          className={styles.tab}
+          data-testid="editor-tab-visual"
+          aria-selected={tab === "visual"}
+          aria-controls={tab === "visual" ? visualId : undefined}
+          tabIndex={tab === "visual" ? 0 : -1}
+          onClick={() => setTab("visual")}
         >
-          <DiagnosticsPanel diagnostics={parsed.diagnostics} />
-          <SongView song={parsed.song} />
-        </div>
+          {STRINGS.tabVisual}
+        </button>
+        <button
+          ref={sourceTabRef}
+          type="button"
+          role="tab"
+          id={sourceTabId}
+          className={styles.tab}
+          data-testid="editor-tab-source"
+          aria-selected={tab === "source"}
+          aria-controls={tab === "source" ? sourceId : undefined}
+          tabIndex={tab === "source" ? 0 : -1}
+          onClick={() => setTab("source")}
+        >
+          {STRINGS.tabSource}
+        </button>
       </div>
+      {tab === "visual" ? (
+        <VisualPanel id={visualId} text={text} onApply={onApply} />
+      ) : (
+        <SourcePanel
+          id={sourceId}
+          labelledBy={sourceTabId}
+          text={text}
+          onType={onType}
+        />
+      )}
     </section>
   );
 }

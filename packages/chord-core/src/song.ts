@@ -30,7 +30,7 @@ const SECTION_ALIASES: Readonly<
   eog: { edge: "end", section: "grid" },
 };
 
-const LITERAL_SECTIONS: ReadonlySet<string> = new Set([
+export const LITERAL_SECTIONS: ReadonlySet<string> = new Set([
   "tab",
   "grid",
   "abc",

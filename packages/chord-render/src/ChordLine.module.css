@@ -34,3 +34,67 @@
   font-family: "JetBrains Mono", monospace;
   font-weight: 700;
 }
+
+/* Editing mode: per-grapheme click targets. No inline margin, padding or border, so lyric
+   text sits exactly where the read-only renderer puts it. */
+.pos {
+  display: inline;
+  cursor: pointer;
+}
+
+.pos:hover {
+  background-color: var(--chord-edit-hover, rgb(29 111 216 / 14%));
+}
+
+/* The caret is an outline: drawn outside layout, the same in both directions. */
+.pos[data-caret] {
+  outline: 2px solid var(--chord-edit-caret, #1d6fd8);
+  outline-offset: -1px;
+  background-color: var(--chord-edit-hover, rgb(29 111 216 / 14%));
+}
+
+/* The end slot is always last on the line, so its padding never moves lyric text. */
+.pos[data-end-slot] {
+  padding-inline-end: 0.75em;
+}
+
+.chordbtn {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
+.chordbtn:focus-visible {
+  outline: 2px solid var(--chord-edit-caret, #1d6fd8);
+  outline-offset: 2px;
+}
+
+@media print {
+  .pos,
+  .chordbtn {
+    cursor: auto;
+  }
+
+  .pos:hover {
+    background-color: transparent;
+  }
+
+  .pos[data-caret] {
+    outline: none;
+    background-color: transparent;
+  }
+
+  .pos[data-end-slot] {
+    padding-inline-end: 0;
+  }
+
+  .chordbtn:focus-visible {
+    outline: none;
+  }
+}

@@ -2,10 +2,12 @@ import { parseSong } from "chord-core";
 import { SongView } from "chord-render";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { EditingSong, type HarnessEdit } from "./EditingSong";
 
 declare global {
   interface Window {
     __setWidth?: (px: number) => void;
+    __lastEdit?: HarnessEdit;
   }
 }
 
@@ -44,13 +46,15 @@ function mount() {
   }
   const width = Number(params.get("width") ?? "720");
   const widthPx = Number.isFinite(width) && width > 0 ? width : 720;
+  const model = parseSong(src).song;
+  const editing = params.get("editing") === "1";
 
   flushSync(() => {
     createRoot(host).render(
       <>
         <nav data-ui-chrome="">Shir harness chrome</nav>
         <main data-harness="" style={{ inlineSize: `${widthPx}px` }}>
-          <SongView song={parseSong(src).song} />
+          {editing ? <EditingSong song={model} /> : <SongView song={model} />}
         </main>
       </>,
     );

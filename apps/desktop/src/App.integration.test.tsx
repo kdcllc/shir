@@ -22,6 +22,7 @@ vi.mock("./storage", () => ({
   getSong: vi.fn(),
   searchSongs: vi.fn(),
   saveSong: vi.fn(),
+  deleteSong: vi.fn(),
 }));
 vi.mock("./files", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./files")>()),
@@ -200,6 +201,16 @@ describe("G6 editor", () => {
     fireEvent.click(screen.getByTestId("new-song"));
     fireEvent.click(screen.getByTestId("editor-paste"));
 
+    // The editor opens on the Visual tab: the pasted song shows as a row.
+    const visual = screen.getByTestId("editor-visual");
+    await waitFor(() =>
+      expect(
+        [...visual.querySelectorAll("[data-chord-button]")].map(
+          (c) => c.textContent,
+        ),
+      ).toEqual(["Am", "G"]),
+    );
+    fireEvent.click(screen.getByTestId("editor-tab-source"));
     const input = screen.getByTestId<HTMLTextAreaElement>("editor-input");
     await waitFor(() => expect(input.value).toContain("[Am]Walking [G]down"));
     const preview = screen.getByTestId("editor-preview");
@@ -266,8 +277,18 @@ describe("G6 editor", () => {
 
     fireEvent.click(screen.getByTestId("open-files"));
 
-    const input =
-      await screen.findByTestId<HTMLTextAreaElement>("editor-input");
+    // The queued file opens on the Visual tab, with Flip available.
+    const visual = await screen.findByTestId("editor-visual");
+    expect(screen.getByTestId("editor-tab-visual")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      visual.querySelectorAll('[data-testid="visual-line"][data-kind="lyric"]'),
+    ).toHaveLength(1);
+    expect(screen.getByTestId("editor-flip")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("editor-tab-source"));
+    const input = screen.getByTestId<HTMLTextAreaElement>("editor-input");
     expect(saveSong).toHaveBeenCalledTimes(1);
     expect(vi.mocked(saveSong).mock.calls[0]![0]).toBe(
       "{title: en}\n[Am]Walking [G]down the lane\n",
@@ -304,8 +325,8 @@ describe("G6 editor", () => {
     );
 
     fireEvent.click(screen.getByTestId("edit-song"));
-    const input =
-      await screen.findByTestId<HTMLTextAreaElement>("editor-input");
+    fireEvent.click(await screen.findByTestId("editor-tab-source"));
+    const input = screen.getByTestId<HTMLTextAreaElement>("editor-input");
     expect(input.value).toBe(db.get("a"));
     fireEvent.change(input, { target: { value: `${db.get("a")!} edited` } });
 
