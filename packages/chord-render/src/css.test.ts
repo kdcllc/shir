@@ -28,7 +28,9 @@ describe("CSS contract", () => {
   it("print CSS hides chrome and avoids breaks", () => {
     const css = read("./SongView.module.css");
     expect(css).toMatch(/@media print/);
-    expect(css).toMatch(/:global\(\[data-ui-chrome\]\)\s*{\s*display:\s*none/);
+    expect(css).toMatch(
+      /@media print\s*{(?:[^{}]|{[^{}]*})*:global\(\[data-ui-chrome\]\)\s*{\s*display:\s*none\s*!important;/,
+    );
     expect(css).toMatch(/break-inside:\s*avoid/);
   });
   it("chord box is the only positioned chord element", () => {

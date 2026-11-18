@@ -6,3 +6,4 @@ export * from "./chord";
 export * from "./serialize";
 export * from "./transpose";
 export * from "./import";
+export * from "./edit";

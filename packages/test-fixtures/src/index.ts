@@ -157,3 +157,30 @@ export function readImportGolden(
   }
   return readFileSync(importFile(`${name}.logical.cho`), "utf8");
 }
+
+// The URL is built from a variable on purpose: Vite rewrites a static
+// `new URL("<literal>", import.meta.url)` into an asset URL, which
+// `fileURLToPath` rejects in bundled (jsdom) test runs.
+const EDIT_CASES_FILE = "cases.json";
+
+/** Absolute path of the golden edit cases, `<package>/edit/cases.json`. */
+export const EDIT_CASES_PATH = fileURLToPath(
+  new URL(`../edit/${EDIT_CASES_FILE}`, import.meta.url),
+);
+
+/**
+ * One golden edit case: `ops` (chord-core `EditOp` values, untyped here
+ * because this package must not depend on chord-core) applied to the parsed
+ * `fixture` give the ChordPro text `expected`.
+ */
+export interface EditCase {
+  name: string;
+  fixture: FixtureName;
+  ops: unknown[];
+  expected: string;
+}
+
+/** The golden edit cases of {@link EDIT_CASES_PATH}. */
+export function readEditCases(): EditCase[] {
+  return JSON.parse(readFileSync(EDIT_CASES_PATH, "utf8")) as EditCase[];
+}
