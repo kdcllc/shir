@@ -1,10 +1,7 @@
-import { useEffect, useId, useRef } from "react";
-import type { KeyboardEvent } from "react";
+import { useId } from "react";
 import { STRINGS } from "../strings";
 import styles from "./ConfirmDiscard.module.css";
-
-const noDiv = (): HTMLDivElement | null => null;
-const noButton = (): HTMLButtonElement | null => null;
+import { useDialogFocus } from "./useDialogFocus";
 
 export interface ConfirmDiscardProps {
   onKeep(): void;
@@ -15,36 +12,12 @@ export interface ConfirmDiscardProps {
 export function ConfirmDiscard({ onKeep, onDiscard }: ConfirmDiscardProps) {
   const titleId = useId();
   const bodyId = useId();
-  const dialog = useRef(noDiv());
-  const keep = useRef(noButton());
-  const discard = useRef(noButton());
-
-  useEffect(() => {
-    const trigger = document.activeElement;
-    dialog.current?.focus();
-    return () => {
-      if (trigger instanceof HTMLElement) trigger.focus();
-    };
-  }, []);
-
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      onKeep();
-      return;
-    }
-    if (e.key !== "Tab") return;
-    const first = keep.current;
-    const last = discard.current;
-    const active = document.activeElement;
-    if (e.shiftKey && (active === first || active === dialog.current)) {
-      e.preventDefault();
-      last?.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first?.focus();
-    }
-  };
+  const {
+    dialog,
+    first: keep,
+    last: discard,
+    onKeyDown,
+  } = useDialogFocus(onKeep);
 
   return (
     <div className={styles.backdrop} data-ui-chrome>

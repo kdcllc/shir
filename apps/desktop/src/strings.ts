@@ -53,6 +53,61 @@ export const STRINGS = {
   importSkipped: "Skipped files",
   importPickFailed: "Could not open files",
   libraryReloadFailed: "Could not refresh the song list",
+  deleteAction: "Delete",
+  selectSongs: "Select",
+  selectAll: "Select all",
+  selectDone: "Done",
+  deleteSelected: "Delete selected",
+  // prettier-ignore
+  deleteConfirmBody: "Deleted songs are permanently removed from the library. This cannot be undone.",
+  deleteFailed: "Could not delete the song",
+  removeGlyph: "×",
+  tabVisual: "Visual",
+  tabSource: "Source",
+  editorTabs: "Editor view",
+  undo: "Undo",
+  redo: "Redo",
+  transposeSongDown: "Transpose song down",
+  transposeSongUp: "Transpose song up",
+  metaForm: "Song details",
+  metaTitle: "Title",
+  metaArtist: "Artist",
+  metaTempo: "Tempo",
+  visualLabel: "Song lines",
+  visualHint: "Type lyrics, then click a letter to add a chord",
+  editLyrics: "Edit lyrics",
+  lyricsInput: "Lyrics",
+  addLineBelow: "Add line below",
+  removeLine: "Remove line",
+  editGlyph: "✎",
+  addGlyph: "+",
+  chordsLineInput: "Chords",
+  commentInput: "Comment",
+  sourceOnly: "Edit in Source",
+  addSection: "Add section",
+  sectionKind: "Section type",
+  sectionLabel: "Section label",
+  sectionVerse: "Verse",
+  sectionChorus: "Chorus",
+  sectionBridge: "Bridge",
+  sectionUp: "Move section up",
+  sectionDown: "Move section down",
+  sectionRemove: "Remove section",
+  upGlyph: "↑",
+  downGlyph: "↓",
+  chordPicker: "Chord",
+  chordInput: "Chord name",
+  chordSuggestions: "Suggestions",
+  chordApply: "Apply",
+  chordRemove: "Remove chord",
+  chordMoveLeft: "Move chord left",
+  chordMoveRight: "Move chord right",
+  leftGlyph: "←",
+  rightGlyph: "→",
+  chordUnknown: "Unrecognized chord",
+  chordClose: "Close",
+  noLabel: "No label",
+  sectionOther: "Other",
 } as const;
 
 /** Diagnostics heading count: `1 problem`, otherwise `N problems`. */
@@ -70,4 +125,44 @@ export function importQueued(n: number): string {
   return n === 1
     ? "1 file needs alignment review"
     : `${n} files need alignment review`;
+}
+
+/** Delete button label for one song: `Delete <title>` (title bidi-isolated). */
+export function deleteSongNamed(title: string): string {
+  return `Delete \u2068${title}\u2069`;
+}
+
+/** Select checkbox label for one song: `Select <title>` (title bidi-isolated). */
+export function selectSongNamed(title: string): string {
+  return `Select \u2068${title}\u2069`;
+}
+
+/** Delete confirmation title for one song: `Delete <title>?` (title bidi-isolated). */
+export function deleteConfirmTitle(title: string): string {
+  return `Delete \u2068${title}\u2069?`;
+}
+
+/** Delete confirmation title for several songs: `Delete 3 songs?`. */
+export function deleteManyTitle(n: number): string {
+  return `Delete ${n} songs?`;
+}
+
+/** Select-mode count: `3 selected`. */
+export function selectedCount(n: number): string {
+  return `${n} selected`;
+}
+
+/** Delete status: `Deleted 1 song`, otherwise `Deleted N songs`. */
+export function deletedCount(n: number): string {
+  return n === 1 ? "Deleted 1 song" : `Deleted ${n} songs`;
+}
+
+/** Partial delete failure: `Could not delete 2 of 5 songs`. */
+export function deleteManyFailed(failed: number, total: number): string {
+  return `Could not delete ${failed} of ${total} songs`;
+}
+
+/** Accessible name of a visual editor line: `Line 4`. */
+export function lineLabel(n: number): string {
+  return `Line ${n}`;
 }

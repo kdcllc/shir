@@ -83,3 +83,19 @@
   align-items: flex-start;
   justify-content: space-between;
 }
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.delete-status {
+  margin-block: 0.5rem 0;
+  font-size: 0.85rem;
+  color: GrayText;
+}
+
+.delete-status:empty {
+  margin-block: 0;
+}
