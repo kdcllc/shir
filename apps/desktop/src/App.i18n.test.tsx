@@ -109,15 +109,23 @@ function englishPatterns(): RegExp[] {
   return patterns;
 }
 
-/** Every rendered text node and every aria-label / title / placeholder / alt. */
+/** The locale toggle shows native names by design; its own test guards it. */
+const TOGGLE = '[data-testid="locale-toggle"]';
+
+/**
+ * Every rendered text node and every aria-label / title / placeholder / alt,
+ * outside the locale toggle subtree.
+ */
 function renderedStrings(): string[] {
   const found: string[] = [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+    if (n.parentElement?.closest(TOGGLE)) continue;
     const text = (n.textContent ?? "").trim();
     if (text !== "") found.push(text);
   }
   for (const el of document.body.querySelectorAll("*")) {
+    if (el.closest(TOGGLE)) continue;
     for (const attr of ["aria-label", "title", "placeholder", "alt"]) {
       const value = el.getAttribute(attr);
       if (value !== null && value.trim() !== "") found.push(value.trim());
@@ -445,5 +453,21 @@ describe("App language switch", () => {
       ),
     );
     expect(leftovers()).toEqual([]);
+  });
+
+  it("keeps the locale toggle in its native names under the marker bundle", async () => {
+    await renderDb();
+    switchToMarkers();
+    await waitFor(() =>
+      expect(screen.getByTestId("new-song")).toHaveTextContent("⟦newSong⟧"),
+    );
+    const group = screen.getByTestId("locale-toggle");
+    expect(group).toHaveAttribute("aria-label", "⟦uiLanguage⟧");
+    const he = screen.getByTestId("locale-he");
+    const en = screen.getByTestId("locale-en");
+    expect(he).toHaveTextContent(EN.localeHebrewShort);
+    expect(en).toHaveTextContent(EN.localeEnglishShort);
+    expect(he).toHaveAttribute("aria-label", EN.localeHebrew);
+    expect(en).toHaveAttribute("aria-label", EN.localeEnglish);
   });
 });
