@@ -1,8 +1,11 @@
 // G5b cross-task contract: log_webview_error wiring, main.tsx install order, twin samples, seeded first title.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- brings in import.meta.glob typings for the apps/desktop/src/library.ts import
+/// <reference path="../apps/desktop/node_modules/vite/client.d.ts" />
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { buildLibrary } from "../apps/desktop/src/library";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -44,7 +47,7 @@ function capabilityProblems(src: string): string[] {
 }
 
 function bindingsProblems(src: string): string[] {
-  return /^\tlogWebviewError: .*__TAURI_INVOKE<void>\("log_webview_error"/m.test(
+  return /^\s*logWebviewError: .*__TAURI_INVOKE<void>\("log_webview_error"/m.test(
     src,
   )
     ? []
@@ -81,6 +84,18 @@ describe("(a) log_webview_error is wired end to end", () => {
     const mutated = src.replace("allow-log-webview-error", "allow-other");
     expect(mutated).not.toBe(src);
     expect(capabilityProblems(mutated).join("\n")).toContain("capability");
+  });
+
+  it("bindings regex tolerates tab and space indentation", () => {
+    const line = (indent: string): string =>
+      `${indent}logWebviewError: (m: string) => __TAURI_INVOKE<void>("log_webview_error", { m }),`;
+    expect(bindingsProblems(line("\t"))).toEqual([]);
+    expect(bindingsProblems(line("  "))).toEqual([]);
+    expect(bindingsProblems(line("    "))).toEqual([]);
+    expect(bindingsProblems(line(""))).toEqual([]);
+    expect(
+      bindingsProblems(line("\t").replace("log_webview_error", "x")),
+    ).toHaveLength(1);
   });
 
   it("negative: bindings invoking another command are reported", () => {
@@ -182,10 +197,13 @@ describe("(d) twin samples", () => {
 // ---- (c) B31 first library title -------------------------------------------------------
 
 function firstSampleFile(): string {
-  const names = readdirSync(path.join(repoRoot, "samples"))
-    .filter((n) => n.endsWith(".cho") && !n.endsWith(".canonical.cho"))
-    .sort();
-  return `samples/${names[0]!}`;
+  const dir = path.join(repoRoot, "samples");
+  const sources: Record<string, string> = {};
+  for (const n of readdirSync(dir)) {
+    if (n.endsWith(".cho"))
+      sources[`samples/${n}`] = readFileSync(path.join(dir, n), "utf8");
+  }
+  return `samples/${buildLibrary(sources, "samples")[0]!.fileName}`;
 }
 
 function titleOf(cho: string): string | undefined {
