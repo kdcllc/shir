@@ -8,6 +8,7 @@ import { ConfirmDiscard } from "./components/ConfirmDiscard";
 import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
 import { Editor } from "./components/Editor";
 import type { ImportSeed } from "./components/Editor";
+import { LibraryControls } from "./components/LibraryControls";
 import { SearchBox } from "./components/SearchBox";
 import { SelectionBar } from "./components/SelectionBar";
 import { SongHeader } from "./components/SongHeader";
@@ -22,6 +23,14 @@ import { fileNameOf, importSongFiles } from "./importFiles";
 import type { FileImportReport, QueuedFile } from "./importFiles";
 import { useT } from "./i18n";
 import { capoOptions, loadLibrary } from "./library";
+import {
+  filterHits,
+  filterSummaries,
+  readLibraryPrefs,
+  sortSummaries,
+  storeLibraryPrefs,
+} from "./libraryView";
+import type { LibraryPrefs } from "./libraryView";
 import { createDebouncedSearch, sortByTitle } from "./songSource";
 import type {
   DebouncedSearch,
@@ -131,7 +140,13 @@ const noSearch = (): DebouncedSearch | undefined => undefined;
 const newIndex = (): SummaryIndex => new Map();
 
 function toItem(s: SongSummary): SongIndexItem {
-  return { id: s.id, title: s.title, artist: s.artist };
+  return {
+    id: s.id,
+    title: s.title,
+    artist: s.artist,
+    songKey: s.key,
+    language: s.language,
+  };
 }
 
 export function App() {
@@ -167,6 +182,9 @@ export function App() {
   const [removing, setRemoving] = useState(false);
   const [deleteStatus, setDeleteStatus] = useState(noMessage);
   const [refocus, setRefocus] = useState(noRefocus);
+  const [prefs, setPrefsState] = useState(() =>
+    readLibraryPrefs(window.localStorage),
+  );
   const live = useRef(noLive());
   const sessionKey = useRef(0);
   const request = useRef(0);
@@ -277,12 +295,17 @@ export function App() {
       );
     });
 
+  const setPrefs = (next: LibraryPrefs) => {
+    setPrefsState(next);
+    storeLibraryPrefs(window.localStorage, next);
+  };
+
   const refreshList = async (select: Song) => {
     let summary: SongSummary | undefined;
     try {
-      const sorted = sortByTitle(await listSongs());
-      setSummaries(sorted);
-      summary = sorted.find((s) => s.id === select.id);
+      const fresh = await listSongs();
+      setSummaries(fresh);
+      summary = fresh.find((s) => s.id === select.id);
     } catch {
       setNotice({ key: "libraryReloadFailed" });
     }
@@ -329,8 +352,14 @@ export function App() {
         .finally(() => setImporting(false));
     });
 
+  /** The library as listed: chosen order, language filter applied. */
+  const shown = useMemo(
+    () => filterSummaries(sortSummaries(summaries, prefs.sort), prefs.language),
+    [summaries, prefs],
+  );
+
   useEffect(() => {
-    live.current = { selectedId, session, summaries };
+    live.current = { selectedId, session, summaries: shown };
   });
 
   const titleOf = (id: string): string =>
@@ -368,7 +397,7 @@ export function App() {
     let listed = before.summaries.filter(alive);
     if (gone.size > 0) {
       try {
-        listed = sortByTitle(await listSongs());
+        listed = await listSongs();
         setSummaries(listed);
       } catch {
         setSummaries((prev) => prev.filter(alive));
@@ -468,7 +497,7 @@ export function App() {
       (list) => {
         if (cancelled) return;
         const sorted = sortByTitle(list);
-        setSummaries(sorted);
+        setSummaries(list);
         setMode("db");
         const demoTitle = bundled[0]?.title;
         const first = sorted.find((s) => s.title === demoTitle) ?? sorted[0];
@@ -542,28 +571,34 @@ export function App() {
     search.query === trimmed;
   const pending = trimmed !== "" && !settled;
 
-  const hitItems: SongIndexItem[] =
-    search.status === "done"
-      ? search.hits.map((h) => ({ ...toItem(h.song), snippet: h.snippet }))
-      : [];
+  const allHits = search.status === "done" ? search.hits : [];
+  const hitItems: SongIndexItem[] = filterHits(allHits, prefs.language).map(
+    (h) => ({ ...toItem(h.song), snippet: h.snippet }),
+  );
 
   const showLoading = mode === "loading";
   const showBundled = mode === "bundled";
   const showDb = mode === "db";
   const showError = showDb && search.status === "error";
-  const showEmpty = showDb && search.status === "done" && hitItems.length === 0;
-  const showHits = showDb && search.status === "done" && !showEmpty;
+  const showEmpty = showDb && search.status === "done" && allHits.length === 0;
+  const showHits = showDb && search.status === "done" && hitItems.length > 0;
   const showLibrary =
     showDb && search.status !== "error" && search.status !== "done";
   const showNoSongs = showLibrary && summaries.length === 0;
-  const showSongs = showLibrary && !showNoSongs;
+  const showSongs = showLibrary && !showNoSongs && shown.length > 0;
+  const showFilterEmpty =
+    (showDb &&
+      search.status === "done" &&
+      allHits.length > 0 &&
+      hitItems.length === 0) ||
+    (showLibrary && !showNoSongs && shown.length === 0);
   const showPane =
     entry !== undefined && song !== undefined && view !== undefined;
   const editing = showDb && session !== undefined;
   const listedIds = showHits
     ? hitItems.map((h) => h.id)
     : showSongs
-      ? summaries.map((s) => s.id)
+      ? shown.map((s) => s.id)
       : [];
   const askRowDelete = (id: string) =>
     askDelete([id], false, listedIds.indexOf(id));
@@ -686,6 +721,12 @@ export function App() {
             >
               {pending ? t("searching") : ""}
             </p>
+            <LibraryControls
+              sort={prefs.sort}
+              language={prefs.language}
+              onSort={(sort) => setPrefs({ ...prefs, sort })}
+              onLanguage={(language) => setPrefs({ ...prefs, language })}
+            />
             <SelectionBar
               selecting={selecting}
               count={picked.size}
@@ -728,11 +769,14 @@ export function App() {
                   deleteDisabled={removing}
                 />
               )}
+              {showFilterEmpty && (
+                <p data-testid="filter-empty">{t("noFilterMatches")}</p>
+              )}
               {showNoSongs && <p>{t("libraryEmpty")}</p>}
               {showSongs && (
                 <SongIndex
                   variant="library"
-                  items={summaries.map(toItem)}
+                  items={shown.map(toItem)}
                   selectedId={selectedId}
                   onSelect={pickDb}
                   onDelete={askRowDelete}

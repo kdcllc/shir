@@ -1,5 +1,6 @@
 import type { SongIdSet } from "../deleteSongs";
 import { useT } from "../i18n";
+import type { Language } from "../storage";
 import styles from "./SongIndex.module.css";
 import type { DialogFocus } from "./useDialogFocus";
 
@@ -7,6 +8,8 @@ export interface SongIndexItem {
   id: string;
   title: string;
   artist?: string | null | undefined;
+  songKey?: string | null | undefined;
+  language?: Language | undefined;
   snippet?: string | null | undefined;
 }
 
@@ -48,6 +51,18 @@ export function SongIndex({
 }: SongIndexProps) {
   const t = useT();
   const results = variant === "results";
+  const badge = (l: Language): string =>
+    l === "he"
+      ? t("badgeHebrew")
+      : l === "en"
+        ? t("badgeEnglish")
+        : t("badgeMixed");
+  const badgeName = (l: Language): string =>
+    l === "he"
+      ? t("filterHebrew")
+      : l === "en"
+        ? t("filterEnglish")
+        : t("filterMixed");
   const removable = onDelete !== undefined && !selecting;
   const extras = selecting || removable;
   // One row renderer for both variants. It lives inside this component because
@@ -79,6 +94,21 @@ export function SongIndex({
         {s.artist != null && s.artist !== "" && (
           <span dir="auto" className={styles.artist}>
             {s.artist}
+          </span>
+        )}
+        {s.songKey != null && s.songKey !== "" && (
+          <span dir="ltr" className={styles.key} data-testid="song-row-key">
+            {s.songKey}
+          </span>
+        )}
+        {s.language !== undefined && (
+          <span
+            className={styles.badge}
+            data-testid="song-language"
+            title={badgeName(s.language)}
+            aria-label={badgeName(s.language)}
+          >
+            {badge(s.language)}
           </span>
         )}
         {s.snippet != null && (

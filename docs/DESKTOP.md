@@ -83,6 +83,27 @@ the library is empty there is no selection, and the song pane shows only
 Loading state (before database mode): while `listSongs` is pending, the sidebar
 shows `loadingLibrary` and the pane shows `noSongSelected`.
 
+Library controls (database mode only, `LibraryControls`, `data-ui-chrome`): a
+`role="group"` named `libraryView` sits between the search status line and the
+selection bar. It holds a native sort `<select>` (`library-sort`, label
+`sortLabel`, options `title` / `artist` / `updated`) and a language filter, a
+`role="radiogroup"` named `filterLanguage` with four `role="radio"` buttons
+(`library-filter-all`, `-he`, `-en`, `-mixed`; exactly one `aria-checked`,
+roving `tabIndex`). Arrow keys move and select within the group; ArrowLeft and
+ArrowRight follow the visual order, so they swap under `dir="rtl"`. Both
+choices are read once on mount and stored on every change with
+`readLibraryPrefs` / `storeLibraryPrefs` (`libraryView.ts`, key `shir.library`).
+The library list is `filterSummaries(sortSummaries(summaries, sort), language)`,
+re-derived after a save, import or delete. Search results are filtered by
+language only (`filterHits`) and keep relevance order; the sort never reorders
+them. When the unfiltered list or hit list is non-empty but the filtered one is
+empty, the sidebar shows `filter-empty` (`noFilterMatches`) instead of the list.
+Each `SongIndex` row shows, after title and artist, the key (`song-row-key`,
+`dir="ltr"`) when non-empty and a language badge (`song-language`, text
+`badgeHebrew` / `badgeEnglish` / `badgeMixed`, `title` and accessible name
+`filterHebrew` / `filterEnglish` / `filterMixed`). Select all selects only the
+listed (filtered) rows. The bundled fallback has no controls.
+
 Database-mode states:
 
 - An empty database list shows `libraryEmpty`.
@@ -576,6 +597,14 @@ Coordinates have two meanings:
 | `song-check`            | `<input type="checkbox">`  | Per song row in select mode: selects the song                         |
 | `selection-bar`         | `<div>`                    | Sidebar bar holding the select-mode controls                          |
 | `select-songs`          | `<button>`                 | Enters select mode                                                    |
+| `library-sort`          | `<select>`                 | Sidebar: sort order (title, artist, recently updated)                 |
+| `library-filter-all`    | `<button role="radio">`    | Language filter: all songs                                            |
+| `library-filter-he`     | `<button role="radio">`    | Language filter: Hebrew songs                                         |
+| `library-filter-en`     | `<button role="radio">`    | Language filter: English songs                                        |
+| `library-filter-mixed`  | `<button role="radio">`    | Language filter: mixed-language songs                                 |
+| `filter-empty`          | `<p>`                      | Shown when the language filter hides every listed song or hit         |
+| `song-row-key`          | `<span dir="ltr">`         | Per song row: the song's key, only when non-empty                     |
+| `song-language`         | `<span>`                   | Per song row: language badge (`HE`, `EN`, `HE+EN`)                    |
 | `select-all`            | `<button>`                 | Select mode: selects every listed song                                |
 | `selection-count`       | `<p role="status">`        | Select mode: `N selected`                                             |
 | `delete-selected`       | `<button>`                 | Select mode: deletes the selected songs after confirmation            |
