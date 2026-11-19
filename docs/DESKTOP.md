@@ -733,6 +733,27 @@ Coordinates have two meanings:
 | `chordClose`          | `Close`                                                                            |
 | `noLabel`             | `No label`                                                                         |
 | `sectionOther`        | `Other`                                                                            |
+| `sortLabel`           | `Sort by`                                                                          |
+| `sortTitle`           | `Title`                                                                            |
+| `sortArtist`          | `Artist`                                                                           |
+| `sortUpdated`         | `Recently updated`                                                                 |
+| `libraryView`         | `Library view`                                                                     |
+| `filterLanguage`      | `Language`                                                                         |
+| `filterAll`           | `All`                                                                              |
+| `filterHebrew`        | `Hebrew`                                                                           |
+| `filterEnglish`       | `English`                                                                          |
+| `filterMixed`         | `Mixed`                                                                            |
+| `badgeHebrew`         | `HE`                                                                               |
+| `badgeEnglish`        | `EN`                                                                               |
+| `badgeMixed`          | `HE+EN`                                                                            |
+| `noFilterMatches`     | `No songs in this language`                                                        |
+| `uiLanguage`          | `Interface language`                                                               |
+| `localeHebrew`        | `עברית`                                                                            |
+| `localeEnglish`       | `English`                                                                          |
+| `localeHebrewShort`   | `עב`                                                                               |
+| `localeEnglishShort`  | `EN`                                                                               |
+| `chordAddEmpty`       | `Add chord`                                                                        |
+| `fileFilterSongs`     | `Song files`                                                                       |
 
 `diagnosticsCount(n: number): string` returns `1 problem` for n = 1 and
 `${n} problems` otherwise.
@@ -753,6 +774,16 @@ three the title is wrapped in the bidi isolate characters U+2068 and U+2069.
 `deleteManyFailed(failed: number, total: number): string` returns
 `Could not delete ${failed} of ${total} songs`.
 `lineLabel(n: number): string` returns `Line ${n}`.
+
+`TEMPLATES` (`apps/desktop/src/strings.ts`) holds the i18next templates that
+replace the helpers above (`{{var}}` interpolation, `_one` / `_other` plural
+suffixes; Hebrew adds `_two` and `_many`). The English resource is
+`{ ...STRINGS, ...TEMPLATES }` (`apps/desktop/src/i18n/en.ts`):
+`diagnosticsCount` (plural, `count`), `importSummary` (plural on `count` = total,
+`saved`), `importQueued` (plural, `count`), `deleteSongNamed`, `selectSongNamed`
+and `deleteConfirmTitle` (`title`, wrapped in U+2068 / U+2069), `deleteManyTitle`
+and `selectedCount` (`count`), `deletedCount` (plural, `count`),
+`deleteManyFailed` (plural on `count` = total, `failed`) and `lineLabel` (`n`).
 
 ## Out of scope
 

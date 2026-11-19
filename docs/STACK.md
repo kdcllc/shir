@@ -51,8 +51,8 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | fast-check                               | `fast-check`                    | 4.10.2                                   | npm       | planned        |
 | Zustand                                  | `zustand`                       | 5.1.0                                    | npm       | planned        |
 | TanStack Router                          | `@tanstack/react-router`        | 1.170.46                                 | npm       | planned        |
-| i18next                                  | `i18next`                       | 27.1.1                                   | npm       | planned        |
-| react-i18next                            | `react-i18next`                 | 18.0.1                                   | npm       | planned        |
+| i18next                                  | `i18next`                       | 27.1.1                                   | npm       | installed (G8) |
+| react-i18next                            | `react-i18next`                 | 18.0.1                                   | npm       | installed (G8) |
 | SVGuitar                                 | `svguitar`                      | 2.10.1                                   | npm       | planned (G3)   |
 | Chord fingering data (HEAD commit)       | `tabsy-gr/chords-db`            | 43f8b4a7ba7b61b90bb48f8721ae918a4f421d64 | data      | planned (G3)   |
 | SQLite bindings (bundled)                | `rusqlite`                      | 0.41.1                                   | crate     | installed (G4) |
