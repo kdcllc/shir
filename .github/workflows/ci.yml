@@ -93,6 +93,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Built frontend print + a11y (chromium + webkit)
+        if: runner.os == 'Linux'
+        run: pnpm --filter desktop test:web
+
+      - name: Upload web report
+        if: failure() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-report
+          path: apps/desktop/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Tauri debug build
         run: pnpm tauri build --debug
 
