@@ -1,5 +1,5 @@
 import type { SongIdSet } from "../deleteSongs";
-import { STRINGS, deleteSongNamed, selectSongNamed } from "../strings";
+import { useT } from "../i18n";
 import styles from "./SongIndex.module.css";
 import type { DialogFocus } from "./useDialogFocus";
 
@@ -46,6 +46,7 @@ export function SongIndex({
   focusIndex,
   focusRef,
 }: SongIndexProps) {
+  const t = useT();
   const results = variant === "results";
   const removable = onDelete !== undefined && !selecting;
   const extras = selecting || removable;
@@ -59,7 +60,7 @@ export function SongIndex({
           className={styles.check}
           data-testid="song-check"
           data-ui-chrome
-          aria-label={selectSongNamed(s.title)}
+          aria-label={t("selectSongNamed", { title: s.title })}
           checked={selected?.has(s.id) ?? false}
           onChange={() => onToggle?.(s.id)}
         />
@@ -96,11 +97,11 @@ export function SongIndex({
           className={styles.remove}
           data-testid="song-delete"
           data-ui-chrome
-          aria-label={deleteSongNamed(s.title)}
+          aria-label={t("deleteSongNamed", { title: s.title })}
           disabled={deleteDisabled}
           onClick={() => onDelete(s.id)}
         >
-          {STRINGS.removeGlyph}
+          {t("removeGlyph")}
         </button>
       )}
     </li>
@@ -111,7 +112,7 @@ export function SongIndex({
         <ul
           className={styles.items}
           data-testid="search-results"
-          aria-label={STRINGS.searchResults}
+          aria-label={t("searchResults")}
           aria-busy={busy === true ? "true" : undefined}
         >
           {items.map(row)}

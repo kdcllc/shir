@@ -1,4 +1,4 @@
-import { STRINGS, selectedCount } from "../strings";
+import { useT } from "../i18n";
 import styles from "./SelectionBar.module.css";
 import type { DialogFocus } from "./useDialogFocus";
 
@@ -27,6 +27,7 @@ export function SelectionBar({
   onDone,
   startRef,
 }: SelectionBarProps) {
+  const t = useT();
   return (
     <div className={styles.bar} data-testid="selection-bar" data-ui-chrome>
       {!selecting && (
@@ -36,7 +37,7 @@ export function SelectionBar({
           data-testid="select-songs"
           onClick={onStart}
         >
-          {STRINGS.selectSongs}
+          {t("selectSongs")}
         </button>
       )}
       {selecting && (
@@ -46,10 +47,10 @@ export function SelectionBar({
             className={styles.count}
             data-testid="selection-count"
           >
-            {selectedCount(count)}
+            {t("selectedCount", { count })}
           </p>
           <button type="button" data-testid="select-all" onClick={onSelectAll}>
-            {STRINGS.selectAll}
+            {t("selectAll")}
           </button>
           <button
             type="button"
@@ -57,10 +58,10 @@ export function SelectionBar({
             disabled={count === 0 || busy}
             onClick={onDelete}
           >
-            {STRINGS.deleteSelected}
+            {t("deleteSelected")}
           </button>
           <button type="button" data-testid="select-done" onClick={onDone}>
-            {STRINGS.selectDone}
+            {t("selectDone")}
           </button>
         </>
       )}

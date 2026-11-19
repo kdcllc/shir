@@ -1,5 +1,5 @@
 import type { Diagnostic } from "chord-core";
-import { STRINGS, diagnosticsCount } from "../strings";
+import { useT } from "../i18n";
 import styles from "./DiagnosticsPanel.module.css";
 
 export interface DiagnosticsPanelProps {
@@ -7,12 +7,13 @@ export interface DiagnosticsPanelProps {
 }
 
 export function DiagnosticsPanel({ diagnostics }: DiagnosticsPanelProps) {
+  const t = useT();
   if (diagnostics.length === 0) return null;
   return (
     <section data-testid="diagnostics" data-ui-chrome className={styles.panel}>
       <h3 className={styles.heading}>
-        {STRINGS.diagnostics} {STRINGS.separator}{" "}
-        {diagnosticsCount(diagnostics.length)}
+        {t("diagnostics")} {t("separator")}{" "}
+        {t("diagnosticsCount", { count: diagnostics.length })}
       </h3>
       <ul className={styles.items}>
         {diagnostics.map((d, i) => (

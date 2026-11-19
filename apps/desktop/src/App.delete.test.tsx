@@ -15,14 +15,16 @@ import {
   searchSongs,
 } from "./storage";
 import type { SearchHit, Song, SongSummary } from "./storage";
-import {
-  STRINGS,
-  deleteConfirmTitle,
-  deleteManyFailed,
-  deleteManyTitle,
-  deletedCount,
-  selectedCount,
-} from "./strings";
+import { STRINGS } from "./strings";
+import { i18n } from "./i18n";
+
+const deleteConfirmTitle = (title: string) =>
+  i18n.t("deleteConfirmTitle", { title });
+const deleteManyFailed = (failed: number, count: number) =>
+  i18n.t("deleteManyFailed", { failed, count });
+const deleteManyTitle = (count: number) => i18n.t("deleteManyTitle", { count });
+const deletedCount = (count: number) => i18n.t("deletedCount", { count });
+const selectedCount = (count: number) => i18n.t("selectedCount", { count });
 
 vi.mock("./uiReady", () => ({ signalUiReady: vi.fn() }));
 vi.mock("./storage", () => ({

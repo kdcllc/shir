@@ -1,5 +1,5 @@
 import { firstStrongDirection } from "chord-core";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./SongHeader.module.css";
 
 export interface SongHeaderProps {
@@ -15,6 +15,7 @@ export function SongHeader({
   soundingKey,
   capo,
 }: SongHeaderProps) {
+  const t = useT();
   return (
     <header
       data-testid="song-header"
@@ -30,18 +31,18 @@ export function SongHeader({
         </p>
       )}
       <p dir="ltr" className={styles.meta}>
-        <span className={styles.label}>{STRINGS.key}</span>{" "}
+        <span className={styles.label}>{t("key")}</span>{" "}
         <span data-testid="sounding-key">
           {soundingKey !== undefined ? (
             <bdi dir="ltr">{soundingKey}</bdi>
           ) : (
-            STRINGS.noKey
+            t("noKey")
           )}
         </span>
         {capo > 0 && (
           <>
             {" "}
-            <span className={styles.label}>{STRINGS.capo}</span>{" "}
+            <span className={styles.label}>{t("capo")}</span>{" "}
             <bdi dir="ltr" data-testid="capo-value">
               {capo}
             </bdi>

@@ -5,7 +5,7 @@ import type { EditOp, ImportResult, RtlColumns, SongModel } from "chord-core";
 import { SongView } from "chord-render";
 import { withTitleFallback } from "../importFiles";
 import { songMeta } from "../library";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import { useHistory } from "../useHistory";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import styles from "./Editor.module.css";
@@ -98,6 +98,7 @@ interface SourcePanelProps {
 
 /** The Source tab: the ChordPro text area and its debounced preview. */
 const SourcePanel = ({ id, labelledBy, text, onType }: SourcePanelProps) => {
+  const t = useT();
   const inputId = useId();
   const [previewText, setPreviewText] = useState(text);
 
@@ -118,7 +119,7 @@ const SourcePanel = ({ id, labelledBy, text, onType }: SourcePanelProps) => {
     >
       <div className={styles["input-pane"]} data-ui-chrome>
         <label htmlFor={inputId} className={styles.label}>
-          {STRINGS.editorLabel}
+          {t("editorLabel")}
         </label>
         <textarea
           id={inputId}
@@ -133,7 +134,7 @@ const SourcePanel = ({ id, labelledBy, text, onType }: SourcePanelProps) => {
       <div
         className={styles.preview}
         role="region"
-        aria-label={STRINGS.previewLabel}
+        aria-label={t("previewLabel")}
         data-testid="editor-preview"
       >
         <DiagnosticsPanel diagnostics={parsed.diagnostics} />
@@ -153,6 +154,7 @@ export function Editor({
   onCancel,
   onDirtyChange,
 }: EditorProps) {
+  const t = useT();
   const id = useId();
   const visualId = `${id}-visual`;
   const sourceId = `${id}-source`;
@@ -311,7 +313,7 @@ export function Editor({
     >
       {fileName !== undefined && (
         <p className={styles.file} data-testid="reviewing-file" data-ui-chrome>
-          {STRINGS.reviewingFile} <bdi dir="auto">{fileName}</bdi>
+          {t("reviewingFile")} <bdi dir="auto">{fileName}</bdi>
         </p>
       )}
       <div className={styles.toolbar} data-ui-chrome>
@@ -322,10 +324,10 @@ export function Editor({
             disabled={saving}
             onClick={() => void onSaveClick()}
           >
-            {STRINGS.save}
+            {t("save")}
           </button>
           <button type="button" data-testid="editor-cancel" onClick={onCancel}>
-            {STRINGS.cancel}
+            {t("cancel")}
           </button>
         </div>
         <div className={styles.group}>
@@ -335,7 +337,7 @@ export function Editor({
             disabled={!history.canUndo}
             onClick={onUndo}
           >
-            {STRINGS.undo}
+            {t("undo")}
           </button>
           <button
             type="button"
@@ -343,7 +345,7 @@ export function Editor({
             disabled={!history.canRedo}
             onClick={onRedo}
           >
-            {STRINGS.redo}
+            {t("redo")}
           </button>
         </div>
         <div
@@ -352,25 +354,25 @@ export function Editor({
           aria-labelledby={transposeId}
         >
           <span id={transposeId} className={styles.label}>
-            {STRINGS.transpose}
+            {t("transpose")}
           </span>
           <button
             type="button"
             className={styles.step}
             data-testid="editor-transpose-down"
-            aria-label={STRINGS.transposeSongDown}
+            aria-label={t("transposeSongDown")}
             onClick={() => onTranspose(-1)}
           >
-            {STRINGS.transposeDownGlyph}
+            {t("transposeDownGlyph")}
           </button>
           <button
             type="button"
             className={styles.step}
             data-testid="editor-transpose-up"
-            aria-label={STRINGS.transposeSongUp}
+            aria-label={t("transposeSongUp")}
             onClick={() => onTranspose(1)}
           >
-            {STRINGS.transposeUpGlyph}
+            {t("transposeUpGlyph")}
           </button>
         </div>
         <div className={styles.group}>
@@ -379,7 +381,7 @@ export function Editor({
             data-testid="editor-paste"
             onClick={() => void onPaste()}
           >
-            {STRINGS.paste}
+            {t("paste")}
           </button>
           {tab === "source" && (
             <button
@@ -387,12 +389,12 @@ export function Editor({
               data-testid="editor-convert"
               onClick={onConvert}
             >
-              {STRINGS.convert}
+              {t("convert")}
             </button>
           )}
           {showFlip && (
             <button type="button" data-testid="editor-flip" onClick={onFlip}>
-              {STRINGS.flipAlignment}
+              {t("flipAlignment")}
             </button>
           )}
         </div>
@@ -403,16 +405,16 @@ export function Editor({
         data-testid="editor-status"
         data-ui-chrome
       >
-        {alreadyChordPro ? STRINGS.alreadyChordPro : ""}
+        {alreadyChordPro ? t("alreadyChordPro") : ""}
       </p>
       {pasteFailed && (
         <p role="alert" data-testid="editor-paste-error" data-ui-chrome>
-          {STRINGS.pasteFailed}
+          {t("pasteFailed")}
         </p>
       )}
       {saveError !== undefined && (
         <p role="alert" data-testid="editor-save-error" data-ui-chrome>
-          {STRINGS.saveFailed}: {saveError}
+          {t("saveFailed")}: {saveError}
         </p>
       )}
       {warnings.length > 0 && (
@@ -421,9 +423,7 @@ export function Editor({
           data-testid="import-warnings"
           data-ui-chrome
         >
-          <h3 className={styles["warnings-heading"]}>
-            {STRINGS.importWarnings}
-          </h3>
+          <h3 className={styles["warnings-heading"]}>{t("importWarnings")}</h3>
           <ul className={styles["warning-items"]}>
             {warnings.map((w, i) => (
               <li key={i} data-testid="import-warning">
@@ -437,7 +437,7 @@ export function Editor({
       <div
         className={styles.tabs}
         role="tablist"
-        aria-label={STRINGS.editorTabs}
+        aria-label={t("editorTabs")}
         data-ui-chrome
         onKeyDown={onTabKey}
       >
@@ -452,7 +452,7 @@ export function Editor({
           tabIndex={tab === "visual" ? 0 : -1}
           onClick={() => setTab("visual")}
         >
-          {STRINGS.tabVisual}
+          {t("tabVisual")}
         </button>
         <button
           ref={sourceTabRef}
@@ -466,7 +466,7 @@ export function Editor({
           tabIndex={tab === "source" ? 0 : -1}
           onClick={() => setTab("source")}
         >
-          {STRINGS.tabSource}
+          {t("tabSource")}
         </button>
       </div>
       {tab === "visual" ? (

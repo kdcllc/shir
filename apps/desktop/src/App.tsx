@@ -20,6 +20,7 @@ import type { SongIdSet } from "./deleteSongs";
 import { pickSongFiles, readTextFile } from "./files";
 import { fileNameOf, importSongFiles } from "./importFiles";
 import type { FileImportReport, QueuedFile } from "./importFiles";
+import { useT } from "./i18n";
 import { capoOptions, loadLibrary } from "./library";
 import { createDebouncedSearch, sortByTitle } from "./songSource";
 import type {
@@ -36,15 +37,6 @@ import {
   searchSongs,
 } from "./storage";
 import type { Song, SongSummary } from "./storage";
-import {
-  STRINGS,
-  deleteConfirmTitle,
-  deleteManyFailed,
-  deleteManyTitle,
-  deletedCount,
-  importQueued,
-  importSummary,
-} from "./strings";
 import { signalUiReady } from "./uiReady";
 
 type Mode = "loading" | "db" | "bundled";
@@ -67,11 +59,27 @@ interface Session {
   path?: string | undefined;
 }
 
+/** A translatable message kept as data so it follows a live language switch. */
+interface Msg {
+  key:
+    | "songLoadFailed"
+    | "libraryReloadFailed"
+    | "importPickFailed"
+    | "deleteFailed"
+    | "deleteManyFailed"
+    | "deleteConfirmTitle"
+    | "deleteManyTitle"
+    | "deletedCount";
+  vars?: { title?: string; count?: number; failed?: number };
+  /** Raw error text appended after a colon. */
+  detail?: string;
+}
+
 /** A delete waiting for the user's confirmation. */
 interface DeleteRequest {
   ids: string[];
   /** Dialog heading. */
-  title: string;
+  title: Msg;
   /** Started from select mode. */
   bulk: boolean;
   /** Position of the list row whose delete button started it; absent otherwise. */
@@ -101,7 +109,7 @@ const noSession = (): Session | undefined => undefined;
 const noQueue = (): QueuedFile[] => [];
 const noPaths = (): string[] => [];
 const noReport = (): FileImportReport | undefined => undefined;
-const noMessage = (): string | undefined => undefined;
+const noMessage = (): Msg | undefined => undefined;
 const noAction = (): (() => void) | undefined => undefined;
 const noDelete = (): DeleteRequest | undefined => undefined;
 const noSelection = (): SongIdSet => new Set();
@@ -127,6 +135,14 @@ function toItem(s: SongSummary): SongIndexItem {
 }
 
 export function App() {
+  const t = useT();
+  const say = (m: Msg): string => {
+    const text = (t as unknown as (k: string, v?: object) => string)(
+      m.key,
+      m.vars,
+    );
+    return m.detail === undefined ? text : `${text}: ${m.detail}`;
+  };
   const bundled = useMemo(() => loadLibrary(), []);
   const [mode, setMode] = useState(loadingMode);
   const [summaries, setSummaries] = useState(noSummaries);
@@ -149,7 +165,7 @@ export function App() {
   const [picked, setPicked] = useState(noSelection);
   const [deleting, setDeleting] = useState(noDelete);
   const [removing, setRemoving] = useState(false);
-  const [deleteStatus, setDeleteStatus] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState(noMessage);
   const [refocus, setRefocus] = useState(noRefocus);
   const live = useRef(noLive());
   const sessionKey = useRef(0);
@@ -248,7 +264,7 @@ export function App() {
             baseline: stored.chordpro,
           });
         })
-        .catch(() => setNotice(STRINGS.songLoadFailed));
+        .catch(() => setNotice({ key: "songLoadFailed" }));
     });
   };
 
@@ -268,7 +284,7 @@ export function App() {
       setSummaries(sorted);
       summary = sorted.find((s) => s.id === select.id);
     } catch {
-      setNotice(STRINGS.libraryReloadFailed);
+      setNotice({ key: "libraryReloadFailed" });
     }
     selectDb(select.id, summary);
   };
@@ -308,7 +324,7 @@ export function App() {
           if (result.queued.length > 0) openQueued(result.queued);
         })
         .catch((reason: unknown) =>
-          setNotice(`${STRINGS.importPickFailed}: ${messageOf(reason)}`),
+          setNotice({ key: "importPickFailed", detail: messageOf(reason) }),
         )
         .finally(() => setImporting(false));
     });
@@ -327,15 +343,15 @@ export function App() {
   const askDelete = (ids: string[], bulk: boolean, row?: number) => {
     const [only] = ids;
     if (only === undefined || removing) return;
-    setDeleteStatus("");
+    setDeleteStatus(undefined);
     setDeleting({
       ids,
       bulk,
       row,
       title:
         ids.length === 1
-          ? deleteConfirmTitle(titleOf(only))
-          : deleteManyTitle(ids.length),
+          ? { key: "deleteConfirmTitle", vars: { title: titleOf(only) } }
+          : { key: "deleteManyTitle", vars: { count: ids.length } },
     });
   };
 
@@ -356,7 +372,7 @@ export function App() {
         setSummaries(listed);
       } catch {
         setSummaries((prev) => prev.filter(alive));
-        setNotice(STRINGS.libraryReloadFailed);
+        setNotice({ key: "libraryReloadFailed" });
       }
     }
     setRemoving(false);
@@ -391,7 +407,7 @@ export function App() {
           selectDb(next.id, listed.find((s) => s.id === next.id) ?? next);
         }
       }
-      setDeleteStatus(deletedCount(deleted.length));
+      setDeleteStatus({ key: "deletedCount", vars: { count: deleted.length } });
     }
 
     const [askedId] = asked.ids;
@@ -414,8 +430,12 @@ export function App() {
     }
     setNotice(
       asked.ids.length === 1
-        ? `${STRINGS.deleteFailed}: ${firstFailure.message}`
-        : `${deleteManyFailed(failed.length, asked.ids.length)}: ${firstFailure.message}`,
+        ? { key: "deleteFailed", detail: firstFailure.message }
+        : {
+            key: "deleteManyFailed",
+            vars: { failed: failed.length, count: asked.ids.length },
+            detail: firstFailure.message,
+          },
     );
   };
 
@@ -563,10 +583,10 @@ export function App() {
     <div className={styles.root}>
       <div className={styles.sidebar}>
         <h1 className={styles.heading} data-ui-chrome>
-          {STRINGS.appName} {STRINGS.separator}{" "}
-          <bdi lang="he">{STRINGS.appNameHebrew}</bdi>
+          {t("appName")} {t("separator")}{" "}
+          <bdi lang="he">{t("appNameHebrew")}</bdi>
         </h1>
-        {showLoading && <p data-ui-chrome>{STRINGS.loadingLibrary}</p>}
+        {showLoading && <p data-ui-chrome>{t("loadingLibrary")}</p>}
         {showBundled && (
           <>
             <SearchBox value="" disabled onChange={() => undefined} />
@@ -575,7 +595,7 @@ export function App() {
               data-testid="search-unavailable"
               data-ui-chrome
             >
-              {STRINGS.searchUnavailable}
+              {t("searchUnavailable")}
             </p>
             <SongList
               songs={bundled}
@@ -588,7 +608,7 @@ export function App() {
           <>
             <div className={styles.actions} data-ui-chrome>
               <button type="button" data-testid="new-song" onClick={openNew}>
-                {STRINGS.newSong}
+                {t("newSong")}
               </button>
               <button
                 type="button"
@@ -596,7 +616,7 @@ export function App() {
                 disabled={importing}
                 onClick={runImport}
               >
-                {STRINGS.openFiles}
+                {t("openFiles")}
               </button>
             </div>
             {report !== undefined && (
@@ -606,21 +626,22 @@ export function App() {
                 data-ui-chrome
               >
                 <p role="status" data-testid="import-summary">
-                  {importSummary(
-                    report.saved.length,
-                    report.saved.length +
+                  {t("importSummary", {
+                    saved: report.saved.length,
+                    count:
+                      report.saved.length +
                       report.queued.length +
                       report.failed.length,
-                  )}
+                  })}
                 </p>
                 {report.queued.length > 0 && (
                   <p role="status" data-testid="import-queued">
-                    {importQueued(report.queued.length)}
+                    {t("importQueued", { count: report.queued.length })}
                   </p>
                 )}
                 {report.saved.some((f) => f.converted) && (
                   <div data-testid="import-converted">
-                    <p>{STRINGS.importConverted}</p>
+                    <p>{t("importConverted")}</p>
                     <ul className={styles["report-items"]}>
                       {report.saved
                         .filter((f) => f.converted)
@@ -634,7 +655,7 @@ export function App() {
                 )}
                 {skipped.length > 0 && (
                   <div data-testid="import-skipped">
-                    <p>{STRINGS.importSkipped}</p>
+                    <p>{t("importSkipped")}</p>
                     <ul className={styles["report-items"]}>
                       {skipped.map((path, i) => (
                         <li key={i} dir="auto">
@@ -653,7 +674,7 @@ export function App() {
             )}
             {notice !== undefined && (
               <p role="alert" data-testid="app-notice" data-ui-chrome>
-                {notice}
+                {say(notice)}
               </p>
             )}
             <SearchBox value={query} onChange={onQuery} />
@@ -663,7 +684,7 @@ export function App() {
               data-testid="search-pending"
               data-ui-chrome
             >
-              {pending ? STRINGS.searching : ""}
+              {pending ? t("searching") : ""}
             </p>
             <SelectionBar
               selecting={selecting}
@@ -681,18 +702,16 @@ export function App() {
               data-testid="delete-status"
               data-ui-chrome
             >
-              {deleteStatus}
+              {deleteStatus === undefined ? "" : say(deleteStatus)}
             </p>
             <nav
-              aria-label={STRINGS.songList}
+              aria-label={t("songList")}
               data-testid="song-list"
               data-ui-chrome
               className={styles.library}
             >
-              {showError && <p role="alert">{STRINGS.searchFailed}</p>}
-              {showEmpty && (
-                <p data-testid="search-empty">{STRINGS.noResults}</p>
-              )}
+              {showError && <p role="alert">{t("searchFailed")}</p>}
+              {showEmpty && <p data-testid="search-empty">{t("noResults")}</p>}
               {showHits && (
                 <SongIndex
                   variant="results"
@@ -709,7 +728,7 @@ export function App() {
                   deleteDisabled={removing}
                 />
               )}
-              {showNoSongs && <p>{STRINGS.libraryEmpty}</p>}
+              {showNoSongs && <p>{t("libraryEmpty")}</p>}
               {showSongs && (
                 <SongIndex
                   variant="library"
@@ -763,7 +782,7 @@ export function App() {
                     disabled={removing}
                     onClick={openEdit}
                   >
-                    {STRINGS.editSong}
+                    {t("editSong")}
                   </button>
                   <button
                     type="button"
@@ -777,7 +796,7 @@ export function App() {
                       )
                     }
                   >
-                    {STRINGS.deleteAction}
+                    {t("deleteAction")}
                   </button>
                 </div>
               )}
@@ -797,8 +816,8 @@ export function App() {
             <SongView song={view.song} />
           </>
         )}
-        {showLoadFailed && <p role="alert">{STRINGS.songLoadFailed}</p>}
-        {showNoSelection && <p>{STRINGS.noSongSelected}</p>}
+        {showLoadFailed && <p role="alert">{t("songLoadFailed")}</p>}
+        {showNoSelection && <p>{t("noSongSelected")}</p>}
       </main>
       {confirming !== undefined && (
         <ConfirmDiscard
@@ -812,7 +831,7 @@ export function App() {
       )}
       {deleting !== undefined && (
         <ConfirmDelete
-          title={deleting.title}
+          title={say(deleting.title)}
           onCancel={() => setDeleting(undefined)}
           onConfirm={() => void runDelete(deleting)}
         />

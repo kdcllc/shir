@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { FormEvent } from "react";
 import type { EditMetaName } from "chord-core";
 import { capoOptions } from "../library";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./MetaForm.module.css";
 import { useDraft } from "./useDraft";
 
@@ -28,6 +28,7 @@ const preventSubmit = (e: FormEvent) => e.preventDefault();
 
 /** Song details: title, artist, key, capo and tempo. */
 export function MetaForm({ values, onChange }: MetaFormProps) {
+  const t = useT();
   const id = useId();
   const title = useDraft(values.title, (next) => onChange("title", next));
   const artist = useDraft(values.artist, (next) => onChange("artist", next));
@@ -44,13 +45,13 @@ export function MetaForm({ values, onChange }: MetaFormProps) {
     <form
       className={styles.form}
       data-testid="meta-form"
-      aria-label={STRINGS.metaForm}
+      aria-label={t("metaForm")}
       data-ui-chrome
       onSubmit={preventSubmit}
     >
       <div className={`${styles.field} ${styles.wide}`}>
         <label htmlFor={`${id}-title`} className={styles.label}>
-          {STRINGS.metaTitle}
+          {t("metaTitle")}
         </label>
         <input
           id={`${id}-title`}
@@ -63,7 +64,7 @@ export function MetaForm({ values, onChange }: MetaFormProps) {
       </div>
       <div className={`${styles.field} ${styles.wide}`}>
         <label htmlFor={`${id}-artist`} className={styles.label}>
-          {STRINGS.metaArtist}
+          {t("metaArtist")}
         </label>
         <input
           id={`${id}-artist`}
@@ -76,7 +77,7 @@ export function MetaForm({ values, onChange }: MetaFormProps) {
       </div>
       <div className={styles.field}>
         <label htmlFor={`${id}-key`} className={styles.label}>
-          {STRINGS.key}
+          {t("key")}
         </label>
         <input
           id={`${id}-key`}
@@ -91,7 +92,7 @@ export function MetaForm({ values, onChange }: MetaFormProps) {
       </div>
       <div className={styles.field}>
         <label htmlFor={`${id}-capo`} className={styles.label}>
-          {STRINGS.capo}
+          {t("capo")}
         </label>
         <select
           id={`${id}-capo`}
@@ -112,7 +113,7 @@ export function MetaForm({ values, onChange }: MetaFormProps) {
       </div>
       <div className={styles.field}>
         <label htmlFor={`${id}-tempo`} className={styles.label}>
-          {STRINGS.metaTempo}
+          {t("metaTempo")}
         </label>
         <input
           id={`${id}-tempo`}

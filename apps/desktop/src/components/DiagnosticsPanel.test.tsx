@@ -1,8 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { Diagnostic } from "chord-core";
-import { STRINGS, diagnosticsCount } from "../strings";
+import { STRINGS } from "../strings";
+import { i18n } from "../i18n";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
+
+const diagnosticsCount = (count: number) =>
+  i18n.t("diagnosticsCount", { count });
 
 const d = (line: number, column: number, message: string): Diagnostic => ({
   line,

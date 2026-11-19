@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { STRINGS, deleteConfirmTitle, deleteManyTitle } from "../strings";
+import { STRINGS } from "../strings";
+import { i18n } from "../i18n";
 import { ConfirmDelete } from "./ConfirmDelete";
+
+const deleteConfirmTitle = (title: string) =>
+  i18n.t("deleteConfirmTitle", { title });
+const deleteManyTitle = (count: number) => i18n.t("deleteManyTitle", { count });
 
 const TITLE = deleteConfirmTitle("Alpha");
 

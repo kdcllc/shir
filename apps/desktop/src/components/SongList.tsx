@@ -1,5 +1,5 @@
 import type { LibrarySong, SongGroup } from "../library";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./SongList.module.css";
 
 export interface SongListProps {
@@ -8,15 +8,15 @@ export interface SongListProps {
   onSelect(id: string): void;
 }
 
-const GROUPS: readonly { group: SongGroup; label: string }[] = [
-  { group: "samples", label: STRINGS.groupSamples },
-  { group: "test-songs", label: STRINGS.groupTestSongs },
-];
-
 export function SongList({ songs, selectedId, onSelect }: SongListProps) {
+  const t = useT();
+  const GROUPS: readonly { group: SongGroup; label: string }[] = [
+    { group: "samples", label: t("groupSamples") },
+    { group: "test-songs", label: t("groupTestSongs") },
+  ];
   return (
     <nav
-      aria-label={STRINGS.songList}
+      aria-label={t("songList")}
       data-testid="song-list"
       data-ui-chrome
       className={styles.list}

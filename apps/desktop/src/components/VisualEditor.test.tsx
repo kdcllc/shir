@@ -11,8 +11,11 @@ import {
 } from "chord-core";
 import type { EditOp, SongModel } from "chord-core";
 import { loadLibrary } from "../library";
-import { STRINGS, lineLabel } from "../strings";
+import { STRINGS } from "../strings";
+import { i18n } from "../i18n";
 import { VisualEditor } from "./VisualEditor";
+
+const lineLabel = (n: number) => i18n.t("lineLabel", { n });
 
 const here = (file: string): string =>
   readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8");

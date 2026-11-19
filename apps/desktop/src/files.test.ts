@@ -11,6 +11,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 }));
 
 import { FileReadError, pickSongFiles, readTextFile } from "./files";
+import { i18n } from "./i18n";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -67,6 +68,27 @@ describe("pickSongFiles", () => {
         },
       ],
     });
+  });
+
+  it("reads the filter name from the current language when the dialog opens", async () => {
+    const original = i18n.getResourceBundle("he", "translation") as object;
+    i18n.addResourceBundle(
+      "he",
+      "translation",
+      { fileFilterSongs: "⟦fileFilterSongs⟧" },
+      true,
+      true,
+    );
+    try {
+      open.mockResolvedValue(null);
+      await pickSongFiles();
+      expect(open.mock.calls[0]![0].filters[0].name).toBe("Song files");
+      await i18n.changeLanguage("he");
+      await pickSongFiles();
+      expect(open.mock.calls[1]![0].filters[0].name).toBe("⟦fileFilterSongs⟧");
+    } finally {
+      i18n.addResourceBundle("he", "translation", original, true, true);
+    }
   });
 
   it("uses a caller-supplied filter name", async () => {

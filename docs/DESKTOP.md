@@ -397,7 +397,7 @@ Visual tab:
   empty row after the last line, where a new line can be typed. It runs
   chord-render's `useChordOverlap` pass over its rows.
 - Lyric and empty rows render the line with chord-render `ChordLine` in editing
-  mode, inside a focusable wrapper named `lineLabel(n)`. Clicking a position
+  mode, inside a focusable wrapper named by the `lineLabel` template. Clicking a position
   opens the chord picker to add a chord there (`addChord`); clicking a chord
   opens the picker for that chord. Clicking an empty row, double-clicking a
   row, pressing F2 or using `Edit lyrics` (`line-edit-text`) replaces the line
@@ -484,9 +484,9 @@ extension>}` unless the text already has a `{title` or `{t:` directive.
 - One file's failure never stops the others; each failure is an
   `import-failed` alert with the file name and message. A failure of the dialog
   itself shows the `app-notice` alert (`importPickFailed`).
-- The sidebar report (`import-report`) shows `importSummary(saved, total)`
+- The sidebar report (`import-report`) shows the `importSummary` template
   (`Imported 2 of 3 files`, `Imported 1 of 1 file`), counting saved files, and
-  `importQueued(n)` (`1 file needs alignment review`, otherwise
+  the `importQueued` template (`1 file needs alignment review`, otherwise
   `N files need alignment review`) when files are queued. Converted `.txt`
   files that were saved at once are listed under `importConverted`.
 
@@ -506,7 +506,7 @@ message even when a JavaScriptCore stack omits it.
 The list is the parse diagnostics followed by the view diagnostics. Each item
 reads `` `${line}:${column} ${message}` `` in `<bdi dir="ltr">` for the
 coordinates and `dir="auto"` for the message. The heading renders as
-`{diagnostics} {separator} {diagnosticsCount(n)}` (for example
+`{diagnostics} {separator}` and the `diagnosticsCount` template (for example
 `Diagnostics · 2 problems`). The panel is absent when n = 0.
 
 Coordinates have two meanings:
@@ -755,35 +755,29 @@ Coordinates have two meanings:
 | `chordAddEmpty`       | `Add chord`                                                                        |
 | `fileFilterSongs`     | `Song files`                                                                       |
 
-`diagnosticsCount(n: number): string` returns `1 problem` for n = 1 and
-`${n} problems` otherwise.
-
-`importSummary(saved: number, total: number): string` returns
-`Imported ${saved} of ${total} files` (`file` when total is 1).
-`importQueued(n: number): string` returns `1 file needs alignment review` for
-n = 1 and `${n} files need alignment review` otherwise.
-
-`deleteSongNamed(title: string): string` returns `Delete ${title}`,
-`selectSongNamed(title: string): string` returns `Select ${title}` and
-`deleteConfirmTitle(title: string): string` returns `Delete ${title}?`. In all
-three the title is wrapped in the bidi isolate characters U+2068 and U+2069.
-`deleteManyTitle(n: number): string` returns `Delete ${n} songs?`.
-`selectedCount(n: number): string` returns `${n} selected`.
-`deletedCount(n: number): string` returns `Deleted 1 song` for n = 1 and
-`Deleted ${n} songs` otherwise.
-`deleteManyFailed(failed: number, total: number): string` returns
-`Could not delete ${failed} of ${total} songs`.
-`lineLabel(n: number): string` returns `Line ${n}`.
-
-`TEMPLATES` (`apps/desktop/src/strings.ts`) holds the i18next templates that
-replace the helpers above (`{{var}}` interpolation, `_one` / `_other` plural
+`TEMPLATES` (`apps/desktop/src/strings.ts`) holds the i18next templates for
+strings with variables (`{{var}}` interpolation, `_one` / `_other` plural
 suffixes; Hebrew adds `_two` and `_many`). The English resource is
-`{ ...STRINGS, ...TEMPLATES }` (`apps/desktop/src/i18n/en.ts`):
-`diagnosticsCount` (plural, `count`), `importSummary` (plural on `count` = total,
-`saved`), `importQueued` (plural, `count`), `deleteSongNamed`, `selectSongNamed`
-and `deleteConfirmTitle` (`title`, wrapped in U+2068 / U+2069), `deleteManyTitle`
-and `selectedCount` (`count`), `deletedCount` (plural, `count`),
-`deleteManyFailed` (plural on `count` = total, `failed`) and `lineLabel` (`n`).
+`{ ...STRINGS, ...TEMPLATES }` (`apps/desktop/src/i18n/en.ts`), and components
+read every string with `const t = useT()` and `t("<key>", vars)`:
+
+- `diagnosticsCount` (plural on `count`): `1 problem` / `N problems`.
+- `importSummary` (plural on `count` = total files, plus `saved`):
+  `Imported 2 of 3 files`, `Imported 1 of 1 file`.
+- `importQueued` (plural on `count`): `1 file needs alignment review` /
+  `N files need alignment review`.
+- `deleteSongNamed`, `selectSongNamed` and `deleteConfirmTitle` (`title`, wrapped
+  in the bidi isolates U+2068 / U+2069): `Delete <title>`, `Select <title>`,
+  `Delete <title>?`.
+- `deleteManyTitle` (`count`): `Delete 3 songs?`; `selectedCount` (`count`):
+  `3 selected`.
+- `deletedCount` (plural on `count`): `Deleted 1 song` / `Deleted N songs`.
+- `deleteManyFailed` (plural on `count` = total, plus `failed`):
+  `Could not delete 2 of 5 songs`.
+- `lineLabel` (`n`): `Line 4`.
+
+The native open-files dialog filter name is `fileFilterSongs`, read from the
+current language each time the dialog opens.
 
 ## Out of scope
 

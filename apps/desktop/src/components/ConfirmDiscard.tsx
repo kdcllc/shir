@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./ConfirmDiscard.module.css";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -10,6 +10,7 @@ export interface ConfirmDiscardProps {
 
 /** In-app unsaved-changes confirmation (never `window.confirm`). */
 export function ConfirmDiscard({ onKeep, onDiscard }: ConfirmDiscardProps) {
+  const t = useT();
   const titleId = useId();
   const bodyId = useId();
   const {
@@ -33,10 +34,10 @@ export function ConfirmDiscard({ onKeep, onDiscard }: ConfirmDiscardProps) {
         onKeyDown={onKeyDown}
       >
         <h2 id={titleId} className={styles.title}>
-          {STRINGS.discardTitle}
+          {t("discardTitle")}
         </h2>
         <p id={bodyId} className={styles.body}>
-          {STRINGS.discardBody}
+          {t("discardBody")}
         </p>
         <div className={styles.actions}>
           <button
@@ -45,7 +46,7 @@ export function ConfirmDiscard({ onKeep, onDiscard }: ConfirmDiscardProps) {
             data-testid="confirm-keep"
             onClick={onKeep}
           >
-            {STRINGS.keepEditing}
+            {t("keepEditing")}
           </button>
           <button
             ref={discard}
@@ -53,7 +54,7 @@ export function ConfirmDiscard({ onKeep, onDiscard }: ConfirmDiscardProps) {
             data-testid="confirm-discard-yes"
             onClick={onDiscard}
           >
-            {STRINGS.discard}
+            {t("discard")}
           </button>
         </div>
       </div>

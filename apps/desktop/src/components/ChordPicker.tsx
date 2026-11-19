@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./ChordPicker.module.css";
 
 const noInput = (): HTMLInputElement | null => null;
@@ -39,6 +39,7 @@ export function ChordPicker({
   onMove,
   onClose,
 }: ChordPickerProps) {
+  const t = useT();
   const listId = useId();
   const input = useRef(noInput());
   const [text, setText] = useState(initial ?? "");
@@ -91,7 +92,7 @@ export function ChordPicker({
   return (
     <div
       role="dialog"
-      aria-label={STRINGS.chordPicker}
+      aria-label={t("chordPicker")}
       className={styles.picker}
       data-testid="chord-picker"
       data-ui-chrome
@@ -104,7 +105,7 @@ export function ChordPicker({
           dir="ltr"
           className={styles.input}
           data-testid="chord-input"
-          aria-label={STRINGS.chordInput}
+          aria-label={t("chordInput")}
           aria-autocomplete="list"
           aria-expanded={options.length !== 0}
           aria-controls={listId}
@@ -125,16 +126,16 @@ export function ChordPicker({
           disabled={!valid}
           onClick={apply}
         >
-          {STRINGS.chordApply}
+          {t("chordApply")}
         </button>
       </div>
       <p role="status" className={styles.warning} data-testid="chord-warning">
-        {unknown ? STRINGS.chordUnknown : ""}
+        {unknown ? t("chordUnknown") : ""}
       </p>
       <ul
         id={listId}
         role="listbox"
-        aria-label={STRINGS.chordSuggestions}
+        aria-label={t("chordSuggestions")}
         className={styles.options}
       >
         {options.map((option, i) => (
@@ -158,24 +159,24 @@ export function ChordPicker({
             <button
               type="button"
               data-testid="chord-move-left"
-              aria-label={STRINGS.chordMoveLeft}
+              aria-label={t("chordMoveLeft")}
               onClick={() => onMove("left")}
             >
-              {STRINGS.leftGlyph}
+              {t("leftGlyph")}
             </button>
             <button
               type="button"
               data-testid="chord-move-right"
-              aria-label={STRINGS.chordMoveRight}
+              aria-label={t("chordMoveRight")}
               onClick={() => onMove("right")}
             >
-              {STRINGS.rightGlyph}
+              {t("rightGlyph")}
             </button>
           </span>
         )}
         {onRemove !== undefined && (
           <button type="button" data-testid="chord-remove" onClick={onRemove}>
-            {STRINGS.chordRemove}
+            {t("chordRemove")}
           </button>
         )}
         <button
@@ -184,7 +185,7 @@ export function ChordPicker({
           data-testid="chord-close"
           onClick={onClose}
         >
-          {STRINGS.chordClose}
+          {t("chordClose")}
         </button>
       </div>
     </div>

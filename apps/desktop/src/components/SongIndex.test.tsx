@@ -1,9 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { deleteSongNamed, selectSongNamed, STRINGS } from "../strings";
+import { STRINGS } from "../strings";
+import { i18n } from "../i18n";
 import { SongIndex } from "./SongIndex";
 import type { SongIndexItem } from "./SongIndex";
+
+const deleteSongNamed = (title: string) => i18n.t("deleteSongNamed", { title });
+const selectSongNamed = (title: string) => i18n.t("selectSongNamed", { title });
 
 const items: SongIndexItem[] = [
   { id: "a", title: "Alpha", artist: "Ann", snippet: "first <b>line</b>" },

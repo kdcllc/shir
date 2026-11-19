@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./ViewControls.module.css";
 
 export interface ViewControlsProps {
@@ -27,22 +27,23 @@ export function ViewControls({
   onCapo,
   onReset,
 }: ViewControlsProps) {
+  const t = useT();
   const capoId = useId();
   return (
     <div data-ui-chrome className={styles.controls}>
       <div className={styles.group}>
-        <span className={styles.label}>{STRINGS.transpose}</span>
+        <span className={styles.label}>{t("transpose")}</span>
         <button
           type="button"
           data-testid="transpose-down"
-          aria-label={STRINGS.transposeDown}
+          aria-label={t("transposeDown")}
           disabled={transpose <= -MAX_TRANSPOSE}
           onClick={() => {
             if (transpose > -MAX_TRANSPOSE)
               onTranspose(Math.min(MAX_TRANSPOSE, transpose - 1));
           }}
         >
-          {STRINGS.transposeDownGlyph}
+          {t("transposeDownGlyph")}
         </button>
         <bdi dir="ltr" data-testid="transpose-value" className={styles.value}>
           {formatTranspose(transpose)}
@@ -50,19 +51,19 @@ export function ViewControls({
         <button
           type="button"
           data-testid="transpose-up"
-          aria-label={STRINGS.transposeUp}
+          aria-label={t("transposeUp")}
           disabled={transpose >= MAX_TRANSPOSE}
           onClick={() => {
             if (transpose < MAX_TRANSPOSE)
               onTranspose(Math.max(-MAX_TRANSPOSE, transpose + 1));
           }}
         >
-          {STRINGS.transposeUpGlyph}
+          {t("transposeUpGlyph")}
         </button>
       </div>
       <div className={styles.group}>
         <label htmlFor={capoId} className={styles.label}>
-          {STRINGS.capo}
+          {t("capo")}
         </label>
         <select
           id={capoId}
@@ -79,14 +80,14 @@ export function ViewControls({
       </div>
       {shapeKey !== undefined && (
         <div className={styles.group}>
-          <span className={styles.label}>{STRINGS.shapes}</span>
+          <span className={styles.label}>{t("shapes")}</span>
           <bdi dir="ltr" data-testid="shape-key">
             {shapeKey}
           </bdi>
         </div>
       )}
       <button type="button" data-testid="reset-view" onClick={onReset}>
-        {STRINGS.reset}
+        {t("reset")}
       </button>
     </div>
   );
