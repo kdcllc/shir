@@ -31,8 +31,16 @@ export function SongHeader({
         </p>
       )}
       <p dir="ltr" className={styles.meta}>
-        <span className={styles.label}>{t("key")}</span>{" "}
-        <span data-testid="sounding-key">
+        <span
+          className={styles.label}
+          data-ui-chrome={soundingKey === undefined ? "" : undefined}
+        >
+          {t("key")}
+        </span>{" "}
+        <span
+          data-testid="sounding-key"
+          data-ui-chrome={soundingKey === undefined ? "" : undefined}
+        >
           {soundingKey !== undefined ? (
             <bdi dir="ltr">{soundingKey}</bdi>
           ) : (

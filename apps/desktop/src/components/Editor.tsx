@@ -62,7 +62,10 @@ const metaValues = (song: SongModel): MetaFormValues => ({
 // Arrow components below: the desktop contract's JSX text scan reads a
 // `function` declaration between two components as text.
 interface VisualPanelProps {
-  /** DOM id of the visual editor root (the Visual tab's `aria-controls`). */
+  /**
+   * DOM id of the visual editor root. The Visual tab's `aria-controls` points
+   * at it only while the Visual panel is rendered (it is unset otherwise).
+   */
   id: string;
   text: string;
   /** One user action on `song`, the parse of `text`. */

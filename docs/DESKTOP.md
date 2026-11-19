@@ -155,12 +155,19 @@ Database-mode states:
   and `deleteManyTitle(n)` for several, its body is `deleteConfirmBody`, and its
   buttons are `Cancel` (first) and `Delete`. Focus moves to the dialog when it
   opens and back to the previously focused element when it closes; Esc cancels.
-  After a confirmed delete from a row, when focus is left on the page body, it
-  moves to the `song-item` button of the row now at that position (the last row
-  when the deleted row was last, the same row when the delete failed), or to
-  `select-songs` when no row is shown. Nothing is deleted before `Delete` is
-  clicked. Deletion is permanent: there is
+  After any confirmed delete (row, header or bulk), when focus is left on the
+  page body, it moves to the `song-item` button of the row now at the position
+  the first deleted row had in the listed (filtered) rows (the last row when
+  that was past the end, the same row when its delete failed), or to the search
+  input when the list is empty or the deleted song was not listed (a header
+  delete of a song the filter or the results hide). The request is cleared once
+  applied, so a later re-render never moves focus again. Nothing is deleted
+  before `Delete` is clicked. Deletion is permanent: there is
   no trash and no undo.
+- An Edit whose `getSong` answers after the song was deleted, after another song
+  was selected, or after a newer Edit started opens no editor; the late result
+  is dropped silently. The set of ids deleted in this session is kept for the
+  whole session: ids are UUIDv7 and never reused.
 - A confirmed delete runs `deleteMany(ids, deleteSong)`
   (`apps/desktop/src/deleteSongs.ts`): one `deleteSong` call per id, one after
   another. A `NotFound` error counts as deleted; any other failure is collected
@@ -189,7 +196,9 @@ The header shows:
 - the artist when present (`dir="auto"`);
 - the label `Key`, followed by `<span data-testid="sounding-key">`. When there
   is a sounding key, the span contains `<bdi dir="ltr">{key}</bdi>`; otherwise
-  it contains the plain text `No key`, with no `bdi`;
+  it contains the plain text `No key`, with no `bdi`. Without a sounding key the
+  `Key` label and the span carry `data-ui-chrome`, so `No key` is not printed;
+  with a key neither does, and the key prints;
 - the label `Capo` followed by
   `<bdi dir="ltr" data-testid="capo-value">{capo}</bdi>`, where `capo` is the
   current capo (view state, the `capo-select` value), shown only when it
@@ -548,7 +557,11 @@ events, `unhandledrejection` events and `console.error` calls (the original
 never rejects. The native side writes each one to stderr as
 `shir: webview: <text>`. The forwarder never throws, ignores an error raised
 while it is itself forwarding (on the same call stack), and includes the error
-message even when a JavaScriptCore stack omits it.
+message even when a JavaScriptCore stack omits it. An `error` event that is
+not an `ErrorEvent` forwards `error event: <type>`. An Error with an empty
+message forwards its name; an Error whose `stack`, `message` or `name` getters
+throw, or whose `stack` is not a string, forwards a fallback line (the text is
+built inside the forwarder's `try`).
 
 ## Diagnostics panel
 

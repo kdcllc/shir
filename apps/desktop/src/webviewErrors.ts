@@ -2,17 +2,19 @@
 
 /** Message always included: JavaScriptCore's `stack` holds frames only. */
 function errorText(error: Error): string {
-  const head = `${error.name}: ${error.message}`;
+  const name = String(error.name);
+  const message = String(error.message);
+  const head = message === "" ? name : `${name}: ${message}`;
   const stack = error.stack;
-  if (stack === undefined || stack === "") return head;
-  if (stack.includes(error.message)) return stack;
+  if (typeof stack !== "string" || stack === "") return head;
+  if (message !== "" && stack.includes(message)) return stack;
   return `${head}\n${stack}`;
 }
 
 function text(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value instanceof Error) return errorText(value);
   try {
+    if (typeof value === "string") return value;
+    if (value instanceof Error) return errorText(value);
     return String(value);
   } catch {
     return "[unprintable]";
@@ -20,11 +22,23 @@ function text(value: unknown): string {
 }
 
 function reasonText(reason: unknown): string {
-  if (typeof reason === "object" && reason !== null && "message" in reason) {
-    const { message } = reason;
-    if (typeof message === "string" && message !== "") return message;
+  try {
+    if (typeof reason === "object" && reason !== null && "message" in reason) {
+      const { message } = reason;
+      if (typeof message === "string" && message !== "") return message;
+    }
+  } catch {
+    // A hostile `message` getter: fall through to the generic text.
   }
   return text(reason);
+}
+
+/** Text of a window `error` event; a plain Event has no `message` / `filename`. */
+function errorEventText(e: Event): string {
+  if (!(e instanceof ErrorEvent)) return `error event: ${e.type}`;
+  const base = e.message !== "" ? e.message : text(e.error);
+  const where = e.filename !== "" ? ` ${e.filename}:${String(e.lineno)}` : "";
+  return `${base}${where}`;
 }
 
 /**
@@ -40,10 +54,16 @@ export function installWebviewErrorForwarder(
 ): () => void {
   let inFlight = false;
 
-  const forward = (message: string): void => {
+  const forward = (describe: () => string): void => {
     if (inFlight) return;
     inFlight = true;
     try {
+      let message: string;
+      try {
+        message = describe();
+      } catch {
+        message = "[unprintable error]";
+      }
       Promise.resolve(log(message)).catch(() => undefined);
     } catch {
       // Best effort: a throwing logger must not escape.
@@ -52,20 +72,17 @@ export function installWebviewErrorForwarder(
     }
   };
 
-  const onError = (e: ErrorEvent): void => {
+  const onError = (e: Event): void => {
     try {
-      const base = e.message !== "" ? e.message : text(e.error);
-      const where =
-        e.filename !== "" ? ` ${e.filename}:${String(e.lineno)}` : "";
-      forward(`${base}${where}`);
+      forward(() => errorEventText(e));
     } catch {
       // Never throw from a listener.
     }
   };
 
-  const onRejection = (e: PromiseRejectionEvent): void => {
+  const onRejection = (e: Event): void => {
     try {
-      forward(reasonText(e.reason));
+      forward(() => reasonText((e as PromiseRejectionEvent).reason));
     } catch {
       // Never throw from a listener.
     }
@@ -74,7 +91,7 @@ export function installWebviewErrorForwarder(
   const original = con.error;
   const patched = (...args: unknown[]): void => {
     try {
-      forward(args.map(text).join(" "));
+      forward(() => args.map(text).join(" "));
     } catch {
       // Never throw from the console hook.
     }

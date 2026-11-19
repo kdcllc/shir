@@ -92,15 +92,17 @@ interface DeleteRequest {
   title: Msg;
   /** Started from select mode. */
   bulk: boolean;
-  /** Position of the list row whose delete button started it; absent otherwise. */
-  row?: number | undefined;
+  /** Listed row of the first song asked for (focus returns near it); -1 when none is listed. */
+  row: number;
+  /** The song at `row`; absent when none is listed. */
+  rowId?: string | undefined;
 }
 
 /** Where focus goes once a row delete has finished. */
 interface Refocus {
-  /** The song the delete was asked for (still listed when the delete failed). */
-  id: string;
-  /** Position its row had in the list. */
+  /** The first listed song the delete was asked for (still listed when its delete failed). */
+  id?: string | undefined;
+  /** Position its row had in the listed rows; -1 when it was not listed. */
   row: number;
 }
 
@@ -189,13 +191,15 @@ export function App() {
   const live = useRef(noLive());
   const sessionKey = useRef(0);
   const request = useRef(0);
+  /** Counts Edit clicks; a `getSong` answering for an older click is dropped. */
+  const editRequest = useRef(0);
+  const sidebar = useRef<HTMLDivElement | null>(null);
   const listing = useRef(noList());
   const debounced = useRef(noSearch());
   const knownHits = useRef(newIndex());
   /** Ids deleted in this session; a late search response never shows them. */
   const removed = useRef(noSelection());
   const rowTarget = useRef(noButton());
-  const startTarget = useRef(noButton());
 
   const selectDb = useCallback((id: string, summary?: SongSummary) => {
     const token = ++request.current;
@@ -271,8 +275,16 @@ export function App() {
     const id = selectedId;
     if (id === undefined) return;
     guard(() => {
+      const edit = ++editRequest.current;
+      const selection = request.current;
+      /** The song is still the open one, not deleted, and no newer Edit started. */
+      const current = () =>
+        edit === editRequest.current &&
+        selection === request.current &&
+        !removed.current.has(id);
       getSong(id)
         .then((stored) => {
+          if (!current()) return;
           abandon();
           setQueue([]);
           setNotice(undefined);
@@ -283,7 +295,9 @@ export function App() {
             baseline: stored.chordpro,
           });
         })
-        .catch(() => setNotice({ key: "songLoadFailed" }));
+        .catch(() => {
+          if (current()) setNotice({ key: "songLoadFailed" });
+        });
     });
   };
 
@@ -370,14 +384,19 @@ export function App() {
     "";
 
   /** Opens the delete confirmation; nothing is deleted before the user confirms. */
-  const askDelete = (ids: string[], bulk: boolean, row?: number) => {
+  const askDelete = (ids: string[], bulk: boolean) => {
     const [only] = ids;
     if (only === undefined || removing) return;
+    const first = ids
+      .map((id) => ({ id, at: listedIds.indexOf(id) }))
+      .filter((p) => p.at >= 0)
+      .sort((a, b) => a.at - b.at)[0];
     setDeleteStatus(undefined);
     setDeleting({
       ids,
       bulk,
-      row,
+      row: first?.at ?? -1,
+      rowId: first?.id,
       title:
         ids.length === 1
           ? { key: "deleteConfirmTitle", vars: { title: titleOf(only) } }
@@ -440,14 +459,9 @@ export function App() {
       setDeleteStatus({ key: "deletedCount", vars: { count: deleted.length } });
     }
 
-    const [askedId] = asked.ids;
     const active = document.activeElement;
-    if (
-      asked.row !== undefined &&
-      askedId !== undefined &&
-      (active === null || active === document.body)
-    ) {
-      setRefocus({ id: askedId, row: asked.row });
+    if (active === null || active === document.body) {
+      setRefocus({ id: asked.rowId, row: asked.row });
     }
 
     const [firstFailure] = failed;
@@ -481,10 +495,19 @@ export function App() {
     setPicked(noSelection());
   };
 
-  /** After a row delete: focus the row at that position, or Select when no row is shown. */
+  /** After a delete: focus the row at that position, or the search box when no row is shown; then drop the request. */
   useEffect(() => {
     if (refocus === undefined) return;
-    (rowTarget.current ?? startTarget.current)?.focus();
+    const row = rowTarget.current;
+    const search = sidebar.current?.querySelector<HTMLElement>(
+      'input[type="search"]',
+    );
+    const target =
+      row !== null && row.isConnected && !row.disabled ? row : search;
+    target?.focus();
+    // Cleared right after the commit that applied it, so a later render
+    // (typing in the search box, say) cannot move focus again.
+    queueMicrotask(() => setRefocus(undefined));
   }, [refocus]);
 
   useEffect(() => {
@@ -601,15 +624,17 @@ export function App() {
     : showSongs
       ? shown.map((s) => s.id)
       : [];
-  const askRowDelete = (id: string) =>
-    askDelete([id], false, listedIds.indexOf(id));
-  const refocusAt = refocus === undefined ? -1 : listedIds.indexOf(refocus.id);
+  const askRowDelete = (id: string) => askDelete([id], false);
+  const refocusAt =
+    refocus?.id === undefined ? -1 : listedIds.indexOf(refocus.id);
   const focusIndex =
     refocus === undefined
       ? undefined
-      : refocusAt >= 0
-        ? refocusAt
-        : Math.min(refocus.row, listedIds.length - 1);
+      : refocus.row < 0
+        ? -1
+        : refocusAt >= 0
+          ? refocusAt
+          : Math.min(refocus.row, listedIds.length - 1);
   const pickListed = () =>
     setPicked((prev) => new Set([...prev, ...listedIds]));
   const showLoadFailed = !editing && !showPane && loadFailed;
@@ -617,7 +642,7 @@ export function App() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.sidebar}>
+      <div ref={sidebar} className={styles.sidebar}>
         <div className={styles["heading-row"]}>
           <h1 className={styles.heading} data-ui-chrome>
             {t("appName")} {t("separator")}{" "}
@@ -739,7 +764,6 @@ export function App() {
               onSelectAll={pickListed}
               onDelete={() => askDelete([...picked], true)}
               onDone={leaveSelect}
-              startRef={startTarget}
             />
             <p
               role="status"
