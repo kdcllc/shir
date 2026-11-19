@@ -13,8 +13,9 @@ implemented in `packages/chord-core` and `packages/chord-render`. The normative 
   `display: inline; position: relative` element that wraps exactly the anchored grapheme (base letter
   plus marks); a chord at end of line uses an empty anchor after the last grapheme. The chord box is
   absolutely positioned with `inset-block-end: 100%; inset-inline-start: 0`, and its `dir` is the
-  anchored grapheme's direction (neutral grapheme or end of line: the line's resolved direction), so it aligns on that grapheme's inline-start edge even at bidi run
-  boundaries. No flex or inline-block chunk layout on mixed lines. Source: `ChordLine.module.css`.
+  anchored grapheme's direction (neutral grapheme or end of line: the line's resolved direction), so
+  it aligns on that grapheme's inline-start edge even at bidi run boundaries. No flex or inline-block
+  chunk layout on mixed lines. Source: `ChordLine.module.css`.
 - **B4** See "Overlap pass" below.
 - **B5** Line base direction is `line.direction`, else the song direction, else `dir="auto"`
   (`ChordLine.tsx`). The song container uses `unicode-bidi: isolate` (`SongView.module.css`).
@@ -23,8 +24,8 @@ implemented in `packages/chord-core` and `packages/chord-render`. The normative 
   without it the read-only DOM above is unchanged. With it the line element also carries
   `data-editing` and keeps the same `dir` (source: `ChordLine.tsx`, `ChordLine.module.css`):
   - Every grapheme is its own inline element with `data-pos` set to its grapheme index, in logical
-    order. After the last one an end slot is always rendered: an element with no lyric text, with `data-pos` set to
-    the grapheme count and `data-end-slot`.
+    order. After the last one an end slot is always rendered: an element with no lyric text, with
+    `data-pos` set to the grapheme count and `data-end-slot`.
   - A position that carries chords also has `data-anchor` and `data-index` and holds the
     `[data-chord-box]`, positioned and given its `dir` as in B3. Each chord in the box is a
     `<button type="button" data-chord-button>` around the chord symbol; its `data-anchor-index` is the
@@ -34,7 +35,8 @@ implemented in `packages/chord-core` and `packages/chord-render`. The normative 
     chord box.
   - Position elements are `display: inline` with no inline margin, padding or border; only the end
     slot has `padding-inline-end: 0.75em`.
-    Under `@media print` the hover background, the caret outline and the end slot padding are removed.
+    Under `@media print` the hover background, the caret outline and tint, and the end slot padding
+    are removed (`ChordLine.module.css`).
   - One click handler on the line: a click inside a chord button calls `onChord` with its
     `data-anchor-index`, any other click inside a position calls `onPosition` with its `data-pos`.
   - `lineDirection(line, songDirection)` (`lineDirection.ts`, exported from `chord-render`) returns
@@ -45,19 +47,35 @@ implemented in `packages/chord-core` and `packages/chord-render`. The normative 
   stack is Noto Sans Hebrew, Heebo, sans-serif.
 
 Non-lyric lines: `SongView` renders `comment` as `<p data-line="comment" data-style dir="auto">`, a
-section start as `<p data-line="section" data-section dir="auto">` showing the label or else the
-section name, `tab` as `<p data-line="tab" dir="ltr">`, and `raw` as `<p data-line="raw" dir="auto">`,
-all as plain text. `meta`, `remark`, `directive` and section ends render nothing. Chord symbols
-(`<bdi dir="ltr">`) appear only in lyric and chord-only lines.
+section start as `<p data-line="section" data-section dir={songDirection(song)}><bdi>label</bdi></p>`
+showing the label or else the section name (`SectionLabel.tsx`), `tab` as
+`<p data-line="tab" dir="ltr">`, and `raw` as `<p data-line="raw" dir="auto">`, all as plain text.
+The section block takes `song.direction`, else the first-strong direction of the song's lyrics, else
+`ltr` (`songDirection` in `lineDirection.ts`); the label text is an isolate. `meta`, `remark`,
+`directive` and section ends render nothing. Chord symbols (`<bdi dir="ltr">`) appear only in lyric
+and chord-only lines.
 
-B7 (editor input direction) and B9 (importer) are implemented as described below. B8 (UI chrome) is
-not covered by this page.
+B7 (editor input direction), B8 (UI chrome) and B9 (importer) are implemented as described below.
+
+**B8** `<html lang dir>` follows the UI language (`applyDocumentLocale` in
+`apps/desktop/src/i18n/locale.ts`, called from `main.tsx` at startup and from `setLocale` in
+`apps/desktop/src/i18n/index.ts` when the language switch `components/LocaleToggle.tsx` changes
+it): `he` gives `dir="rtl"`, `en` gives `ltr`. The
+chrome mirrors through logical CSS, and the Hebrew chrome font is set by `html[lang="he"]`
+(`apps/desktop/src/styles/global.css`). Desktop source stylesheets contain no `:lang(` selector
+(`scripts/g8-contract.test.ts` (b)); the built-CSS guard is the `cssTarget` statement under
+"Verifying" (`apps/desktop/vite.config.ts`). Songs keep their own direction. The ChordPicker
+move-left and move-right buttons keep their visual meaning and are not mirrored: they sit in a
+`dir="ltr"` span (`components/ChordPicker.tsx`).
 
 ## Editor input (B7)
 
 The editor (`apps/desktop/src/components/Editor.tsx`) has two tabs, Visual (the default) and Source.
 
 Source tab: the ChordPro text is a plain `<textarea dir="auto">`, next to a `SongView` preview.
+
+Metadata form (`Editor.tsx` renders `components/MetaForm.tsx`): the title and artist inputs are
+`dir="auto"`, the key and tempo inputs are `dir="ltr"`; the capo is a `<select>` with no `dir`.
 
 Visual tab (`apps/desktop/src/components/VisualEditor.tsx`):
 
@@ -67,8 +85,7 @@ Visual tab (`apps/desktop/src/components/VisualEditor.tsx`):
 - The lyric text input and the comment input are `dir="auto"`. The input of a chords-only line is
   `dir="ltr"`. Lines shown as source text are `dir="ltr"` for `tab` lines, else `dir="auto"`.
 - The chord picker input (`ChordPicker.tsx`) is `dir="ltr"`. The section label input
-  (`SectionControls.tsx`) is `dir="auto"`. In `MetaForm.tsx` the title and artist inputs are
-  `dir="auto"`, the key and tempo inputs are `dir="ltr"`; the capo is a `<select>` with no `dir`.
+  (`SectionControls.tsx`) is `dir="auto"`.
 - Positions are logical grapheme indices (B2): the caret, a clicked position and the index of an added
   or moved chord are all indices `0..n` into the lyric, `n` being the end of the line. Splitting a line
   at the text caret converts its code-unit offset to a grapheme index (`graphemeIndexAt`).
@@ -103,12 +120,13 @@ code-point column `s` anchors at grapheme `s`. For RTL lyric lines (first-strong
   1. If the chord's start column shows an LTR-level grapheme, anchor on it.
   2. Otherwise anchor on the grapheme shown at the chord's last column. A chord straddling an RTL to
      LTR boundary therefore anchors on the LTR end (`[Dm7]blues` in the `mixed_over_lyrics` fixture).
-  3. When neither rule applies because the chord's last column lies beyond the line (its start column not showing an LTR-level grapheme), it clamps: to the grapheme shown at the line's last column when that grapheme is
-     RTL-level, else to the end of the line (index 0 for an empty lyric), with a `chord-past-end`
-     warning.
-- In both models an anchor on whitespace snaps forward to the next non-whitespace grapheme (or to the end of the line when only whitespace follows) (not to the
-  nearest, unlike B9's wording), and in `logical` a column past the end clamps to the end of line with
-  `chord-past-end`.
+  3. When neither rule applies because the chord's last column lies beyond the line (its start
+     column not showing an LTR-level grapheme), it clamps: to the grapheme shown at the line's last
+     column when that grapheme is RTL-level, else to the end of the line (index 0 for an empty
+     lyric), with a `chord-past-end` warning.
+- In both models an anchor on whitespace snaps forward to the next non-whitespace grapheme (or to the
+  end of the line when only whitespace follows) (not to the nearest, unlike B9's wording), and in
+  `logical` a column past the end clamps to the end of line with `chord-past-end`.
 
 Documented gaps of the simplified map (`import.ts`):
 
@@ -128,6 +146,11 @@ whose import has `hasRtlChords` are queued for review (`apps/desktop/src/importF
   on physical left/right rects with a 4px gap, so mixed-direction rows and dense WebKit rows work.
 - A collision is fixed by setting `padding-inline-end` on the element preceding the later chord's
   anchor (text segment or previous anchor). Shifts cascade along the row.
+- Wrong-side fallback: when that previous sibling lies on the far side of the anchor from the line
+  start (the anchor sits in an embedded opposite-direction run, `prevOnWrongSide`), its padding cannot
+  move the later chord away from the earlier one, so `padPair` tries earlier elements back toward the
+  earlier chord's anchor and keeps the first that measurably widens the gap. The padding is still
+  `padding-inline-end`.
 - The measure/pad loop repeats at most 8 iterations per line and stops early when nothing changes.
 - `useChordOverlap` re-runs the pass when the root's inline size changes (ResizeObserver), on
   `loadingdone` and on `document.fonts.ready`. The song root exposes the completed-pass count as
@@ -175,6 +198,15 @@ pnpm --filter chord-render test:bidi
   are `packages/chord-render/bidi/*.bidi.ts`.
 - Checklist items 1–6 (textContent equality, anchor edge within 2px, no overlap including resize
   re-runs, mixed word order, wrap, print CSS), plus B1, B6 and B10 checks and harness self-tests.
+  Checklist 2's end-of-line rule: a chord at the end of the line aligns with the visual inline-end of
+  the last row (`expectedEdge` in `packages/chord-render/bidi/helpers.ts`), so an LTR tail inside an
+  RTL line ends at the row's left edge. The edge fixtures (`EDGE_FIXTURES` in `checklist.bidi.ts`) and
+  the chorded fixtures (`CHORDED_FIXTURES` in `helpers.ts`) include `dense_chords` and `rtl_ltr_tail`.
+- Two further real-engine specs: `bidi/print.bidi.ts` (under print media every `[data-ui-chrome]` is
+  hidden and the song lines stay visible) and `bidi/wrap.bidi.ts` (editing and read-only rows wrap
+  the same). `ChordLine.module.css` sets `font-kerning: none` on `.lyric` in both modes so they
+  measure alike. Recorded residual: the editing end slot's `0.75em` padding can still make WebKit
+  editing wrap one extra row at exact boundary widths.
 - Editing mode has its own spec, `packages/chord-render/bidi/editing.bidi.ts`. It opens the harness
   with `/?fixture=<name>&editing=1`, which renders `harness/EditingSong.tsx` (the song with interactive lyric lines)
   instead of `SongView` and records the last editing callback on `window.__lastEdit`. On the

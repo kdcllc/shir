@@ -1,7 +1,9 @@
 # Desktop song viewer
 
 Normative spec for the desktop song viewer. Code lives in `apps/desktop/src/`;
-all UI strings live in `apps/desktop/src/strings.ts`.
+all UI strings come from i18next resources (`apps/desktop/src/i18n/`): the
+English source is `STRINGS` and `TEMPLATES` in `apps/desktop/src/strings.ts`,
+and the Hebrew resource is `apps/desktop/src/i18n/he.ts`.
 
 ## Layout
 
@@ -32,12 +34,16 @@ import).
 - CSS uses logical properties only.
 - The production CSP `style-src 'self'` forbids `<style>` elements and
   `style="…"` attribute strings. `dangerouslySetInnerHTML` is banned separately
-  by project rule.
+  by project rule. In dev, `devCsp` in `apps/desktop/src-tauri/tauri.conf.json`
+  replaces `csp`; Tauri sends it only with pages served through its `tauri://`
+  protocol, so the pages the Vite dev server serves at `devUrl` get no CSP
+  from Tauri.
 - The app heading `<h1>`, the `<nav>`, the search box, the search status
-  element, the search-unavailable
-  notice, the loading text, the view controls, the diagnostics panel, the
-  New song / Open files actions, the import report, the app notice, the Edit button, the editor toolbar, status, labels and alerts, the reviewing-file line, the import warnings and the discard dialog carry
-  the `data-ui-chrome` attribute, so the existing print CSS
+  element, the search-unavailable notice, the loading text, the view controls,
+  the diagnostics panel, the New song / Open files actions, the import report,
+  the app notice, the Edit button, the editor toolbar, status, labels and
+  alerts, the reviewing-file line, the import warnings and the discard dialog
+  carry the `data-ui-chrome` attribute, so the existing print CSS
   (`docs/BIDI.md` § Print CSS) hides them. So do the selection bar, the row
   checkbox and the row delete button, the delete status, the header delete
   button, the delete dialog, the editor tabs, the song-details form, the chord
@@ -60,10 +66,12 @@ nothing after the first emit attempt.
 
 ## Library
 
-The sidebar lists the songs stored in the database (`listSongs`), ordered by
-title with `Intl.Collator(["he", "en"])` (sensitivity `base`, numeric), ties
-broken by `id`, as one flat list with no group headings. Selecting a song loads
-it with `getSong` and parses it with `parseSong`.
+The sidebar lists the songs stored in the database (`listSongs`) as one flat
+list with no group headings, in the persisted sort order (default `title`) with
+the persisted language filter applied (see Library controls below). The `title`
+order uses `Intl.Collator(["he", "en"])` (sensitivity `base`, numeric), ties
+broken by `id`. Selecting a song loads it with `getSong` and parses it with
+`parseSong`.
 
 The bundled library described below is only the read-only fallback, used when
 `listSongs` fails: the sidebar then shows the `searchUnavailable` notice and the
@@ -137,22 +145,24 @@ Database-mode states:
 - A `getSong` failure shows the `songLoadFailed` alert in the pane.
 - Delete controls: every row of the library and of the results list has a
   delete button (`song-delete`, showing `removeGlyph`, accessible name
-  `deleteSongNamed(title)`), and the `Delete` button (`delete-song`) next to
+  `deleteSongNamed`), and the `Delete` button (`delete-song`) next to
   `Edit` deletes the open song. While a delete is running these buttons, `Edit`
   (`edit-song`) and `Delete selected` are disabled.
 - Select mode: the selection bar (`selection-bar`) sits between the search
   status and the delete status (`delete-status`), above the `<nav>`. `Select`
   (`select-songs`) enters select mode. In select mode the bar shows
-  `selectedCount(n)` (`selection-count`), `Select all` (`select-all`, adds the
-  rows now listed: the search hits once a search has completed, or every library song while the library is shown, and nothing while the search error or the empty-result message is shown),
+  `selectedCount` (`selection-count`), `Select all` (`select-all`, adds the
+  rows now listed: the search hits once a search has completed, or the listed
+  (filtered) library rows while the library is shown, and nothing while the
+  search error or the empty-result message is shown),
   `Delete selected` (`delete-selected`, disabled when nothing is selected) and
   `Done` (`select-done`, leaves select mode and clears the selection). Each row
-  shows a checkbox (`song-check`, accessible name `selectSongNamed(title)`)
+  shows a checkbox (`song-check`, accessible name `selectSongNamed`)
   instead of its delete button, and clicking the row toggles the song instead
   of opening it.
 - Every delete first opens `ConfirmDelete` (`confirm-delete`,
-  `role="alertdialog"`). Its heading is `deleteConfirmTitle(title)` for one song
-  and `deleteManyTitle(n)` for several, its body is `deleteConfirmBody`, and its
+  `role="alertdialog"`). Its heading is `deleteConfirmTitle` for one song
+  and `deleteManyTitle` for several, its body is `deleteConfirmBody`, and its
   buttons are `Cancel` (first) and `Delete`. Focus moves to the dialog when it
   opens and back to the previously focused element when it closes; Esc cancels.
   After any confirmed delete (row, header or bulk), when focus is left on the
@@ -177,14 +187,15 @@ Database-mode states:
   `libraryReloadFailed`. Shown search hits lose the deleted songs without a new
   search, a search response that arrives after a delete never shows a deleted
   song, and deleted songs leave the selection. `delete-status` shows
-  `deletedCount(n)`; it is emptied when the next delete dialog opens.
-- When the open song was deleted, the next song of the library list opens
-  (otherwise the nearest earlier one); when none is left there is no selection.
+  `deletedCount`; it is emptied when the next delete dialog opens.
+- When the open song was deleted, the next song among the listed (filtered)
+  rows opens (otherwise the nearest earlier one); when none is left, or the open
+  song was not among the listed rows, the selection is cleared.
   When the song being edited was deleted, the editor closes without the discard
   dialog.
 - After a delete from select mode with no failure, the selection is cleared and
   select mode ends. When a delete fails, the `app-notice` alert shows
-  `deleteFailed` (one song asked) or `deleteManyFailed(failed, total)` (several),
+  `deleteFailed` (one song asked) or `deleteManyFailed` (several),
   followed by a colon and the first failure's message; select mode stays on, with
   the songs that failed still selected.
 
@@ -239,6 +250,11 @@ Each component lives at `apps/desktop/src/components/<Name>.tsx`.
 
 - `SearchBox`: an `<input type="search" dir="auto">` carrying `data-ui-chrome`.
   Esc clears it, and it is disabled in the bundled fallback.
+- `LibraryControls`: the sort `<select>` and language radio group described in
+  § Library (`apps/desktop/src/components/LibraryControls.tsx`).
+- `LocaleToggle`: the interface-language toggle of § Layout
+  (`apps/desktop/src/components/LocaleToggle.tsx`), which reads the current
+  language and switches it through `useLocale`.
 - `SongIndex` (`variant: "library" | "results"`): renders the `song-index`
   (library) or `search-results` (results) list. Each row shows the title and,
   when present, the artist and the snippet (search hits only), each with
@@ -267,8 +283,9 @@ Each component lives at `apps/desktop/src/components/<Name>.tsx`.
   once, in the given order, and resolves to
   `{ deleted: string[]; failed: { id: string; message: string }[] }`; it never
   rejects. The file also exports the `SongIdSet` type (`ReadonlySet<string>`).
-- `songSource` (`apps/desktop/src/songSource.ts`): `sortByTitle` orders
-  summaries as described in § Library. `createDebouncedSearch` waits 150 ms by
+- `songSource` (`apps/desktop/src/songSource.ts`): `sortByTitle` is the title
+  order of § Library: `sortSummaries` uses it for the `title` sort, and the
+  startup selection uses it. `createDebouncedSearch` waits 150 ms by
   default and trims the query; an empty or whitespace-only query goes idle with
   no call. Stale responses and stale errors are dropped. A current error becomes
   `{status:"error"}`, which `App` shows as the `searchFailed` alert.
@@ -307,8 +324,8 @@ Each component lives at `apps/desktop/src/components/<Name>.tsx`.
   `ArrowLeft`, `ArrowRight`, `Home` or `End`. The order is a simplified bidi
   order: number runs and nested embeddings are not modelled. The file also holds
   the visual editor's UI-state helpers (`initialUi`, `reconcileUi`, `rowClass`,
-  `textRows`, `neighbourRow`, `rowKeys`, `lineMap`, `lyricOf`,
-  `graphemeIndexAt`).
+  `textRows`, `neighbourRow`, `initialRowIds`, `followRowIds`,
+  `trackLine`, `lineMap`, `lyricOf`, `graphemeIndexAt`).
 - `capoOptions(songCapo: number | undefined): number[]` is exported from
   `apps/desktop/src/library.ts` as a pure helper. It returns `0..12` ascending,
   plus `songCapo` appended when it is an integer in 13..24.
@@ -320,6 +337,7 @@ SongList { songs: readonly LibrarySong[]; selectedId: string | undefined;
   onSelect(id: string): void }
 SearchBox { value: string; disabled?: boolean; onChange(next: string): void }
 SongIndexItem { id: string; title: string; artist?: string | null | undefined;
+  songKey?: string | null | undefined; language?: Language | undefined;
   snippet?: string | null | undefined }
 SongIndex { items: readonly SongIndexItem[]; selectedId: string | undefined;
   variant: "library" | "results"; busy?: boolean | undefined;
@@ -330,6 +348,8 @@ SongIndex { items: readonly SongIndexItem[]; selectedId: string | undefined;
   deleteDisabled?: boolean | undefined;
   focusIndex?: number | undefined;
   focusRef?: RefObject<HTMLButtonElement | null> | undefined }
+LibraryControls { sort: SortOrder; language: LanguageFilter;
+  onSort(next: SortOrder): void; onLanguage(next: LanguageFilter): void }
 SelectionBar { selecting: boolean; count: number; busy: boolean;
   onStart(): void; onSelectAll(): void; onDelete(): void; onDone(): void;
   startRef?: RefObject<HTMLButtonElement | null> | undefined }
@@ -488,8 +508,9 @@ Visual tab:
 - A chords-only row has a `dir="ltr"` input (`chords-input`) holding the chords
   separated by spaces; blur or Enter commits them (`setChordsLine`). Its
   `Edit lyrics` button opens a `line-input` that adds lyrics to the line
-  (`setLyric`) on blur or Enter; Esc leaves it without committing. A comment row has a `dir="auto"` input (`comment-input`,
-  `setComment`). Both rows have `Remove line`.
+  (`setLyric`) on blur or Enter; Esc leaves it without committing. A comment
+  row has a `dir="auto"` input (`comment-input`, `setComment`). Both rows have
+  `Remove line`.
 - A section start row whose section has a matching end shows
   `SectionControls`: the type `<select>` (`section-kind`: `Verse`, `Chorus`,
   `Bridge`, plus `Other` for any other section name), the label input
@@ -516,7 +537,9 @@ Visual tab:
 - After a chord is added to an empty row or to the extra last row, focus moves
   to that row's `chords-input`. An open chord picker, the caret and the most
   recently focused row follow their line after the editor's own edits that
-  add, remove or move lines, and after reorders that keep the line count; the
+  add, remove or move lines, after reorders that keep the line count, and after
+  changes from outside the visual editor (Undo, Redo, edits in the Source tab
+  and song-details changes); the
   picker closes when its own line is removed. On a reorder that keeps the line
   count, a line follows its content only when that content occurs exactly once
   in the changed span on both sides. Every row has a stable identity (its React
@@ -606,7 +629,7 @@ Coordinates have two meanings:
 | `search-empty`          | `<p>`                      | Shown when a search has zero hits                                     |
 | `search-unavailable`    | `<p>`                      | Notice shown in bundled mode: search is unavailable                   |
 | `song-snippet`          | `<span>`                   | Lyric line of a search hit, rendered as text, only when non-null      |
-| `song-index`            | `<ul>`                     | The `SongIndex` list of all DB songs, sorted by title                 |
+| `song-index`            | `<ul>`                     | The `SongIndex` list of the listed (sorted, filtered) DB songs        |
 | `search-results`        | `<ul>`                     | The `SongIndex` list holding the ranked search hits                   |
 | `search-pending`        | `<p role="status">`        | Live region: `Searching…` while a query is pending, else empty        |
 | `new-song`              | `<button>`                 | Sidebar: opens an empty editor (database mode only)                   |
@@ -855,7 +878,9 @@ current language each time the dialog opens.
 
 ## Out of scope
 
-- TanStack Router, Zustand, i18next and a Hebrew UI locale (planned).
-- Persistence of the last song or view settings.
-- Chord diagrams (G3).
+- TanStack Router and Zustand.
+- Persistence of the last open song and of the transpose and capo view
+  settings (only the library sort and filter, `shir.library`, and the interface
+  language, `shir.locale`, are stored).
+- Chord diagrams.
 - Print layout.
