@@ -3,6 +3,10 @@
   display: block;
   position: relative;
   line-height: 2.6;
+
+  /* Editing mode wraps each grapheme in its own span, which WebKit shapes without
+     cross-element kerning; switching kerning off keeps both modes' line breaks identical. */
+  font-kerning: none;
 }
 
 .chords {

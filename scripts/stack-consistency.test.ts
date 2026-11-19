@@ -191,7 +191,7 @@ function compareStack({
   for (const name of Object.keys(catalog)) {
     const row = rows.find((r) => r.pkg === name && r.ecosystem === "npm");
     if (!row || !isInstalled(row.status)) {
-      problems.push(`${name}: in catalog but no '${INSTALLED}' STACK.md row`);
+      problems.push(`${name}: in catalog but no installed (G<n>) STACK.md row`);
     }
   }
   return problems;
@@ -402,8 +402,30 @@ describe("compareStack is not vacuous", () => {
       catalog: { ...catalog, "left-pad": "1.0.0" },
     });
     expect(problems).toContain(
-      "left-pad: in catalog but no 'installed (G0)' STACK.md row",
+      "left-pad: in catalog but no installed (G<n>) STACK.md row",
     );
+  });
+
+  it("accepts any installed (G<n>) status and names the real status of a non-installed row", () => {
+    const row = (status: string): StackRow => ({
+      component: "Left pad",
+      pkg: "left-pad",
+      version: "1.0.0",
+      ecosystem: "npm",
+      status,
+    });
+    const run = (status: string): string[] =>
+      compareStack({
+        rows: [row(status)],
+        catalog: { "left-pad": "1.0.0" },
+        lockCatalog: { "left-pad": "1.0.0" },
+        cargoLock: new Map(),
+      });
+    expect(run("installed (G7)")).toEqual([]);
+    expect(run("installed (G12)")).toEqual([]);
+    expect(run("planned (G2)")).toEqual([
+      "left-pad: in catalog but no installed (G<n>) STACK.md row",
+    ]);
   });
 
   it("catches drift injected into a STACK.md string via the parser", () => {

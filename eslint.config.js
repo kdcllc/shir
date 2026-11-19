@@ -39,7 +39,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
-    files: ["scripts/**", "**/*.config.*"],
+    files: ["scripts/**", "e2e/**", "**/*.config.*"],
     languageOptions: { globals: globals.node },
   },
   {

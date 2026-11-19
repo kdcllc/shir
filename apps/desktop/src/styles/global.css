@@ -20,3 +20,17 @@ body,
 #root {
   block-size: 100%;
 }
+
+html[lang="he"] {
+  font-family:
+    "Noto Sans Hebrew",
+    heebo,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif;
+}

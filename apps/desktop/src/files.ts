@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { commands } from "./bindings";
+import { i18n } from "./i18n";
 import type { FileError, FileErrorKind } from "./bindings";
 
 export type { FileError, FileErrorKind };
@@ -28,9 +29,6 @@ export const SONG_FILE_EXTENSIONS = [
   "chordpro",
   "txt",
 ] as const;
-
-/** Native dialog filter label; callers may pass a localized one. */
-const DEFAULT_FILTER_NAME = "Song files";
 
 function isFileError(value: unknown): value is FileError {
   if (typeof value !== "object" || value === null) return false;
@@ -61,9 +59,12 @@ export async function readTextFile(path: string): Promise<string> {
   return result.data;
 }
 
-/** Opens the native multi-file picker; resolves to the chosen paths (empty on cancel). */
+/**
+ * Opens the native multi-file picker; resolves to the chosen paths (empty on cancel).
+ * The filter label defaults to the current language's `fileFilterSongs`, read when the dialog opens.
+ */
 export async function pickSongFiles(
-  filterName: string = DEFAULT_FILTER_NAME,
+  filterName: string = i18n.t("fileFilterSongs"),
 ): Promise<string[]> {
   let picked: string | string[] | null;
   try {

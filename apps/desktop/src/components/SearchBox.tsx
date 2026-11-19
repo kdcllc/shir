@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from "react";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./SearchBox.module.css";
 
 export interface SearchBoxProps {
@@ -9,6 +9,7 @@ export interface SearchBoxProps {
 }
 
 export function SearchBox({ value, disabled, onChange }: SearchBoxProps) {
+  const t = useT();
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -22,8 +23,8 @@ export function SearchBox({ value, disabled, onChange }: SearchBoxProps) {
       className={styles.input}
       data-testid="search-input"
       data-ui-chrome
-      aria-label={STRINGS.searchLabel}
-      placeholder={STRINGS.searchPlaceholder}
+      aria-label={t("searchLabel")}
+      placeholder={t("searchPlaceholder")}
       value={value}
       disabled={disabled === true}
       onChange={(e) => onChange(e.target.value)}

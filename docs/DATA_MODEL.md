@@ -147,7 +147,7 @@ null when only the title or artist matched. Cases live in
 ## Seeding
 
 `src/db/seed.rs` embeds every `samples/*.cho` and every non-canonical
-`packages/test-fixtures/fixtures/*.cho` (17 today) with `include_str!`.
+`packages/test-fixtures/fixtures/*.cho` (18 today) with `include_str!`.
 `DbState::open` (file database only; in-memory states never seed) migrates,
 then seeds once in one transaction. The flag `app_meta.bundled_seeded` holds
 the count. Once it is present, seeding is a no-op, so deleted songs stay
@@ -170,6 +170,8 @@ one of `NotFound`, `Invalid`, `Storage`, `Migration` or `Unavailable`.
 `DbState` (`src/commands/state.rs`), a `Mutex<Result<Connection, DbError>>`.
 A sixth command, `log_webview_error`, is synchronous: it writes one line
 `shir: webview: <text>` to stderr, returns nothing and does not use `DbState`.
+It delegates to `log_webview_error_to(message, &mut dyn Write)`, which takes the
+writer and ignores write failures.
 Control characters in the text become spaces, and the text is capped at 2000
 characters with `…` appended when cut.
 A seventh command, `read_text_file` (`src/commands/files.rs`), is also
@@ -183,9 +185,12 @@ The database file is `<app_data_dir>/shir.db` (app identifier
 `com.kdcllc.shir`). If it cannot be opened, startup logs one line,
 `shir: database unavailable: <cause>`, and the five storage commands return
 `Unavailable`; `log_webview_error` and `read_text_file` are unaffected because
-they do not use `DbState`.
-`DbState::open` opens, migrates, then seeds (see Seeding). A
-poisoned lock returns `Storage`.
+they do not use `DbState`. `open_db_state` writes that line through
+`report_unavailable(&DbState, &mut dyn Write)` (`src/lib.rs`) with stderr; the
+line comes from `DbState::unavailable_line`, which still works after a poisoned
+lock.
+`DbState::open` opens, migrates, then seeds (see Seeding). In
+the storage commands, a poisoned lock returns `Storage`.
 
 `build.rs` lists the seven commands, and `capabilities/default.json` grants
 `core:default`, `dialog:allow-open` (the `tauri-plugin-dialog` file picker,

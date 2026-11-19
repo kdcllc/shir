@@ -1,9 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { deleteSongNamed, selectSongNamed, STRINGS } from "../strings";
+import { STRINGS } from "../strings";
+import { i18n } from "../i18n";
 import { SongIndex } from "./SongIndex";
 import type { SongIndexItem } from "./SongIndex";
+
+const deleteSongNamed = (title: string) => i18n.t("deleteSongNamed", { title });
+const selectSongNamed = (title: string) => i18n.t("selectSongNamed", { title });
 
 const items: SongIndexItem[] = [
   { id: "a", title: "Alpha", artist: "Ann", snippet: "first <b>line</b>" },
@@ -406,5 +410,54 @@ describe("SongIndex focus target", () => {
       />,
     );
     expect(focusRef.current).toBeNull();
+  });
+
+  describe("row metadata", () => {
+    const rich: SongIndexItem[] = [
+      { id: "h", title: "שיר", songKey: "Am", language: "he" },
+      { id: "e", title: "Song", songKey: "", language: "en" },
+      { id: "m", title: "Mix", songKey: null, language: "mixed" },
+      { id: "n", title: "Plain" },
+    ];
+    for (const variant of ["library", "results"] as const) {
+      it(`shows key and language badge in the ${variant} variant`, () => {
+        render(
+          <SongIndex
+            variant={variant}
+            items={rich}
+            selectedId={undefined}
+            onSelect={vi.fn()}
+          />,
+        );
+        const rows = screen.getAllByTestId("song-item");
+        const keys = screen.getAllByTestId("song-row-key");
+        expect(keys).toHaveLength(1);
+        expect(keys[0]).toHaveTextContent("Am");
+        expect(keys[0]).toHaveAttribute("dir", "ltr");
+        expect(rows[0]).toContainElement(keys[0]!);
+        expect(
+          rows[1]!.querySelector('[data-testid="song-row-key"]'),
+        ).toBeNull();
+        const badges = screen.getAllByTestId("song-language");
+        expect(badges.map((b) => b.textContent)).toEqual([
+          STRINGS.badgeHebrew,
+          STRINGS.badgeEnglish,
+          STRINGS.badgeMixed,
+        ]);
+        expect(badges.map((b) => b.getAttribute("title"))).toEqual([
+          STRINGS.filterHebrew,
+          STRINGS.filterEnglish,
+          STRINGS.filterMixed,
+        ]);
+        expect(badges.map((b) => b.getAttribute("aria-label"))).toEqual([
+          STRINGS.filterHebrew,
+          STRINGS.filterEnglish,
+          STRINGS.filterMixed,
+        ]);
+        expect(
+          rows[3]!.querySelector('[data-testid="song-language"]'),
+        ).toBeNull();
+      });
+    }
   });
 });

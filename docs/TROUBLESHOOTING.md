@@ -69,5 +69,27 @@ corepack enable
 ## Bidi tests: Playwright WebKit fails to launch
 
 `pnpm --filter chord-render test:bidi` needs the Playwright browsers and their host libraries. CI
-installs them with `pnpm --filter chord-render exec playwright install --with-deps chromium webkit`;
-run the same command once locally.
+caches the browsers, runs `pnpm --filter chord-render exec playwright install --with-deps chromium webkit`
+on a cache miss and `playwright install-deps chromium webkit` on a hit; run the full command once locally. The `--with-deps` flag installs system packages, so Playwright
+asks for `sudo` permissions.
+
+To run the web suite's WebKit project (`test:web`, `apps/desktop/web/playwright.config.ts`) locally
+against a cached WebKit build whose revision differs from the pinned Playwright one, set
+`SHIR_WEBKIT_EXECUTABLE` to that build's executable. It is a local-only escape hatch; CI installs
+the matching browser.
+
+## Real-app E2E (`e2e/`)
+
+Setup and the run command are in [`e2e/README.md`](../e2e/README.md). Common failures:
+
+- **The run stops at once with `e2e: <tool> not found; install it with: ...`.** `tauri-driver` or
+  `WebKitWebDriver` is missing. The message names the tool and its install command
+  (`cargo install tauri-driver --locked --version 2.1.0` or `sudo apt install webkit2gtk-driver`).
+  `tauri-driver` is looked up in `$CARGO_HOME/bin` (default `~/.cargo/bin`), then on `PATH`.
+- **There is no Paste-from-clipboard E2E spec.** Under WebKitGTK, `navigator.clipboard.readText()`
+  rejects with `NotAllowedError`, so the real-clipboard Paste cannot be automated. The clipboard is
+  never faked inside the page; see `e2e/README.md`.
+- **Bumping `webdriverio` or `expect-webdriverio` fails to install on Node 24.20.** `webdriverio`
+  10.2.0 and `expect-webdriverio` 8.1.0 require Node >=24.22.1, so they are pinned to 10.1.0 and
+  8.0.0, and the `@wdio/*` packages are pinned at 10.1.0 too (`docs/STACK.md`, `e2e/README.md`).
+  Raise all of them together when the repo's Node floor moves.

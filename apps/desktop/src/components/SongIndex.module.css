@@ -58,6 +58,23 @@
   unicode-bidi: plaintext;
 }
 
+.key {
+  font-size: 0.8rem;
+  color: GrayText;
+  unicode-bidi: isolate;
+}
+
+.badge {
+  margin-block-start: 0.15rem;
+  padding-block: 0.05rem;
+  padding-inline: 0.35rem;
+  border: 1px solid GrayText;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: GrayText;
+}
+
 .snippet {
   max-inline-size: 100%;
   font-size: 0.8rem;

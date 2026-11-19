@@ -1,6 +1,6 @@
 .song {
   unicode-bidi: isolate;
-  font-family: "Noto Sans Hebrew", heebo, sans-serif;
+  font-family: "Noto Sans Hebrew", Heebo, sans-serif;
 }
 
 @media print {

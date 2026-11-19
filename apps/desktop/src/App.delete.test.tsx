@@ -15,14 +15,16 @@ import {
   searchSongs,
 } from "./storage";
 import type { SearchHit, Song, SongSummary } from "./storage";
-import {
-  STRINGS,
-  deleteConfirmTitle,
-  deleteManyFailed,
-  deleteManyTitle,
-  deletedCount,
-  selectedCount,
-} from "./strings";
+import { STRINGS } from "./strings";
+import { i18n } from "./i18n";
+
+const deleteConfirmTitle = (title: string) =>
+  i18n.t("deleteConfirmTitle", { title });
+const deleteManyFailed = (failed: number, count: number) =>
+  i18n.t("deleteManyFailed", { failed, count });
+const deleteManyTitle = (count: number) => i18n.t("deleteManyTitle", { count });
+const deletedCount = (count: number) => i18n.t("deletedCount", { count });
+const selectedCount = (count: number) => i18n.t("selectedCount", { count });
 
 vi.mock("./uiReady", () => ({ signalUiReady: vi.fn() }));
 vi.mock("./storage", () => ({
@@ -777,7 +779,7 @@ describe("App delete (database mode)", () => {
       expect(items()[1]!.textContent).toContain("Alpha");
     });
 
-    it("focus moves to Select after a row delete empties the list", async () => {
+    it("focus moves to the search box after a row delete empties the list", async () => {
       db = [summary("c", "שיר")];
       await renderDb();
       deleteRow(0);
@@ -785,8 +787,174 @@ describe("App delete (database mode)", () => {
         expect(screen.getByText(STRINGS.libraryEmpty)).toBeInTheDocument(),
       );
       await waitFor(() =>
-        expect(document.activeElement).toBe(screen.getByTestId("select-songs")),
+        expect(document.activeElement).toBe(screen.getByTestId("search-input")),
       );
+    });
+
+    it("focus moves to the row at the same position after a header delete", async () => {
+      await renderDb();
+      fireEvent.click(items()[1]!);
+      await waitFor(() => expect(songTitle()).toBe("Alpha"));
+      screen.getByTestId("delete-song").focus();
+      fireEvent.click(screen.getByTestId("delete-song"));
+      confirmYes();
+      await waitFor(() => expect(titles()).toEqual(["שיר", "Beta"]));
+      await waitFor(() => expect(document.activeElement).toBe(items()[1]));
+      expect(items()[1]!.textContent).toContain("Beta");
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("focus moves to the search box after a header delete of the only song", async () => {
+      db = [summary("c", "שיר")];
+      await renderDb();
+      screen.getByTestId("delete-song").focus();
+      fireEvent.click(screen.getByTestId("delete-song"));
+      confirmYes();
+      await waitFor(() =>
+        expect(screen.getByText(STRINGS.libraryEmpty)).toBeInTheDocument(),
+      );
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByTestId("search-input")),
+      );
+    });
+
+    it("focus moves to the search box after a header delete of a song that is not listed", async () => {
+      await renderDb();
+      vi.mocked(searchSongs).mockResolvedValue([hit("a", "Alpha")]);
+      type("alp");
+      await screen.findByTestId("search-results");
+      // The open song (c) is not among the listed hits.
+      expect(titles()).toEqual(["Alpha"]);
+      screen.getByTestId("delete-song").focus();
+      fireEvent.click(screen.getByTestId("delete-song"));
+      confirmYes();
+      await waitFor(() => expect(deleteSong).toHaveBeenCalledTimes(1));
+      await settled();
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByTestId("search-input")),
+      );
+    });
+
+    it("focus moves to the row at the first deleted position after a bulk delete", async () => {
+      await renderDb();
+      fireEvent.click(screen.getByTestId("select-songs"));
+      fireEvent.click(check(1));
+      fireEvent.click(check(2));
+      fireEvent.click(screen.getByTestId("delete-selected"));
+      confirmYes();
+      await waitFor(() => expect(titles()).toEqual(["שיר"]));
+      // First deleted row was 1; the list now has one row, so clamp to it.
+      await waitFor(() => expect(document.activeElement).toBe(items()[0]));
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it("bulk delete of a middle row focuses the row now at its position", async () => {
+      await renderDb();
+      fireEvent.click(screen.getByTestId("select-songs"));
+      fireEvent.click(check(1));
+      fireEvent.click(screen.getByTestId("delete-selected"));
+      confirmYes();
+      await waitFor(() => expect(titles()).toEqual(["שיר", "Beta"]));
+      await waitFor(() => expect(document.activeElement).toBe(items()[1]));
+      expect(items()[1]!.textContent).toContain("Beta");
+    });
+
+    it("bulk delete focuses the row at the lowest deleted position, whatever the pick order", async () => {
+      db = [...DB_LIST, summary("d", "Delta")];
+      vi.mocked(getSong).mockImplementation((id) =>
+        Promise.resolve(
+          stored(id, DB_SONGS[id] ?? "{title: Delta}\n[D]Delta line"),
+        ),
+      );
+      await renderDb();
+      expect(titles()).toEqual(["שיר", "Alpha", "Beta", "Delta"]);
+      fireEvent.click(screen.getByTestId("select-songs"));
+      fireEvent.click(check(2));
+      fireEvent.click(check(0));
+      fireEvent.click(screen.getByTestId("delete-selected"));
+      confirmYes();
+      await waitFor(() => expect(titles()).toEqual(["Alpha", "Delta"]));
+      await waitFor(() => expect(document.activeElement).toBe(items()[0]));
+      expect(items()[0]!.textContent).toContain("Alpha");
+    });
+
+    it("focus moves to the search box after a bulk delete of every song", async () => {
+      await renderDb();
+      fireEvent.click(screen.getByTestId("select-songs"));
+      fireEvent.click(screen.getByTestId("select-all"));
+      fireEvent.click(screen.getByTestId("delete-selected"));
+      confirmYes();
+      await waitFor(() =>
+        expect(screen.getByText(STRINGS.libraryEmpty)).toBeInTheDocument(),
+      );
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByTestId("search-input")),
+      );
+    });
+
+    it("clears the refocus request: typing afterwards does not move focus", async () => {
+      await renderDb();
+      deleteRow(1);
+      await waitFor(() => expect(titles()).toEqual(["שיר", "Beta"]));
+      await waitFor(() => expect(document.activeElement).toBe(items()[1]));
+      // The user moves on; an unrelated re-render must not pull focus back.
+      const other = screen.getByTestId("select-songs");
+      other.focus();
+      type("x");
+      type("");
+      await screen.findByTestId("song-index");
+      expect(document.activeElement).toBe(other);
+    });
+
+    it("an Edit whose getSong resolves after the song was deleted opens no editor", async () => {
+      await renderDb();
+      let late!: (s: Song) => void;
+      vi.mocked(getSong).mockImplementationOnce(
+        () => new Promise<Song>((resolve) => (late = resolve)),
+      );
+      fireEvent.click(screen.getByTestId("edit-song"));
+      await waitFor(() => expect(getSong).toHaveBeenCalledTimes(2));
+      fireEvent.click(rowDelete(0));
+      confirmYes();
+      await waitFor(() => expect(titles()).toEqual(["Alpha", "Beta"]));
+      await settled();
+      late(stored("c", DB_SONGS.c!));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.queryByTestId("editor")).toBeNull();
+      expect(screen.queryByTestId("app-notice")).toBeNull();
+    });
+
+    it("an Edit whose getSong resolves after another song was selected opens no editor", async () => {
+      await renderDb();
+      let late!: (s: Song) => void;
+      vi.mocked(getSong).mockImplementationOnce(
+        () => new Promise<Song>((resolve) => (late = resolve)),
+      );
+      fireEvent.click(screen.getByTestId("edit-song"));
+      await waitFor(() => expect(getSong).toHaveBeenCalledTimes(2));
+      fireEvent.click(items()[2]!);
+      await waitFor(() => expect(songTitle()).toBe("Beta"));
+      late(stored("c", DB_SONGS.c!));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.queryByTestId("editor")).toBeNull();
+      expect(songTitle()).toBe("Beta");
+    });
+
+    it("a second Edit supersedes the first: the late first result opens no editor", async () => {
+      await renderDb();
+      let first!: (s: Song) => void;
+      vi.mocked(getSong).mockImplementationOnce(
+        () => new Promise<Song>((resolve) => (first = resolve)),
+      );
+      fireEvent.click(screen.getByTestId("edit-song"));
+      await waitFor(() => expect(getSong).toHaveBeenCalledTimes(2));
+      fireEvent.click(screen.getByTestId("edit-song"));
+      await screen.findByTestId("editor");
+      const before = screen.getByTestId("editor");
+      first(stored("c", "{title: Stale}\n"));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.getByTestId("editor")).toBe(before);
+      expect(screen.queryByDisplayValue(/Stale/)).toBeNull();
     });
 
     it("focus moves to the row itself after a failed row delete", async () => {

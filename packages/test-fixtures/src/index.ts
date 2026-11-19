@@ -12,7 +12,7 @@ export const FIXTURE_NAMES = [
   "long_wrap_line",
 ] as const;
 
-/** G2 round-trip fixtures (sections, tabs, unknown directives, aliases, malformed). */
+/** G2 round-trip fixtures (sections, tabs, unknown directives, aliases, malformed, RTL line with an LTR tail). */
 export const ROUNDTRIP_FIXTURE_NAMES = [
   "sections_he",
   "tab_block",
@@ -20,6 +20,7 @@ export const ROUNDTRIP_FIXTURE_NAMES = [
   "slash_chords_key",
   "aliases_input",
   "malformed_input",
+  "rtl_ltr_tail",
 ] as const;
 
 /** Every fixture: the G1 rendering set, then the round-trip set. */

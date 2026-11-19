@@ -38,6 +38,24 @@ interface Measured {
   anchor: HTMLElement;
   left: number;
   right: number;
+  /** The previous sibling lies on the far side of the anchor from the line start. */
+  prevOnWrongSide: boolean;
+}
+
+/**
+ * True when the anchor's previous sibling (its logical end) lies on the same visual row but
+ * on the far side of the anchor from the line start, i.e. the anchor sits in an embedded
+ * opposite-direction run. Read with the box measurements, before any padding is written.
+ */
+function prevOnWrongSide(anchor: HTMLElement): boolean {
+  const prev = anchor.previousElementSibling;
+  const p = prev ? [...prev.getClientRects()].pop() : undefined;
+  const l = anchor.getClientRects()[0];
+  if (!p || !l) return false;
+  if (p.top >= l.bottom || l.top >= p.bottom) return false; // different rows
+  const rtl = getComputedStyle(anchor).direction === "rtl";
+  const dx = p.left + p.right - (l.left + l.right);
+  return rtl ? dx < 0 : dx > 0;
 }
 
 /** Chord boxes grouped into visual rows (top within tolerance), each in DOM order. */
@@ -48,7 +66,12 @@ function measureLine(line: HTMLElement): Measured[][] {
     if (!anchor) continue;
     const r = box.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) continue; // not laid out
-    const item: Measured = { anchor, left: r.left, right: r.right };
+    const item: Measured = {
+      anchor,
+      left: r.left,
+      right: r.right,
+      prevOnWrongSide: prevOnWrongSide(anchor),
+    };
     const row = rows.find((x) => Math.abs(x.top - r.top) <= ROW_TOLERANCE);
     if (row) row.items.push(item);
     else rows.push({ top: r.top, items: [item] });
@@ -72,19 +95,115 @@ function pairPadding(earlier: Measured, later: Measured): number {
 }
 
 /** Per-chord padding for one physical row in DOM order; shifts cascade. */
-function rowPadding(row: readonly Measured[]): number[] {
+function rowPadding(row: readonly Measured[]): {
+  pad: number;
+  against: number;
+}[] {
   const cum: number[] = [];
-  const out: number[] = [];
+  const out: { pad: number; against: number }[] = [];
   row.forEach((later, i) => {
     let pad = 0;
+    let against = Math.max(i - 1, 0);
     for (let j = 0; j < i; j++) {
       const applied = (cum[i - 1] ?? 0) - (cum[j] ?? 0);
-      pad = Math.max(pad, pairPadding(row[j]!, later) - applied);
+      const need = pairPadding(row[j]!, later) - applied;
+      if (need > pad) {
+        pad = need;
+        against = j;
+      }
     }
-    out.push(pad);
+    out.push({ pad, against });
     cum.push((cum[i - 1] ?? 0) + pad);
   });
   return out;
+}
+
+/** The chord box of an anchor. */
+function boxOf(anchor: HTMLElement): HTMLElement | null {
+  return anchor.querySelector<HTMLElement>("[data-chord-box]");
+}
+
+/** Physical distance between two anchors' chord boxes; negative when they overlap. */
+function boxGap(a: HTMLElement, b: HTMLElement): number {
+  const ra = boxOf(a)?.getBoundingClientRect();
+  const rb = boxOf(b)?.getBoundingClientRect();
+  if (!ra || !rb) return Number.POSITIVE_INFINITY;
+  return Math.max(rb.left - ra.right, ra.left - rb.right);
+}
+
+function addPadding(el: HTMLElement, px: number, padded: Set<HTMLElement>) {
+  const current = padded.has(el)
+    ? parseFloat(el.style.getPropertyValue("padding-inline-end")) || 0
+    : 0;
+  el.style.setProperty("padding-inline-end", `${current + px}px`);
+  padded.add(el);
+}
+
+function removePadding(el: HTMLElement, px: number, padded: Set<HTMLElement>) {
+  const current =
+    parseFloat(el.style.getPropertyValue("padding-inline-end")) || 0;
+  if (current - px > 0) {
+    el.style.setProperty("padding-inline-end", `${current - px}px`);
+  } else {
+    el.style.removeProperty("padding-inline-end");
+    padded.delete(el);
+  }
+}
+
+/**
+ * Elements whose end-padding can separate `earlier` from `later`, nearest to `later` first:
+ * the previous sibling of `later`, then every element back to `earlier`'s own anchor.
+ * `padding-inline-end` is applied at the LOGICAL end of an element, so inside an embedded
+ * opposite-direction run the previous sibling's padding lands on the wrong side of `later`
+ * (it moves the text before `later`, not `later`); the elements before the run work instead.
+ */
+function candidates(earlier: HTMLElement, later: HTMLElement): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  for (
+    let el = later.previousElementSibling;
+    el instanceof HTMLElement;
+    el = el.previousElementSibling
+  ) {
+    out.push(el);
+    if (el === earlier) break;
+  }
+  return out;
+}
+
+/**
+ * Pads for the pair. Normally that is the previous sibling of `later`; when it lies on the
+ * far side of `later` (`wrongSide`: embedded opposite-direction run) its padding cannot move `later`
+ * away from `earlier`, so the elements before it are tried, keeping the first one that
+ * measurably widens the gap.
+ */
+function padPair(
+  earlier: HTMLElement,
+  later: HTMLElement,
+  wrongSide: boolean,
+  pad: number,
+  padded: Set<HTMLElement>,
+): boolean {
+  const list = candidates(earlier, later);
+  const first = list[0];
+  if (!first) return false;
+  if (!wrongSide) {
+    addPadding(first, pad, padded);
+    return true;
+  }
+  const before = boxGap(earlier, later);
+  for (const el of list) {
+    const had = padded.has(el);
+    addPadding(el, pad, padded);
+    if (boxGap(earlier, later) - before >= pad / 2) return true;
+    if (had) removePadding(el, pad, padded);
+    else {
+      el.style.removeProperty("padding-inline-end");
+      padded.delete(el);
+    }
+  }
+  // Nothing measurably helped: keep the nearest candidate.
+  addPadding(first, pad, padded);
+  return true;
 }
 
 /** Measures all lyric lines and pads; `padded` tracks elements we touched. */
@@ -101,16 +220,11 @@ export function runOverlapPass(
       for (const row of measureLine(line)) {
         const pads = rowPadding(row);
         row.forEach((m, i) => {
-          const pad = pads[i] ?? 0;
-          const target = m.anchor.previousElementSibling;
-          if (pad <= 0 || !(target instanceof HTMLElement)) return;
-          const current = padded.has(target)
-            ? parseFloat(target.style.getPropertyValue("padding-inline-end")) ||
-              0
-            : 0;
-          target.style.setProperty("padding-inline-end", `${current + pad}px`);
-          padded.add(target);
-          changed = true;
+          const { pad, against } = pads[i] ?? { pad: 0, against: 0 };
+          const earlier = row[against];
+          if (pad <= 0 || !earlier) return;
+          if (padPair(earlier.anchor, m.anchor, m.prevOnWrongSide, pad, padded))
+            changed = true;
         });
       }
       if (!changed) break;

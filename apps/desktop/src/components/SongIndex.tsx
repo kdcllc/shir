@@ -1,5 +1,6 @@
 import type { SongIdSet } from "../deleteSongs";
-import { STRINGS, deleteSongNamed, selectSongNamed } from "../strings";
+import { useT } from "../i18n";
+import type { Language } from "../storage";
 import styles from "./SongIndex.module.css";
 import type { DialogFocus } from "./useDialogFocus";
 
@@ -7,6 +8,8 @@ export interface SongIndexItem {
   id: string;
   title: string;
   artist?: string | null | undefined;
+  songKey?: string | null | undefined;
+  language?: Language | undefined;
   snippet?: string | null | undefined;
 }
 
@@ -46,7 +49,20 @@ export function SongIndex({
   focusIndex,
   focusRef,
 }: SongIndexProps) {
+  const t = useT();
   const results = variant === "results";
+  const badge = (l: Language): string =>
+    l === "he"
+      ? t("badgeHebrew")
+      : l === "en"
+        ? t("badgeEnglish")
+        : t("badgeMixed");
+  const badgeName = (l: Language): string =>
+    l === "he"
+      ? t("filterHebrew")
+      : l === "en"
+        ? t("filterEnglish")
+        : t("filterMixed");
   const removable = onDelete !== undefined && !selecting;
   const extras = selecting || removable;
   // One row renderer for both variants. It lives inside this component because
@@ -59,7 +75,7 @@ export function SongIndex({
           className={styles.check}
           data-testid="song-check"
           data-ui-chrome
-          aria-label={selectSongNamed(s.title)}
+          aria-label={t("selectSongNamed", { title: s.title })}
           checked={selected?.has(s.id) ?? false}
           onChange={() => onToggle?.(s.id)}
         />
@@ -80,6 +96,21 @@ export function SongIndex({
             {s.artist}
           </span>
         )}
+        {s.songKey != null && s.songKey !== "" && (
+          <span dir="ltr" className={styles.key} data-testid="song-row-key">
+            {s.songKey}
+          </span>
+        )}
+        {s.language !== undefined && (
+          <span
+            className={styles.badge}
+            data-testid="song-language"
+            title={badgeName(s.language)}
+            aria-label={badgeName(s.language)}
+          >
+            {badge(s.language)}
+          </span>
+        )}
         {s.snippet != null && (
           <span
             dir="auto"
@@ -96,11 +127,11 @@ export function SongIndex({
           className={styles.remove}
           data-testid="song-delete"
           data-ui-chrome
-          aria-label={deleteSongNamed(s.title)}
+          aria-label={t("deleteSongNamed", { title: s.title })}
           disabled={deleteDisabled}
           onClick={() => onDelete(s.id)}
         >
-          {STRINGS.removeGlyph}
+          {t("removeGlyph")}
         </button>
       )}
     </li>
@@ -111,7 +142,7 @@ export function SongIndex({
         <ul
           className={styles.items}
           data-testid="search-results"
-          aria-label={STRINGS.searchResults}
+          aria-label={t("searchResults")}
           aria-busy={busy === true ? "true" : undefined}
         >
           {items.map(row)}

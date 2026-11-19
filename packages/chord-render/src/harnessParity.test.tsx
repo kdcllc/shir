@@ -1,21 +1,11 @@
 import { render } from "@testing-library/react";
 import { parseSong } from "chord-core";
 import type { SongModel } from "chord-core";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { ALL_FIXTURE_NAMES } from "test-fixtures";
 import { describe, expect, it } from "vitest";
 import { EditingSong } from "../harness/EditingSong";
 import { SongView } from "./SongView";
-
-// test-fixtures' own readers resolve paths via import.meta.url, which jsdom
-// breaks (/@fs/ URL); read the same files by a directory-relative path instead.
-const FIXTURES_DIR = path.resolve(
-  import.meta.dirname,
-  "../../test-fixtures/fixtures",
-);
-const readFixture = (name: string): string =>
-  readFileSync(path.join(FIXTURES_DIR, `${name}.cho`), "utf8");
+import { readFixture } from "./test/fixtures";
 
 const songOf = (name: string): SongModel => parseSong(readFixture(name)).song;
 

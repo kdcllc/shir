@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./ConfirmDiscard.module.css";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -16,6 +16,7 @@ export function ConfirmDelete({
   onCancel,
   onConfirm,
 }: ConfirmDeleteProps) {
+  const t = useT();
   const titleId = useId();
   const bodyId = useId();
   const { dialog, first, last, onKeyDown } = useDialogFocus(onCancel);
@@ -37,7 +38,7 @@ export function ConfirmDelete({
           {title}
         </h2>
         <p id={bodyId} className={styles.body}>
-          {STRINGS.deleteConfirmBody}
+          {t("deleteConfirmBody")}
         </p>
         <div className={styles.actions}>
           <button
@@ -46,7 +47,7 @@ export function ConfirmDelete({
             data-testid="confirm-delete-cancel"
             onClick={onCancel}
           >
-            {STRINGS.cancel}
+            {t("cancel")}
           </button>
           <button
             ref={last}
@@ -54,7 +55,7 @@ export function ConfirmDelete({
             data-testid="confirm-delete-yes"
             onClick={onConfirm}
           >
-            {STRINGS.deleteAction}
+            {t("deleteAction")}
           </button>
         </div>
       </div>

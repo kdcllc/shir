@@ -51,8 +51,8 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | fast-check                               | `fast-check`                    | 4.10.2                                   | npm       | planned        |
 | Zustand                                  | `zustand`                       | 5.1.0                                    | npm       | planned        |
 | TanStack Router                          | `@tanstack/react-router`        | 1.170.46                                 | npm       | planned        |
-| i18next                                  | `i18next`                       | 27.1.1                                   | npm       | planned        |
-| react-i18next                            | `react-i18next`                 | 18.0.1                                   | npm       | planned        |
+| i18next                                  | `i18next`                       | 27.1.1                                   | npm       | installed (G8) |
+| react-i18next                            | `react-i18next`                 | 18.0.1                                   | npm       | installed (G8) |
 | SVGuitar                                 | `svguitar`                      | 2.10.1                                   | npm       | planned (G3)   |
 | Chord fingering data (HEAD commit)       | `tabsy-gr/chords-db`            | 43f8b4a7ba7b61b90bb48f8721ae918a4f421d64 | data      | planned (G3)   |
 | SQLite bindings (bundled)                | `rusqlite`                      | 0.41.1                                   | crate     | installed (G4) |
@@ -67,8 +67,15 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | Error derive                             | `thiserror`                     | 2.0.21                                   | crate     | installed (G4) |
 | Temp files (dev-dependency)              | `tempfile`                      | 3.27.0                                   | crate     | installed (G4) |
 | Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | installed (G1) |
-| WebdriverIO                              | `webdriverio`                   | 10.2.0                                   | npm       | planned (G1)   |
-| WDIO Tauri service                       | `@wdio/tauri-service`           | 1.5.1                                    | npm       | planned (G1)   |
+| WebdriverIO                              | `webdriverio`                   | 10.1.0                                   | npm       | installed (G8) |
+| WDIO CLI                                 | `@wdio/cli`                     | 10.1.0                                   | npm       | installed (G8) |
+| WDIO globals                             | `@wdio/globals`                 | 10.1.0                                   | npm       | installed (G8) |
+| WDIO local runner                        | `@wdio/local-runner`            | 10.1.0                                   | npm       | installed (G8) |
+| WDIO Mocha framework                     | `@wdio/mocha-framework`         | 10.1.0                                   | npm       | installed (G8) |
+| WDIO spec reporter                       | `@wdio/spec-reporter`           | 10.1.0                                   | npm       | installed (G8) |
+| WDIO assertions (pinned for Node floor)  | `expect-webdriverio`            | 8.0.0                                    | npm       | installed (G8) |
+| WDIO Tauri service                       | `@wdio/tauri-service`           | 1.5.1                                    | npm       | not used (G8)  |
+| Tauri WebDriver server (cargo install)   | `tauri-driver`                  | 2.1.0                                    | tool      | installed (G8) |
 | Tauri updater plugin                     | `tauri-plugin-updater`          | 2.14.1                                   | crate     | planned (G10)  |
 | Noto Sans Hebrew                         | `@fontsource/noto-sans-hebrew`  | 5.3.0                                    | npm       | installed (G1) |
 | Noto Serif Hebrew                        | `@fontsource/noto-serif-hebrew` | 5.3.0                                    | npm       | installed (G1) |

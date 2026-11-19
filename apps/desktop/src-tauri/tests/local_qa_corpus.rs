@@ -5,10 +5,6 @@ use shir_lib::commands::{save_song_impl, search_songs_impl};
 use shir_lib::db::SaveSongInput;
 use std::path::PathBuf;
 
-fn first_words(s: &str, n: usize) -> String {
-    s.split_whitespace().take(n).collect::<Vec<_>>().join(" ")
-}
-
 #[test]
 #[ignore = "needs the local-only .local/qa-songs corpus"]
 fn local_qa_corpus_probe() {
@@ -43,13 +39,8 @@ fn local_qa_corpus_probe() {
     for q in ["katamar", "hanisim", "צדיק", "עי", "צדיקים", "lekha"] {
         let hits = search_songs_impl(&state, q).expect("search");
         println!("query {q:?}: {} hit(s)", hits.len());
-        for h in &hits {
-            println!(
-                "  title={:?} snippet={:?}",
-                h.song.title,
-                h.snippet.as_deref().map(|s| first_words(s, 8))
-            );
-        }
+        let with_ctx = hits.iter().filter(|h| h.snippet.is_some()).count();
+        println!("  {with_ctx} with context");
         if q == "katamar" {
             let want = id_of("qa-02.cho").expect("qa-02.cho present");
             assert!(

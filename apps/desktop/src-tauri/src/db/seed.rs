@@ -36,6 +36,7 @@ static BUNDLED: &[BundledSong] = &[
     song!("packages/test-fixtures/fixtures/long_wrap_line.cho"),
     song!("packages/test-fixtures/fixtures/malformed_input.cho"),
     song!("packages/test-fixtures/fixtures/mixed_he_en.cho"),
+    song!("packages/test-fixtures/fixtures/rtl_ltr_tail.cho"),
     song!("packages/test-fixtures/fixtures/sections_he.cho"),
     song!("packages/test-fixtures/fixtures/sharp_flat_extensions.cho"),
     song!("packages/test-fixtures/fixtures/slash_chords_key.cho"),

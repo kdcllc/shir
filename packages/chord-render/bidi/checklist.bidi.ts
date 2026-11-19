@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { FIXTURE_NAMES } from "test-fixtures";
+import type { Page } from "@playwright/test";
 import type { FixtureName } from "test-fixtures";
 import {
+  CHECKLIST_FIXTURES,
   CHORDED_FIXTURES,
   anchorEdgeErrors,
   boxesBelowAnchor,
@@ -12,6 +13,7 @@ import {
   goldenChords,
   measure,
   open,
+  openSource,
   overlapCount,
   overlapPass,
   wordRects,
@@ -26,10 +28,12 @@ const EDGE_FIXTURES: FixtureName[] = [
   "mixed_he_en",
   "sharp_flat_extensions",
   "long_wrap_line",
+  "dense_chords",
+  "rtl_ltr_tail",
 ];
 
 test.describe("checklist 1", () => {
-  for (const name of FIXTURE_NAMES) {
+  for (const name of CHECKLIST_FIXTURES) {
     test(`checklist 1 textContent equality ${name}`, async ({ page }) => {
       await open(page, name);
       expect(await fontsInUse(page)).toBe(true);
@@ -192,4 +196,129 @@ test("B10 niqqud rendering", async ({ page }) => {
   await expect(page.locator("[data-song]")).toHaveScreenshot(
     "niqqud-he_niqqud.png",
   );
+});
+
+/** Chord anchors whose preceding element carries overlap-pass padding, as `line:index`. */
+async function paddedAnchors(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>("[data-line]")].flatMap(
+      (line, i) =>
+        [...line.querySelectorAll<HTMLElement>("[data-anchor]")]
+          .filter((a) => {
+            const prev = a.previousElementSibling;
+            return (
+              prev instanceof HTMLElement &&
+              parseFloat(prev.style.getPropertyValue("padding-inline-end")) > 0
+            );
+          })
+          .map((a) => `${i}:${a.getAttribute("data-index")}`),
+    ),
+  );
+}
+
+test.describe("checklist 3+2 overlap pass keeps anchors (g1 #3)", () => {
+  // The fixture's chords are short, so they never collide at 240-720px: enlarge the chord
+  // boxes, then resize by 1px so the B4 pass re-runs on a layout that needs padding.
+  for (const width of [320, 480, 720]) {
+    test(`mixed_he_en @${width}: no chord box overlaps and padded anchors stay on their edge`, async ({
+      page,
+    }) => {
+      await open(page, "mixed_he_en", { width });
+      await page.addStyleTag({
+        content: "[data-chord-box]{font-size:56px !important}",
+      });
+      const before = await overlapPass(page);
+      await page.evaluate((w) => window.__setWidth?.(w + 1), width);
+      await expect.poll(() => overlapPass(page)).toBeGreaterThan(before);
+      const song = golden("mixed_he_en");
+      const lines = await measure(page, song);
+      const padded = await paddedAnchors(page);
+      // Precondition: the pass had to pad, so the assertions below see padded anchors.
+      expect(
+        padded.length,
+        "anchors padded by the overlap pass",
+      ).toBeGreaterThan(0);
+      expect(overlapCount(lines)).toBe(0);
+      const errors = anchorEdgeErrors(song, lines);
+      for (const e of errors) {
+        expect(
+          e.error,
+          `line ${e.line} index ${e.index} (padded: ${padded.join(",")})`,
+        ).toBeLessThanOrEqual(2);
+      }
+    });
+  }
+});
+
+/** Edges of the first section label's text and of the song container's content box. */
+async function labelEdges(page: Page): Promise<{
+  left: number;
+  right: number;
+  contentLeft: number;
+  contentRight: number;
+}> {
+  return page.evaluate(() => {
+    const song = document.querySelector<HTMLElement>("[data-song]");
+    const label = document.querySelector('[data-line="section"] bdi');
+    if (!song || !label) throw new Error("no song or section label");
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const text = range.getBoundingClientRect();
+    const box = song.getBoundingClientRect();
+    const cs = getComputedStyle(song);
+    return {
+      left: text.left,
+      right: text.right,
+      contentLeft:
+        box.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft),
+      contentRight:
+        box.right -
+        parseFloat(cs.borderRightWidth) -
+        parseFloat(cs.paddingRight),
+    };
+  });
+}
+
+test.describe("N15 section label alignment", () => {
+  const he = "[Am]שיר של [F]אהבה ו[C]עוד שיר";
+  const en = "[Am]A song of [F]love and [C]more";
+
+  test("a Latin label of a directive-less Hebrew song sits at the right edge", async ({
+    page,
+  }) => {
+    await openSource(
+      page,
+      `{title: t}\n{start_of_chorus: Chorus}\n${he}\n{end_of_chorus}\n`,
+      { width: 480 },
+    );
+    const e = await labelEdges(page);
+    expect(Math.abs(e.right - e.contentRight)).toBeLessThanOrEqual(2);
+    expect(e.contentRight - e.contentLeft).toBeGreaterThan(400);
+    expect(e.left).toBeGreaterThan(e.contentLeft + 200);
+  });
+
+  test("a Latin label of an explicit rtl song with Latin lyrics sits at the right edge", async ({
+    page,
+  }) => {
+    await openSource(
+      page,
+      `{title: t}\n{meta: direction rtl}\n{start_of_chorus: Chorus}\n${en}\n{end_of_chorus}\n`,
+      { width: 480 },
+    );
+    const e = await labelEdges(page);
+    expect(Math.abs(e.right - e.contentRight)).toBeLessThanOrEqual(2);
+  });
+
+  test("a Hebrew label of a directive-less English song sits at the left edge", async ({
+    page,
+  }) => {
+    await openSource(
+      page,
+      `{title: t}\n{start_of_chorus: פזמון}\n${en}\n{end_of_chorus}\n`,
+      { width: 480 },
+    );
+    const e = await labelEdges(page);
+    expect(Math.abs(e.left - e.contentLeft)).toBeLessThanOrEqual(2);
+    expect(e.right).toBeLessThan(e.contentRight - 200);
+  });
 });

@@ -27,7 +27,10 @@ Normative rules for Shir. Code, tests and evaluator verdicts cite rule ids (B1�
   characters. (Amended in G1, Q&A 11: zero-width anchors land 109–125px off at the start of an
   embedded opposite-direction run in Chromium/WebKit.)
 - **B4** After layout, a measure pass prevents chord overlap by adding
-  padding-inline-end to the element preceding the later chord's anchor (text segment or previous anchor); re-run on resize/font change.
+  padding-inline-end to the element preceding the later chord's anchor (text segment or
+  previous anchor); re-run on resize/font change. Wrong-side fallback: when that previous
+  sibling lies on the far side of the anchor (embedded opposite-direction run), padding goes on
+  an earlier element back toward the earlier chord's anchor — still `padding-inline-end`.
 - **B5** Line base direction: line.direction if set, else song.base_direction, else
   `dir="auto"` (first strong char). Song container uses `unicode-bidi:isolate`.
 - **B6** Chord-only lines (instrumental) follow the song direction for ordering of
@@ -37,7 +40,9 @@ Normative rules for Shir. Code, tests and evaluator verdicts cite rule ids (B1�
   in editing mode, so B1–B5 apply there; its Source tab is a `dir="auto"` textarea next
   to a `SongView` preview that applies B1–B5.
 - **B8** UI chrome mirrors via `<html dir>` from UI language; only logical CSS props;
-  directional icons flip; numbers/times/keys stay LTR.
+  directional icons flip; numbers/times/keys stay LTR. The ChordPicker ←/→ chord-move buttons
+  are the exception: they sit in a `dir="ltr"` span and keep their visual meaning, not
+  mirrored.
 - **B9** Importer: for RTL lyric lines in chords-over-lyrics text, chord columns are
   measured from the RIGHT edge; snap to nearest grapheme/word start; preview +
   "flip alignment" toggle before save.
@@ -55,6 +60,7 @@ Normative rules for Shir. Code, tests and evaluator verdicts cite rule ids (B1�
 | `chord_only_line` | Instrumental bars in an RTL song (B6) |
 | `sharp_flat_extensions` | `C#`, `Bb`, `F#m7(b5)`, `Dsus4/F#` (B1) |
 | `dense_chords` | A chord on every syllable (B4 overlap) |
+| `rtl_ltr_tail` | Hebrew lines ending in an English word, chords at the end-of-line slot (B3, checklist 2) |
 | `long_wrap_line` | Line that wraps at narrow widths; chords must stay with their graphemes |
 
 All fixture text is written for this repo (or public domain with a `samples/LICENSES.md`
@@ -67,9 +73,9 @@ Each item is a command or an assertion the evaluator checks; a missing item for 
 1. **textContent equality** — every `.chord` node's `textContent` === source chord string.
 2. **Anchor edge ≤ 2px** — chord box inline-start edge within 2px of the anchored grapheme's
    inline-start edge in that grapheme's direction (RTL letter: right edges; LTR letter: left
-   edges; neutral: line direction); an end-of-line chord aligns on the last grapheme's
-   inline-end edge in the line direction. Runs in Playwright `chromium` AND `webkit`
-   (`pnpm --filter chord-render test:bidi`).
+   edges; neutral: line direction); an end-of-line chord aligns on the visual inline-end of the
+   last row in the line direction (an LTR tail inside an RTL line ends at the row's left edge).
+   Runs in Playwright `chromium` AND `webkit` (`pnpm --filter chord-render test:bidi`).
 3. **No overlap** — no two chord boxes on the same visual line intersect.
 4. **Mixed word order** — in `mixed_he_en`, "rock and roll" is visually LTR (word boxes increase in x).
 5. **Wrap** — after wrapping `long_wrap_line`, each chord sits on the same visual line as its anchor grapheme.

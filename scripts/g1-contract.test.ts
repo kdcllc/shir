@@ -1,5 +1,14 @@
 // G1 cross-workspace contract: STACK rows, CSP, smoke event parity, CI wiring, no formatter use, fonts.
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -233,8 +242,24 @@ function toStep(lines: string[]): Step {
   const text = lines.join("\n");
   return { name: /name:\s*(.+)/.exec(text)?.[1]?.trim() ?? "", text };
 }
-const isLinuxOnly = (s: Step): boolean =>
-  /^\s+if:.*runner\.os == 'Linux'/m.test(s.text);
+/** The single-line `if:` expression of a step (without `${{ }}`), if any. */
+function ifExpression(text: string): string | undefined {
+  const raw = /^\s+if:\s*(.+?)\s*$/m.exec(text)?.[1];
+  if (raw === undefined) return undefined;
+  return raw.replace(/^\$\{\{\s*/, "").replace(/\s*\}\}$/, "");
+}
+const LINUX_TEST = /^(?:runner\.os == 'Linux'|matrix\.os == 'ubuntu-[^']*')$/;
+/**
+ * Linux-only when the Linux test is a required top-level `&&` conjunct and the
+ * condition has no `||` and no negation.
+ */
+function isLinuxOnly(s: Step): boolean {
+  const expr = ifExpression(s.text);
+  if (expr === undefined) return false;
+  if (expr.includes("||")) return false;
+  if (/!\s*\(?\s*(?:runner|matrix)\.os\b/.test(expr)) return false;
+  return expr.split("&&").some((c) => LINUX_TEST.test(c.trim()));
+}
 
 function checkCi(yamlText: string): string[] {
   const problems: string[] = [];
@@ -280,6 +305,32 @@ describe("(d) ci.yml Linux-only Playwright wiring", () => {
     expect(checkCi(GOOD)).toEqual([]);
   });
 
+  it("self-test: isLinuxOnly accepts only a required Linux conjunct", () => {
+    const step = (cond: string): Step => ({
+      name: "s",
+      text: `      - name: s\n        if: ${cond}\n        run: x`,
+    });
+    expect(isLinuxOnly(step("runner.os == 'Linux'"))).toBe(true);
+    expect(isLinuxOnly(step("failure() && runner.os == 'Linux'"))).toBe(true);
+    expect(isLinuxOnly(step("matrix.os == 'ubuntu-latest'"))).toBe(true);
+    expect(isLinuxOnly(step("runner.os == 'Linux' || true"))).toBe(false);
+    expect(isLinuxOnly(step("always()"))).toBe(false);
+    expect(isLinuxOnly(step("runner.os == 'Linux' && x || y"))).toBe(false);
+    expect(
+      isLinuxOnly(step("runner.os == 'Linux' && !(runner.os == 'Linux')")),
+    ).toBe(false);
+    expect(isLinuxOnly(step("runner.os == 'Linux' && !cancelled()"))).toBe(
+      true,
+    );
+    expect(isLinuxOnly(step("!(runner.os == 'Linux')"))).toBe(false);
+    expect(isLinuxOnly(step("runner.os != 'Linux'"))).toBe(false);
+    expect(isLinuxOnly(step("runner.os == 'Windows'"))).toBe(false);
+    expect(isLinuxOnly(step("runner.os == 'Linux' == false"))).toBe(false);
+    expect(
+      isLinuxOnly({ name: "s", text: "      - name: s\n        run: x" }),
+    ).toBe(false);
+  });
+
   it("self-test: detects missing guard, wrong order and missing steps", () => {
     expect(
       checkCi(
@@ -320,13 +371,18 @@ describe("(d) ci.yml Linux-only Playwright wiring", () => {
 
 // ---- (e) no Formatter use; no chordsheetjs import anywhere ------------------
 
-const SCAN_ROOTS = [
-  "packages/chord-core/src",
-  "packages/chord-render/src",
-  "packages/test-fixtures/src",
-  "packages/chord-render/harness",
-  "apps/desktop/src",
-];
+/** Non-package roots that are always scanned. */
+const EXTRA_SCAN_ROOTS = ["packages/chord-render/harness", "apps/desktop/src"];
+
+// Every package that has a src directory, as repo-relative roots (glob packages, then src).
+function discoverPackageRoots(base: string): string[] {
+  const packagesDir = path.join(base, "packages");
+  return readdirSync(packagesDir)
+    .filter((n) => existsSync(path.join(packagesDir, n, "src")))
+    .sort()
+    .map((n) => `packages/${n}/src`);
+}
+const SCAN_ROOTS = [...discoverPackageRoots(repoRoot), ...EXTRA_SCAN_ROOTS];
 const SOURCE_EXT = /\.(?:[cm]?[jt]sx?)$/;
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -377,6 +433,43 @@ describe("(e) no *Formatter use; no chordsheetjs import anywhere", () => {
 
   it("finds no Formatter and no chordsheetjs importer", () => {
     expect(checkSources(sources)).toEqual([]);
+  });
+
+  it("scan roots are discovered by glob and cover every package src", () => {
+    expect(SCAN_ROOTS).toEqual(
+      expect.arrayContaining([
+        "packages/chord-core/src",
+        "packages/chord-render/src",
+        "packages/test-fixtures/src",
+        ...EXTRA_SCAN_ROOTS,
+      ]),
+    );
+  });
+
+  it("self-test: a newly added package src is discovered automatically", () => {
+    const tmp = mkdtempSync(path.join(os.tmpdir(), "g1-roots-"));
+    try {
+      mkdirSync(path.join(tmp, "packages", "brand-new", "src"), {
+        recursive: true,
+      });
+      mkdirSync(path.join(tmp, "packages", "no-src"), { recursive: true });
+      expect(discoverPackageRoots(tmp)).toEqual(["packages/brand-new/src"]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("self-test: typeof import is excluded; a real import() is reported", () => {
+    expect(
+      checkSources([
+        { file: "t.ts", text: 'type X = typeof import("chordsheetjs");' },
+      ]),
+    ).toEqual([]);
+    expect(
+      checkSources([
+        { file: "r.ts", text: 'const m = await import("chordsheetjs");' },
+      ]),
+    ).toEqual(["r.ts: imports chordsheetjs"]);
   });
 
   it("self-test: detects Formatter use and a chordsheetjs import", () => {

@@ -4,19 +4,20 @@ import type { SongModel, TextDirection } from "chord-core";
 import { loadLibrary } from "./library";
 import {
   caretMove,
+  followRowIds,
   graphemeIndexAt,
+  initialRowIds,
   initialUi,
   lyricOf,
   neighbourRow,
   lineMap,
   reconcileUi,
   rowClass,
-  rowKeys,
   textRows,
   visualOrder,
   visualStep,
 } from "./visualKeys";
-import type { VisualUi } from "./visualKeys";
+import type { RowIds, VisualUi } from "./visualKeys";
 
 function fixture(name: string): SongModel {
   const entry = loadLibrary().find((s) => s.id === `test-songs:${name}`);
@@ -363,21 +364,69 @@ describe("reconcileUi", () => {
   });
 });
 
-describe("rowKeys", () => {
-  const keysOf = (text: string) => rowKeys(parseSong(text).song);
+describe("row identities", () => {
+  const song = (text: string) => parseSong(text).song;
+  const follow = (ids: RowIds, before: string, after: string, own = false) =>
+    followRowIds(ids, song(before), song(after), own);
 
-  it("numbers the rendered rows, the phantom row last", () => {
-    expect(keysOf("one\n\n{comment: c}\ntwo\n")).toEqual([0, 1, 2, 3, 4]);
-    expect(rowKeys({ lines: [] })).toEqual([0]);
+  it("starts with one distinct identity per line, the phantom row last", () => {
+    expect(initialRowIds(song("one\n\n{comment: c}\ntwo\n"))).toEqual({
+      keys: [0, 1, 2, 3, 4],
+      next: 5,
+    });
+    expect(initialRowIds({ lines: [] })).toEqual({ keys: [0], next: 1 });
   });
 
-  it("gives every row the same key when meta lines are added or removed", () => {
-    const plain = keysOf("one\ntwo\n");
-    const titled = keysOf("{title: T}\none\ntwo\n");
-    const both = keysOf("{title: T}\n{artist: A}\none\n{key: C}\ntwo\n");
-    expect(plain).toEqual([0, 1, 2]);
-    expect(titled.slice(1)).toEqual(plain);
-    expect(both).toEqual([-1, -1, 0, -1, 1, 2]);
+  it("keeps every identity when lines are inserted above, and gives the new line a new one", () => {
+    const ids = initialRowIds(song("one\ntwo\n"));
+    const titled = follow(ids, "one\ntwo\n", "{title: T}\none\ntwo\n");
+    expect(titled.keys).toEqual([3, 0, 1, 2]);
+    const back = follow(titled, "{title: T}\none\ntwo\n", "one\ntwo\n");
+    expect(back.keys).toEqual([0, 1, 2]);
+  });
+
+  it("drops the identity of a removed line and keeps the others", () => {
+    const ids = initialRowIds(song("one\ntwo\nthree\n"));
+    expect(follow(ids, "one\ntwo\nthree\n", "two\nthree\n").keys).toEqual([
+      1, 2, 3,
+    ]);
+  });
+
+  it("follows a reordered section by its content", () => {
+    const verse = "{start_of_verse}\none\n{end_of_verse}\n";
+    const chorus = "{start_of_chorus}\ntwo\n{end_of_chorus}\n";
+    const ids = initialRowIds(song(verse + chorus));
+    expect(follow(ids, verse + chorus, chorus + verse).keys).toEqual([
+      3, 4, 5, 0, 1, 2, 6,
+    ]);
+  });
+
+  it("after an own edit that appends, the phantom row's identity moves to the new line", () => {
+    const ids = initialRowIds(song("one\n"));
+    const own = follow(ids, "one\n", "one\nnew\n", true);
+    expect(own.keys).toEqual([0, 1, 2]);
+    // From outside the same change adds a line: the phantom row stays last.
+    const outside = follow(ids, "one\n", "one\nnew\n", false);
+    expect(outside.keys).toEqual([0, 2, 1]);
+  });
+
+  it("never hands out an identity twice", () => {
+    let ids = initialRowIds(song("one\n"));
+    const used = new Set(ids.keys);
+    for (const [before, after] of [
+      ["one\n", "{title: T}\none\n"],
+      ["{title: T}\none\n", "one\n"],
+      ["one\n", "one\ntwo\nthree\n"],
+    ] as const) {
+      const old = new Set(ids.keys);
+      ids = follow(ids, before, after);
+      expect(new Set(ids.keys).size).toBe(ids.keys.length);
+      // A new row never gets an identity a row (even a removed one) had.
+      for (const key of ids.keys)
+        expect(old.has(key) || !used.has(key)).toBe(true);
+      for (const key of ids.keys) used.add(key);
+    }
+    expect(Math.max(...used)).toBeLessThan(ids.next);
   });
 });
 

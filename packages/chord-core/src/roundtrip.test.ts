@@ -120,8 +120,8 @@ function applyDocumentedNormalizations(source: string): string {
 }
 
 describe("cross-module round trip over every fixture", () => {
-  it("covers 14 fixtures", () => {
-    expect(ALL_FIXTURE_NAMES).toHaveLength(14);
+  it("covers 15 fixtures", () => {
+    expect(ALL_FIXTURE_NAMES).toHaveLength(15);
   });
 
   describe.each([...ALL_FIXTURE_NAMES])("%s", (name) => {

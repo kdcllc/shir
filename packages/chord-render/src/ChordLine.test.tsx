@@ -280,6 +280,12 @@ function buttons(root: Element) {
   );
 }
 
+/** Expected anchor position of a chord index: out-of-range indices land on the nearest end. */
+function clampIndex(index: number, count: number): number {
+  if (index < 0) return 0;
+  return index > count ? count : index;
+}
+
 /** The whole editing DOM contract that holds for every lyric line. */
 function expectContract(root: HTMLElement, line: LyricLine) {
   const graphemes = splitGraphemes(line.lyric);
@@ -330,7 +336,7 @@ function expectContract(root: HTMLElement, line: LyricLine) {
     expect(box.getAttribute("data-chord-box")).toBe("");
     const anchor = box.parentElement!;
     expect(anchor.getAttribute("data-anchor")).toBe("");
-    const clamped = Math.min(Math.max(chord.index, 0), count);
+    const clamped = clampIndex(chord.index, count);
     expect(anchor.getAttribute("data-index")).toBe(String(clamped));
     expect(anchor.getAttribute("data-pos")).toBe(String(clamped));
   }

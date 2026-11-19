@@ -99,7 +99,82 @@ describe("installWebviewErrorForwarder", () => {
     });
   });
 
+  it("forwards a plain error event without undefined parts", () => {
+    const log = vi.fn<Log>(() => Promise.resolve());
+    install(log);
+    window.dispatchEvent(new Event("error"));
+    expect(log).toHaveBeenCalledExactlyOnceWith("error event: error");
+    expect(log.mock.calls[0]![0]).not.toContain("undefined");
+  });
+
+  describe("hostile and empty errors", () => {
+    function forwardedFor(err: Error): string {
+      const log = vi.fn<Log>(() => Promise.resolve());
+      const { con } = fakeConsole();
+      install(log, con);
+      expect(() => con.error(err)).not.toThrow();
+      expect(log).toHaveBeenCalledTimes(1);
+      return log.mock.calls[0]![0];
+    }
+
+    it("forwards a fallback line for an Error whose stack getter throws", () => {
+      const err = new Error("boom");
+      Object.defineProperty(err, "stack", {
+        get() {
+          throw new Error("hostile");
+        },
+      });
+      expect(forwardedFor(err)).toBe("[unprintable]");
+    });
+
+    it("forwards a fallback line for an Error whose message and name getters throw", () => {
+      const err = new Error("x");
+      for (const key of ["message", "name"])
+        Object.defineProperty(err, key, {
+          get() {
+            throw new Error("hostile");
+          },
+        });
+      expect(forwardedFor(err)).toBe("[unprintable]");
+    });
+
+    it("forwards the message for an Error whose stack is not a string", () => {
+      const err = new Error("boom");
+      Object.defineProperty(err, "stack", { value: 42 });
+      expect(forwardedFor(err)).toBe("Error: boom");
+    });
+
+    it("does not throw from the window listeners for a hostile rejection reason", () => {
+      const log = vi.fn<Log>(() => Promise.resolve());
+      install(log);
+      const reason = {
+        get message(): string {
+          throw new Error("hostile");
+        },
+      };
+      expect(() => window.dispatchEvent(rejection(reason))).not.toThrow();
+      expect(log).toHaveBeenCalledTimes(1);
+    });
+
+    it("includes the name for an Error with an empty message", () => {
+      const err = new TypeError("");
+      Object.defineProperty(err, "stack", { value: "f@file:1:2" });
+      const out = forwardedFor(err);
+      expect(out).toContain("TypeError");
+      expect(out).toContain("f@file:1:2");
+    });
+
+    it("includes the name for an empty-message Error without a stack", () => {
+      const err = new RangeError("");
+      Object.defineProperty(err, "stack", { value: undefined });
+      expect(forwardedFor(err)).toBe("RangeError");
+    });
+  });
+
   it("swallows a rejecting log and a throwing log", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
     let forwarded = 0;
     const rejecting: Log = () => {
       forwarded += 1;
@@ -107,10 +182,15 @@ describe("installWebviewErrorForwarder", () => {
     };
     const { con, error } = fakeConsole();
     install(rejecting, con);
-    expect(() => con.error("a")).not.toThrow();
-    window.dispatchEvent(new ErrorEvent("error", { message: "b" }));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(forwarded).toBe(2);
+    try {
+      expect(() => con.error("a")).not.toThrow();
+      window.dispatchEvent(new ErrorEvent("error", { message: "b" }));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(forwarded).toBe(2);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
     expect(error).toHaveBeenCalledTimes(1);
 
     const throwing = vi.fn<Log>(() => {

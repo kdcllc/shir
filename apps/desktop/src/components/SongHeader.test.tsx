@@ -38,6 +38,25 @@ describe("SongHeader", () => {
     expect(key.querySelector("bdi")).toBeNull();
   });
 
+  it("marks the 'No key' readout and its label as UI chrome (hidden in print)", () => {
+    render(<SongHeader title="Alpha" capo={0} />);
+    expect(screen.getByTestId("sounding-key")).toHaveAttribute(
+      "data-ui-chrome",
+    );
+    expect(screen.getByText("Key")).toHaveAttribute("data-ui-chrome");
+  });
+
+  it("leaves a real key printable: no data-ui-chrome on the readout or label", () => {
+    render(<SongHeader title="Alpha" soundingKey="F#m" capo={2} />);
+    expect(screen.getByTestId("sounding-key")).not.toHaveAttribute(
+      "data-ui-chrome",
+    );
+    expect(screen.getByText("Key")).not.toHaveAttribute("data-ui-chrome");
+    expect(screen.getByTestId("capo-value")).not.toHaveAttribute(
+      "data-ui-chrome",
+    );
+  });
+
   it("omits the capo label and value when capo is 0", () => {
     render(<SongHeader title="Alpha" soundingKey="C" capo={0} />);
     expect(screen.queryByTestId("capo-value")).toBeNull();

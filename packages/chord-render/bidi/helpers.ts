@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { firstStrongDirection, splitGraphemes } from "chord-core";
 import type { SongLine, SongModel, TextDirection } from "chord-core";
-import { readGolden } from "test-fixtures";
+import { FIXTURE_NAMES, readGolden } from "test-fixtures";
 import type { FixtureName } from "test-fixtures";
 
 export interface Rect {
@@ -11,6 +11,12 @@ export interface Rect {
   yMin: number;
   yMax: number;
 }
+
+/** Every fixture the checklists iterate: the G1 set plus the RTL line with an LTR tail. */
+export const CHECKLIST_FIXTURES = [
+  ...FIXTURE_NAMES,
+  "rtl_ltr_tail",
+] as const satisfies readonly FixtureName[];
 
 export const CHORDED_FIXTURES = [
   "he_plain",
@@ -21,6 +27,7 @@ export const CHORDED_FIXTURES = [
   "long_wrap_line",
   "dense_chords",
   "chord_only_line",
+  "rtl_ltr_tail",
 ] as const satisfies readonly FixtureName[];
 
 export function golden(name: FixtureName): SongModel {
@@ -57,15 +64,29 @@ export function lineDirection(song: SongModel, i: number): TextDirection {
 export async function open(
   page: Page,
   fixture: FixtureName | string,
-  opts: { width?: number; nofonts?: boolean } = {},
+  opts: { width?: number; nofonts?: boolean; editing?: boolean } = {},
 ): Promise<void> {
   const q = new URLSearchParams({ fixture });
   if (opts.width !== undefined) q.set("width", String(opts.width));
   if (opts.nofonts) q.set("nofonts", "1");
+  if (opts.editing) q.set("editing", "1");
   await page.goto(`/?${q.toString()}`);
   await page.waitForSelector('body[data-ready="1"]');
   // R5: every spec asserts the bundled fonts are really in use.
   if (!opts.nofonts) expect(await fontsInUse(page)).toBe(true);
+}
+
+/** Opens the harness on an ad-hoc ChordPro source instead of a fixture. */
+export async function openSource(
+  page: Page,
+  cho: string,
+  opts: { width?: number } = {},
+): Promise<void> {
+  const q = new URLSearchParams({ cho });
+  if (opts.width !== undefined) q.set("width", String(opts.width));
+  await page.goto(`/?${q.toString()}`);
+  await page.waitForSelector('body[data-ready="1"]');
+  expect(await fontsInUse(page)).toBe(true);
 }
 
 /** R5: the bundled Noto Sans Hebrew is loaded AND applied to lyric lines. */
@@ -185,9 +206,14 @@ export function expectedEdge(
 ): number {
   const gs = line.graphemes;
   if (index >= gs.length) {
-    const last = gs[gs.length - 1];
+    // Visual inline-end of the last row: an LTR tail inside an RTL line ends at the
+    // row's left edge, not at the last grapheme's own edge.
+    const rows = groupRows(gs);
+    const last = rows[rows.length - 1];
     if (!last) return Number.NaN;
-    return lineDir === "rtl" ? last.rect.xMin : last.rect.xMax;
+    return lineDir === "rtl"
+      ? Math.min(...last.map((g) => g.rect.xMin))
+      : Math.max(...last.map((g) => g.rect.xMax));
   }
   const g = gs[index];
   if (!g) return Number.NaN;

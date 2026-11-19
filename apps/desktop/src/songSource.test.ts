@@ -43,6 +43,24 @@ describe("sortByTitle", () => {
     ]);
   });
 
+  it("ignores case: titles differing only by case fall to the id tie-break", () => {
+    // Case-sensitive collation would put "apple" first; base sensitivity ties, so id decides.
+    expect(
+      sortByTitle([summary("2", "apple"), summary("1", "Apple")]).map(
+        (s) => s.id,
+      ),
+    ).toEqual(["1", "2"]);
+  });
+
+  it("ignores accents: titles differing only by accent fall to the id tie-break", () => {
+    // Accent-sensitive collation would put "resume" first; base sensitivity ties, so id decides.
+    expect(
+      sortByTitle([summary("2", "resume"), summary("1", "résumé")]).map(
+        (s) => s.id,
+      ),
+    ).toEqual(["1", "2"]);
+  });
+
   it("breaks ties by id in code-unit order and does not mutate the input", () => {
     const input = [
       summary("b", "Same"),

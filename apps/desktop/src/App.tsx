@@ -8,6 +8,8 @@ import { ConfirmDiscard } from "./components/ConfirmDiscard";
 import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
 import { Editor } from "./components/Editor";
 import type { ImportSeed } from "./components/Editor";
+import { LibraryControls } from "./components/LibraryControls";
+import { LocaleToggle } from "./components/LocaleToggle";
 import { SearchBox } from "./components/SearchBox";
 import { SelectionBar } from "./components/SelectionBar";
 import { SongHeader } from "./components/SongHeader";
@@ -20,7 +22,16 @@ import type { SongIdSet } from "./deleteSongs";
 import { pickSongFiles, readTextFile } from "./files";
 import { fileNameOf, importSongFiles } from "./importFiles";
 import type { FileImportReport, QueuedFile } from "./importFiles";
+import { useT } from "./i18n";
 import { capoOptions, loadLibrary } from "./library";
+import {
+  filterHits,
+  filterSummaries,
+  readLibraryPrefs,
+  sortSummaries,
+  storeLibraryPrefs,
+} from "./libraryView";
+import type { LibraryPrefs } from "./libraryView";
 import { createDebouncedSearch, sortByTitle } from "./songSource";
 import type {
   DebouncedSearch,
@@ -36,15 +47,6 @@ import {
   searchSongs,
 } from "./storage";
 import type { Song, SongSummary } from "./storage";
-import {
-  STRINGS,
-  deleteConfirmTitle,
-  deleteManyFailed,
-  deleteManyTitle,
-  deletedCount,
-  importQueued,
-  importSummary,
-} from "./strings";
 import { signalUiReady } from "./uiReady";
 
 type Mode = "loading" | "db" | "bundled";
@@ -67,22 +69,40 @@ interface Session {
   path?: string | undefined;
 }
 
+/** A translatable message kept as data so it follows a live language switch. */
+interface Msg {
+  key:
+    | "songLoadFailed"
+    | "libraryReloadFailed"
+    | "importPickFailed"
+    | "deleteFailed"
+    | "deleteManyFailed"
+    | "deleteConfirmTitle"
+    | "deleteManyTitle"
+    | "deletedCount";
+  vars?: { title?: string; count?: number; failed?: number };
+  /** Raw error text appended after a colon. */
+  detail?: string;
+}
+
 /** A delete waiting for the user's confirmation. */
 interface DeleteRequest {
   ids: string[];
   /** Dialog heading. */
-  title: string;
+  title: Msg;
   /** Started from select mode. */
   bulk: boolean;
-  /** Position of the list row whose delete button started it; absent otherwise. */
-  row?: number | undefined;
+  /** Listed row of the first song asked for (focus returns near it); -1 when none is listed. */
+  row: number;
+  /** The song at `row`; absent when none is listed. */
+  rowId?: string | undefined;
 }
 
 /** Where focus goes once a row delete has finished. */
 interface Refocus {
-  /** The song the delete was asked for (still listed when the delete failed). */
-  id: string;
-  /** Position its row had in the list. */
+  /** The first listed song the delete was asked for (still listed when its delete failed). */
+  id?: string | undefined;
+  /** Position its row had in the listed rows; -1 when it was not listed. */
   row: number;
 }
 
@@ -101,7 +121,7 @@ const noSession = (): Session | undefined => undefined;
 const noQueue = (): QueuedFile[] => [];
 const noPaths = (): string[] => [];
 const noReport = (): FileImportReport | undefined => undefined;
-const noMessage = (): string | undefined => undefined;
+const noMessage = (): Msg | undefined => undefined;
 const noAction = (): (() => void) | undefined => undefined;
 const noDelete = (): DeleteRequest | undefined => undefined;
 const noSelection = (): SongIdSet => new Set();
@@ -123,10 +143,24 @@ const noSearch = (): DebouncedSearch | undefined => undefined;
 const newIndex = (): SummaryIndex => new Map();
 
 function toItem(s: SongSummary): SongIndexItem {
-  return { id: s.id, title: s.title, artist: s.artist };
+  return {
+    id: s.id,
+    title: s.title,
+    artist: s.artist,
+    songKey: s.key,
+    language: s.language,
+  };
 }
 
 export function App() {
+  const t = useT();
+  const say = (m: Msg): string => {
+    const text = (t as unknown as (k: string, v?: object) => string)(
+      m.key,
+      m.vars,
+    );
+    return m.detail === undefined ? text : `${text}: ${m.detail}`;
+  };
   const bundled = useMemo(() => loadLibrary(), []);
   const [mode, setMode] = useState(loadingMode);
   const [summaries, setSummaries] = useState(noSummaries);
@@ -149,18 +183,23 @@ export function App() {
   const [picked, setPicked] = useState(noSelection);
   const [deleting, setDeleting] = useState(noDelete);
   const [removing, setRemoving] = useState(false);
-  const [deleteStatus, setDeleteStatus] = useState("");
+  const [deleteStatus, setDeleteStatus] = useState(noMessage);
   const [refocus, setRefocus] = useState(noRefocus);
+  const [prefs, setPrefsState] = useState(() =>
+    readLibraryPrefs(window.localStorage),
+  );
   const live = useRef(noLive());
   const sessionKey = useRef(0);
   const request = useRef(0);
+  /** Counts Edit clicks; a `getSong` answering for an older click is dropped. */
+  const editRequest = useRef(0);
+  const sidebar = useRef<HTMLDivElement | null>(null);
   const listing = useRef(noList());
   const debounced = useRef(noSearch());
   const knownHits = useRef(newIndex());
   /** Ids deleted in this session; a late search response never shows them. */
   const removed = useRef(noSelection());
   const rowTarget = useRef(noButton());
-  const startTarget = useRef(noButton());
 
   const selectDb = useCallback((id: string, summary?: SongSummary) => {
     const token = ++request.current;
@@ -236,8 +275,16 @@ export function App() {
     const id = selectedId;
     if (id === undefined) return;
     guard(() => {
+      const edit = ++editRequest.current;
+      const selection = request.current;
+      /** The song is still the open one, not deleted, and no newer Edit started. */
+      const current = () =>
+        edit === editRequest.current &&
+        selection === request.current &&
+        !removed.current.has(id);
       getSong(id)
         .then((stored) => {
+          if (!current()) return;
           abandon();
           setQueue([]);
           setNotice(undefined);
@@ -248,7 +295,9 @@ export function App() {
             baseline: stored.chordpro,
           });
         })
-        .catch(() => setNotice(STRINGS.songLoadFailed));
+        .catch(() => {
+          if (current()) setNotice({ key: "songLoadFailed" });
+        });
     });
   };
 
@@ -261,14 +310,19 @@ export function App() {
       );
     });
 
+  const setPrefs = (next: LibraryPrefs) => {
+    setPrefsState(next);
+    storeLibraryPrefs(window.localStorage, next);
+  };
+
   const refreshList = async (select: Song) => {
     let summary: SongSummary | undefined;
     try {
-      const sorted = sortByTitle(await listSongs());
-      setSummaries(sorted);
-      summary = sorted.find((s) => s.id === select.id);
+      const fresh = await listSongs();
+      setSummaries(fresh);
+      summary = fresh.find((s) => s.id === select.id);
     } catch {
-      setNotice(STRINGS.libraryReloadFailed);
+      setNotice({ key: "libraryReloadFailed" });
     }
     selectDb(select.id, summary);
   };
@@ -308,13 +362,19 @@ export function App() {
           if (result.queued.length > 0) openQueued(result.queued);
         })
         .catch((reason: unknown) =>
-          setNotice(`${STRINGS.importPickFailed}: ${messageOf(reason)}`),
+          setNotice({ key: "importPickFailed", detail: messageOf(reason) }),
         )
         .finally(() => setImporting(false));
     });
 
+  /** The library as listed: chosen order, language filter applied. */
+  const shown = useMemo(
+    () => filterSummaries(sortSummaries(summaries, prefs.sort), prefs.language),
+    [summaries, prefs],
+  );
+
   useEffect(() => {
-    live.current = { selectedId, session, summaries };
+    live.current = { selectedId, session, summaries: shown };
   });
 
   const titleOf = (id: string): string =>
@@ -324,18 +384,23 @@ export function App() {
     "";
 
   /** Opens the delete confirmation; nothing is deleted before the user confirms. */
-  const askDelete = (ids: string[], bulk: boolean, row?: number) => {
+  const askDelete = (ids: string[], bulk: boolean) => {
     const [only] = ids;
     if (only === undefined || removing) return;
-    setDeleteStatus("");
+    const first = ids
+      .map((id) => ({ id, at: listedIds.indexOf(id) }))
+      .filter((p) => p.at >= 0)
+      .sort((a, b) => a.at - b.at)[0];
+    setDeleteStatus(undefined);
     setDeleting({
       ids,
       bulk,
-      row,
+      row: first?.at ?? -1,
+      rowId: first?.id,
       title:
         ids.length === 1
-          ? deleteConfirmTitle(titleOf(only))
-          : deleteManyTitle(ids.length),
+          ? { key: "deleteConfirmTitle", vars: { title: titleOf(only) } }
+          : { key: "deleteManyTitle", vars: { count: ids.length } },
     });
   };
 
@@ -352,11 +417,11 @@ export function App() {
     let listed = before.summaries.filter(alive);
     if (gone.size > 0) {
       try {
-        listed = sortByTitle(await listSongs());
+        listed = await listSongs();
         setSummaries(listed);
       } catch {
         setSummaries((prev) => prev.filter(alive));
-        setNotice(STRINGS.libraryReloadFailed);
+        setNotice({ key: "libraryReloadFailed" });
       }
     }
     setRemoving(false);
@@ -391,17 +456,12 @@ export function App() {
           selectDb(next.id, listed.find((s) => s.id === next.id) ?? next);
         }
       }
-      setDeleteStatus(deletedCount(deleted.length));
+      setDeleteStatus({ key: "deletedCount", vars: { count: deleted.length } });
     }
 
-    const [askedId] = asked.ids;
     const active = document.activeElement;
-    if (
-      asked.row !== undefined &&
-      askedId !== undefined &&
-      (active === null || active === document.body)
-    ) {
-      setRefocus({ id: askedId, row: asked.row });
+    if (active === null || active === document.body) {
+      setRefocus({ id: asked.rowId, row: asked.row });
     }
 
     const [firstFailure] = failed;
@@ -414,8 +474,12 @@ export function App() {
     }
     setNotice(
       asked.ids.length === 1
-        ? `${STRINGS.deleteFailed}: ${firstFailure.message}`
-        : `${deleteManyFailed(failed.length, asked.ids.length)}: ${firstFailure.message}`,
+        ? { key: "deleteFailed", detail: firstFailure.message }
+        : {
+            key: "deleteManyFailed",
+            vars: { failed: failed.length, count: asked.ids.length },
+            detail: firstFailure.message,
+          },
     );
   };
 
@@ -431,10 +495,19 @@ export function App() {
     setPicked(noSelection());
   };
 
-  /** After a row delete: focus the row at that position, or Select when no row is shown. */
+  /** After a delete: focus the row at that position, or the search box when no row is shown; then drop the request. */
   useEffect(() => {
     if (refocus === undefined) return;
-    (rowTarget.current ?? startTarget.current)?.focus();
+    const row = rowTarget.current;
+    const search = sidebar.current?.querySelector<HTMLElement>(
+      'input[type="search"]',
+    );
+    const target =
+      row !== null && row.isConnected && !row.disabled ? row : search;
+    target?.focus();
+    // Cleared right after the commit that applied it, so a later render
+    // (typing in the search box, say) cannot move focus again.
+    queueMicrotask(() => setRefocus(undefined));
   }, [refocus]);
 
   useEffect(() => {
@@ -448,7 +521,7 @@ export function App() {
       (list) => {
         if (cancelled) return;
         const sorted = sortByTitle(list);
-        setSummaries(sorted);
+        setSummaries(list);
         setMode("db");
         const demoTitle = bundled[0]?.title;
         const first = sorted.find((s) => s.title === demoTitle) ?? sorted[0];
@@ -522,38 +595,46 @@ export function App() {
     search.query === trimmed;
   const pending = trimmed !== "" && !settled;
 
-  const hitItems: SongIndexItem[] =
-    search.status === "done"
-      ? search.hits.map((h) => ({ ...toItem(h.song), snippet: h.snippet }))
-      : [];
+  const allHits = search.status === "done" ? search.hits : [];
+  const hitItems: SongIndexItem[] = filterHits(allHits, prefs.language).map(
+    (h) => ({ ...toItem(h.song), snippet: h.snippet }),
+  );
 
   const showLoading = mode === "loading";
   const showBundled = mode === "bundled";
   const showDb = mode === "db";
   const showError = showDb && search.status === "error";
-  const showEmpty = showDb && search.status === "done" && hitItems.length === 0;
-  const showHits = showDb && search.status === "done" && !showEmpty;
+  const showEmpty = showDb && search.status === "done" && allHits.length === 0;
+  const showHits = showDb && search.status === "done" && hitItems.length > 0;
   const showLibrary =
     showDb && search.status !== "error" && search.status !== "done";
   const showNoSongs = showLibrary && summaries.length === 0;
-  const showSongs = showLibrary && !showNoSongs;
+  const showSongs = showLibrary && !showNoSongs && shown.length > 0;
+  const showFilterEmpty =
+    (showDb &&
+      search.status === "done" &&
+      allHits.length > 0 &&
+      hitItems.length === 0) ||
+    (showLibrary && !showNoSongs && shown.length === 0);
   const showPane =
     entry !== undefined && song !== undefined && view !== undefined;
   const editing = showDb && session !== undefined;
   const listedIds = showHits
     ? hitItems.map((h) => h.id)
     : showSongs
-      ? summaries.map((s) => s.id)
+      ? shown.map((s) => s.id)
       : [];
-  const askRowDelete = (id: string) =>
-    askDelete([id], false, listedIds.indexOf(id));
-  const refocusAt = refocus === undefined ? -1 : listedIds.indexOf(refocus.id);
+  const askRowDelete = (id: string) => askDelete([id], false);
+  const refocusAt =
+    refocus?.id === undefined ? -1 : listedIds.indexOf(refocus.id);
   const focusIndex =
     refocus === undefined
       ? undefined
-      : refocusAt >= 0
-        ? refocusAt
-        : Math.min(refocus.row, listedIds.length - 1);
+      : refocus.row < 0
+        ? -1
+        : refocusAt >= 0
+          ? refocusAt
+          : Math.min(refocus.row, listedIds.length - 1);
   const pickListed = () =>
     setPicked((prev) => new Set([...prev, ...listedIds]));
   const showLoadFailed = !editing && !showPane && loadFailed;
@@ -561,12 +642,15 @@ export function App() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.sidebar}>
-        <h1 className={styles.heading} data-ui-chrome>
-          {STRINGS.appName} {STRINGS.separator}{" "}
-          <bdi lang="he">{STRINGS.appNameHebrew}</bdi>
-        </h1>
-        {showLoading && <p data-ui-chrome>{STRINGS.loadingLibrary}</p>}
+      <div ref={sidebar} className={styles.sidebar}>
+        <div className={styles["heading-row"]}>
+          <h1 className={styles.heading} data-ui-chrome>
+            {t("appName")} {t("separator")}{" "}
+            <bdi lang="he">{t("appNameHebrew")}</bdi>
+          </h1>
+          <LocaleToggle />
+        </div>
+        {showLoading && <p data-ui-chrome>{t("loadingLibrary")}</p>}
         {showBundled && (
           <>
             <SearchBox value="" disabled onChange={() => undefined} />
@@ -575,7 +659,7 @@ export function App() {
               data-testid="search-unavailable"
               data-ui-chrome
             >
-              {STRINGS.searchUnavailable}
+              {t("searchUnavailable")}
             </p>
             <SongList
               songs={bundled}
@@ -588,7 +672,7 @@ export function App() {
           <>
             <div className={styles.actions} data-ui-chrome>
               <button type="button" data-testid="new-song" onClick={openNew}>
-                {STRINGS.newSong}
+                {t("newSong")}
               </button>
               <button
                 type="button"
@@ -596,7 +680,7 @@ export function App() {
                 disabled={importing}
                 onClick={runImport}
               >
-                {STRINGS.openFiles}
+                {t("openFiles")}
               </button>
             </div>
             {report !== undefined && (
@@ -606,21 +690,22 @@ export function App() {
                 data-ui-chrome
               >
                 <p role="status" data-testid="import-summary">
-                  {importSummary(
-                    report.saved.length,
-                    report.saved.length +
+                  {t("importSummary", {
+                    saved: report.saved.length,
+                    count:
+                      report.saved.length +
                       report.queued.length +
                       report.failed.length,
-                  )}
+                  })}
                 </p>
                 {report.queued.length > 0 && (
                   <p role="status" data-testid="import-queued">
-                    {importQueued(report.queued.length)}
+                    {t("importQueued", { count: report.queued.length })}
                   </p>
                 )}
                 {report.saved.some((f) => f.converted) && (
                   <div data-testid="import-converted">
-                    <p>{STRINGS.importConverted}</p>
+                    <p>{t("importConverted")}</p>
                     <ul className={styles["report-items"]}>
                       {report.saved
                         .filter((f) => f.converted)
@@ -634,7 +719,7 @@ export function App() {
                 )}
                 {skipped.length > 0 && (
                   <div data-testid="import-skipped">
-                    <p>{STRINGS.importSkipped}</p>
+                    <p>{t("importSkipped")}</p>
                     <ul className={styles["report-items"]}>
                       {skipped.map((path, i) => (
                         <li key={i} dir="auto">
@@ -653,7 +738,7 @@ export function App() {
             )}
             {notice !== undefined && (
               <p role="alert" data-testid="app-notice" data-ui-chrome>
-                {notice}
+                {say(notice)}
               </p>
             )}
             <SearchBox value={query} onChange={onQuery} />
@@ -663,8 +748,14 @@ export function App() {
               data-testid="search-pending"
               data-ui-chrome
             >
-              {pending ? STRINGS.searching : ""}
+              {pending ? t("searching") : ""}
             </p>
+            <LibraryControls
+              sort={prefs.sort}
+              language={prefs.language}
+              onSort={(sort) => setPrefs({ ...prefs, sort })}
+              onLanguage={(language) => setPrefs({ ...prefs, language })}
+            />
             <SelectionBar
               selecting={selecting}
               count={picked.size}
@@ -673,7 +764,6 @@ export function App() {
               onSelectAll={pickListed}
               onDelete={() => askDelete([...picked], true)}
               onDone={leaveSelect}
-              startRef={startTarget}
             />
             <p
               role="status"
@@ -681,18 +771,16 @@ export function App() {
               data-testid="delete-status"
               data-ui-chrome
             >
-              {deleteStatus}
+              {deleteStatus === undefined ? "" : say(deleteStatus)}
             </p>
             <nav
-              aria-label={STRINGS.songList}
+              aria-label={t("songList")}
               data-testid="song-list"
               data-ui-chrome
               className={styles.library}
             >
-              {showError && <p role="alert">{STRINGS.searchFailed}</p>}
-              {showEmpty && (
-                <p data-testid="search-empty">{STRINGS.noResults}</p>
-              )}
+              {showError && <p role="alert">{t("searchFailed")}</p>}
+              {showEmpty && <p data-testid="search-empty">{t("noResults")}</p>}
               {showHits && (
                 <SongIndex
                   variant="results"
@@ -709,11 +797,14 @@ export function App() {
                   deleteDisabled={removing}
                 />
               )}
-              {showNoSongs && <p>{STRINGS.libraryEmpty}</p>}
+              {showFilterEmpty && (
+                <p data-testid="filter-empty">{t("noFilterMatches")}</p>
+              )}
+              {showNoSongs && <p>{t("libraryEmpty")}</p>}
               {showSongs && (
                 <SongIndex
                   variant="library"
-                  items={summaries.map(toItem)}
+                  items={shown.map(toItem)}
                   selectedId={selectedId}
                   onSelect={pickDb}
                   onDelete={askRowDelete}
@@ -763,7 +854,7 @@ export function App() {
                     disabled={removing}
                     onClick={openEdit}
                   >
-                    {STRINGS.editSong}
+                    {t("editSong")}
                   </button>
                   <button
                     type="button"
@@ -777,7 +868,7 @@ export function App() {
                       )
                     }
                   >
-                    {STRINGS.deleteAction}
+                    {t("deleteAction")}
                   </button>
                 </div>
               )}
@@ -797,8 +888,8 @@ export function App() {
             <SongView song={view.song} />
           </>
         )}
-        {showLoadFailed && <p role="alert">{STRINGS.songLoadFailed}</p>}
-        {showNoSelection && <p>{STRINGS.noSongSelected}</p>}
+        {showLoadFailed && <p role="alert">{t("songLoadFailed")}</p>}
+        {showNoSelection && <p>{t("noSongSelected")}</p>}
       </main>
       {confirming !== undefined && (
         <ConfirmDiscard
@@ -812,7 +903,7 @@ export function App() {
       )}
       {deleting !== undefined && (
         <ConfirmDelete
-          title={deleting.title}
+          title={say(deleting.title)}
           onCancel={() => setDeleting(undefined)}
           onConfirm={() => void runDelete(deleting)}
         />

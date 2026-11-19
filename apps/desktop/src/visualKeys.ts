@@ -190,19 +190,44 @@ export function neighbourRow(
     : rows.reverse().find((row) => row < line);
 }
 
+/** Stable identities of the rows of a song: one per line, the phantom row last. */
+export interface RowIds {
+  keys: readonly number[];
+  /** The next unused identity. */
+  next: number;
+}
+
+/** Fresh identities for every row of `song`. */
+export function initialRowIds(song: SongModel): RowIds {
+  const count = song.lines.length + 1;
+  return { keys: Array.from({ length: count }, (_, i) => i), next: count };
+}
+
 /**
- * A React key for every row, the phantom row last: the row's ordinal among
- * the rendered rows, so a `meta` line added or removed above (a song-details
- * commit) does not change the identity of any row.
+ * The identities of the rows of `next`: a row that has a counterpart in
+ * `prev` (`trackLine`) keeps its identity, so a row that shifts or moves, by
+ * an edit of this editor or from outside, stays the same React element (its
+ * picker, draft and focus survive); every other row is new.
  */
-export function rowKeys(song: SongModel): number[] {
-  const keys: number[] = [];
-  let rendered = 0;
-  for (const line of song.lines) {
-    keys.push(line.kind === "meta" ? -1 : rendered++);
-  }
-  keys.push(rendered);
-  return keys;
+export function followRowIds(
+  ids: RowIds,
+  prev: SongModel,
+  next: SongModel,
+  own: boolean,
+): RowIds {
+  const map = trackLine(prev, next, own);
+  const keys: (number | undefined)[] = Array.from(
+    { length: next.lines.length + 1 },
+    () => undefined,
+  );
+  ids.keys.forEach((key, line) => {
+    const to = map(line);
+    if (to !== null && to < keys.length && keys[to] === undefined) {
+      keys[to] = key;
+    }
+  });
+  let fresh = ids.next;
+  return { keys: keys.map((key) => key ?? fresh++), next: fresh };
 }
 
 /**
@@ -250,23 +275,30 @@ export function lineMap(
 }
 
 /**
- * `ui` with every row index moved to where its line is in `next`. After the
- * editor's own edit (`ui.own`) that only appends lines, the phantom row keeps
- * its index: it is the row that became the first new line.
+ * Where each line of `prev` (and its phantom row) is in `next`: `lineMap`,
+ * except that after the editor's own edit (`own`) that only appends lines the
+ * phantom row keeps its index, being the row that became the first new line.
  */
-function followLines(ui: VisualUi, prev: SongModel, next: SongModel): VisualUi {
+export function trackLine(
+  prev: SongModel,
+  next: SongModel,
+  own: boolean,
+): (line: number) => number | null {
   const map = lineMap(prev, next);
   const count = prev.lines.length;
   const appended =
-    ui.own &&
+    own &&
     next.lines.length > count &&
     prev.lines.every(
       (line, i) => JSON.stringify(line) === JSON.stringify(next.lines[i]),
     );
-  const at = (line: number | null) => {
-    if (line === null) return null;
-    return appended && line === count ? line : map(line);
-  };
+  return (line) => (appended && line === count ? line : map(line));
+}
+
+/** `ui` with every row index moved to where its line is in `next`. */
+function followLines(ui: VisualUi, prev: SongModel, next: SongModel): VisualUi {
+  const map = trackLine(prev, next, ui.own);
+  const at = (line: number | null) => (line === null ? null : map(line));
   const caretLine = at(ui.caret?.line ?? null);
   const pickerLine = at(ui.picker?.line ?? null);
   return {

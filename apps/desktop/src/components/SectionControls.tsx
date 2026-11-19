@@ -1,14 +1,14 @@
 import { SECTION_KINDS } from "chord-core";
 import type { SectionKind } from "chord-core";
-import { STRINGS } from "../strings";
+import { useT } from "../i18n";
 import styles from "./SectionControls.module.css";
 import { useDraft } from "./useDraft";
 
-const KIND_LABELS: { readonly [Kind in SectionKind]: string } = {
-  verse: STRINGS.sectionVerse,
-  chorus: STRINGS.sectionChorus,
-  bridge: STRINGS.sectionBridge,
-};
+const KIND_LABEL_KEYS = {
+  verse: "sectionVerse",
+  chorus: "sectionChorus",
+  bridge: "sectionBridge",
+} as const satisfies { readonly [Kind in SectionKind]: string };
 
 /** `value` as a section kind the editor can rename to, else `undefined`. */
 function kindOf(value: string): SectionKind | undefined {
@@ -38,12 +38,13 @@ export function SectionControls({
   onMove,
   onRemove,
 }: SectionControlsProps) {
+  const t = useT();
   const kind = kindOf(section);
   const draft = useDraft(label ?? "", (next) => {
     if (kind !== undefined) onRename(kind, next);
   });
   const kindLabel =
-    kind === undefined ? STRINGS.sectionOther : KIND_LABELS[kind];
+    kind === undefined ? t("sectionOther") : t(KIND_LABEL_KEYS[kind]);
   const ownLabel = (label ?? "").trim();
   const groupName = ownLabel === "" ? kindLabel : `${kindLabel} ${ownLabel}`;
 
@@ -57,7 +58,7 @@ export function SectionControls({
       <select
         className={styles.kind}
         data-testid="section-kind"
-        aria-label={STRINGS.sectionKind}
+        aria-label={t("sectionKind")}
         value={kind ?? ""}
         disabled={literal}
         onChange={(e) => {
@@ -65,10 +66,10 @@ export function SectionControls({
           if (next !== undefined) onRename(next, draft.value.trim());
         }}
       >
-        {kind === undefined && <option value="">{STRINGS.sectionOther}</option>}
+        {kind === undefined && <option value="">{t("sectionOther")}</option>}
         {SECTION_KINDS.map((option) => (
           <option key={option} value={option}>
-            {KIND_LABELS[option]}
+            {t(KIND_LABEL_KEYS[option])}
           </option>
         ))}
       </select>
@@ -77,8 +78,8 @@ export function SectionControls({
         dir="auto"
         className={styles.label}
         data-testid="section-label"
-        aria-label={STRINGS.sectionLabel}
-        placeholder={STRINGS.noLabel}
+        aria-label={t("sectionLabel")}
+        placeholder={t("noLabel")}
         disabled={literal || kind === undefined}
         {...draft}
       />
@@ -86,28 +87,28 @@ export function SectionControls({
         <button
           type="button"
           data-testid="section-up"
-          aria-label={STRINGS.sectionUp}
+          aria-label={t("sectionUp")}
           disabled={!canMoveUp}
           onClick={() => onMove("up")}
         >
-          {STRINGS.upGlyph}
+          {t("upGlyph")}
         </button>
         <button
           type="button"
           data-testid="section-down"
-          aria-label={STRINGS.sectionDown}
+          aria-label={t("sectionDown")}
           disabled={!canMoveDown}
           onClick={() => onMove("down")}
         >
-          {STRINGS.downGlyph}
+          {t("downGlyph")}
         </button>
         <button
           type="button"
           data-testid="section-remove"
-          aria-label={STRINGS.sectionRemove}
+          aria-label={t("sectionRemove")}
           onClick={onRemove}
         >
-          {STRINGS.removeGlyph}
+          {t("removeGlyph")}
         </button>
       </span>
     </div>

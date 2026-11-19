@@ -18,15 +18,16 @@ import type {
   SongModel,
 } from "chord-core";
 import { ChordLine, lineDirection, useChordOverlap } from "chord-render";
-import { STRINGS, lineLabel } from "../strings";
+import { useT } from "../i18n";
 import {
   caretMove,
+  followRowIds,
   graphemeIndexAt,
+  initialRowIds,
   initialUi,
   lyricOf,
   neighbourRow,
   reconcileUi,
-  rowKeys,
   textRows,
   visualStep,
 } from "../visualKeys";
@@ -42,11 +43,11 @@ const emptyLyric = (): LyricLine => ({ kind: "lyric", lyric: "", chords: [] });
 
 const NAV_KEYS = ["ArrowLeft", "ArrowRight", "Home", "End"] as const;
 
-const KIND_LABELS: { readonly [Kind in SectionKind]: string } = {
-  verse: STRINGS.sectionVerse,
-  chorus: STRINGS.sectionChorus,
-  bridge: STRINGS.sectionBridge,
-};
+const KIND_LABEL_KEYS = {
+  verse: "sectionVerse",
+  chorus: "sectionChorus",
+  bridge: "sectionBridge",
+} as const satisfies { readonly [Kind in SectionKind]: string };
 
 const isKnownChord = (chord: string): boolean => parseChord(chord) !== null;
 
@@ -102,6 +103,7 @@ interface ChordsInputProps {
 
 /** The chords of a chord-only line as space separated text. */
 function ChordsInput({ chords, onCommit }: ChordsInputProps) {
+  const t = useT();
   const draft = useDraft(chords.join(" "), (next) =>
     onCommit(next.split(/\s+/).filter((chord) => chord !== "")),
   );
@@ -112,7 +114,7 @@ function ChordsInput({ chords, onCommit }: ChordsInputProps) {
       className={styles.chords}
       data-testid="chords-input"
       data-ui-chrome
-      aria-label={STRINGS.chordsLineInput}
+      aria-label={t("chordsLineInput")}
       spellCheck={false}
       autoCapitalize="off"
       autoComplete="off"
@@ -129,6 +131,7 @@ interface CommentInputProps {
 }
 
 const CommentInput = ({ text, onCommit }: CommentInputProps) => {
+  const t = useT();
   const draft = useDraft(text, onCommit);
   return (
     <input
@@ -137,7 +140,7 @@ const CommentInput = ({ text, onCommit }: CommentInputProps) => {
       className={styles.comment}
       data-testid="comment-input"
       data-ui-chrome
-      aria-label={STRINGS.commentInput}
+      aria-label={t("commentInput")}
       {...draft}
     />
   );
@@ -165,6 +168,7 @@ function LyricInput({
   onArrow,
   onEscape,
 }: LyricInputProps) {
+  const t = useT();
   // Set when a key already dealt with the draft, so the blur that follows
   // (the input losing focus or being replaced) does not commit it again.
   const handled = useRef(false);
@@ -204,7 +208,7 @@ function LyricInput({
       className={styles.lyrics}
       data-testid="line-input"
       data-ui-chrome
-      aria-label={STRINGS.lyricsInput}
+      aria-label={t("lyricsInput")}
       spellCheck={false}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
@@ -224,36 +228,37 @@ interface RowButtonsProps {
 
 /** The secondary controls of a row; only the given actions are shown. */
 const RowButtons = ({ onEditText, onAddBelow, onRemove }: RowButtonsProps) => {
+  const t = useT();
   return (
     <span className={styles.buttons} data-ui-chrome>
       {onEditText !== undefined && (
         <button
           type="button"
           data-testid="line-edit-text"
-          aria-label={STRINGS.editLyrics}
+          aria-label={t("editLyrics")}
           onClick={onEditText}
         >
-          {STRINGS.editGlyph}
+          {t("editGlyph")}
         </button>
       )}
       {onAddBelow !== undefined && (
         <button
           type="button"
           data-testid="line-add-below"
-          aria-label={STRINGS.addLineBelow}
+          aria-label={t("addLineBelow")}
           onClick={onAddBelow}
         >
-          {STRINGS.addGlyph}
+          {t("addGlyph")}
         </button>
       )}
       {onRemove !== undefined && (
         <button
           type="button"
           data-testid="line-remove"
-          aria-label={STRINGS.removeLine}
+          aria-label={t("removeLine")}
           onClick={onRemove}
         >
-          {STRINGS.removeGlyph}
+          {t("removeGlyph")}
         </button>
       )}
     </span>
@@ -267,6 +272,8 @@ interface RowProps {
   phantom?: boolean | undefined;
   /** A visual terminator: hidden from assistive technology. */
   terminator?: boolean | undefined;
+  /** The chord picker is open in this row. */
+  pickerOpen?: boolean | undefined;
   onFocus(index: number): void;
   children?: ReactNode;
 }
@@ -276,6 +283,7 @@ const Row = ({
   kind,
   phantom,
   terminator,
+  pickerOpen,
   onFocus,
   children,
 }: RowProps) => {
@@ -286,6 +294,7 @@ const Row = ({
       data-line-index={index}
       data-kind={kind}
       data-phantom={phantom === true ? "" : undefined}
+      data-picker-open={pickerOpen === true ? "" : undefined}
       aria-hidden={terminator === true ? "true" : undefined}
       onFocus={() => onFocus(index)}
     >
@@ -308,9 +317,11 @@ export interface VisualEditorProps {
  * `song`; only UI state (focus, caret, picker, drafts) lives here.
  */
 export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
+  const t = useT();
   const rootRef = useRef(noRoot());
   const [seen, setSeen] = useState(song);
   const [ui, setUi] = useState(initialUi);
+  const [ids, setIds] = useState(() => initialRowIds(song));
   const [addKind, setAddKind] = useState(defaultKind);
 
   // Leaving lyric-edit mode mounts a fresh ChordLine without a song change,
@@ -324,6 +335,8 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
     // focus) or a change from outside; row indices follow their lines.
     setSeen(song);
     setUi(reconcileUi(ui, song, seen));
+    // Rows keep their identity (and so their picker and draft) when they shift.
+    setIds(followRowIds(ids, seen, song, ui.own));
   } else if (ui.pending !== null || ui.own) {
     // The edit was rejected (same song): the row stays as it is.
     setUi({ ...ui, pending: null, own: false });
@@ -363,7 +376,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
   }, [edit]);
 
   const count = song.lines.length;
-  const keys = rowKeys(song);
+  const keys = ids.keys;
   const spans = listSections(song);
   const wrappers = textRows(song);
 
@@ -444,6 +457,8 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
     };
 
     const onEnter = (draft: string, offset: number) => {
+      // The untouched phantom row is not a line yet: nothing to split or add.
+      if (phantom && draft === "") return;
       onEdit([
         ...setLyric(draft),
         offset < draft.length
@@ -551,6 +566,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
         index={i}
         kind={blank ? "empty" : "lyric"}
         phantom={phantom}
+        pickerOpen={picker !== null}
         onFocus={noteRow}
       >
         {edit !== null ? (
@@ -569,10 +585,15 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
             data-row-focus=""
             tabIndex={0}
             role="group"
-            aria-label={lineLabel(wrappers.indexOf(i) + 1)}
+            aria-label={t("lineLabel", { n: wrappers.indexOf(i) + 1 })}
             onFocus={onWrapperFocus}
             onBlur={onWrapperBlur}
             onKeyDown={onKeyDown}
+            // The second click of a double click (which enters lyric-edit
+            // mode) does not open or reopen the chord picker.
+            onClickCapture={(e) => {
+              if (e.detail >= 2) e.stopPropagation();
+            }}
             onClick={blank ? () => startEdit(i, "text", 0) : undefined}
             onDoubleClick={() => startEdit(i, "text", lyric.length)}
           >
@@ -589,6 +610,18 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
               }}
             />
           </div>
+        )}
+        {blank && !phantom && edit === null && (
+          <button
+            type="button"
+            className={styles.add}
+            data-testid="row-add-chord"
+            data-ui-chrome
+            aria-label={t("chordAddEmpty")}
+            onClick={() => openAdd(i, 0)}
+          >
+            {t("addGlyph")}
+          </button>
         )}
         {picker !== null && (
           <div className={styles.picker}>
@@ -655,7 +688,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
         {sourceText(line)}
       </pre>
       <span className={styles.note} data-ui-chrome>
-        {STRINGS.sourceOnly}
+        {t("sourceOnly")}
       </span>
       {removable && <RowButtons onRemove={removeLine(i)} />}
     </Row>
@@ -774,13 +807,13 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
       className={styles.root}
       data-testid="editor-visual"
       role="tabpanel"
-      aria-label={STRINGS.visualLabel}
+      aria-label={t("visualLabel")}
       dir={song.direction ?? "auto"}
       data-overlap-pass={pass}
     >
       {!hasContent && (
         <p className={styles.hint} data-testid="visual-hint" data-ui-chrome>
-          {STRINGS.visualHint}
+          {t("visualHint")}
         </p>
       )}
       {song.lines.map(row)}
@@ -789,7 +822,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
         <select
           className={styles.kind}
           data-testid="add-section-kind"
-          aria-label={STRINGS.sectionKind}
+          aria-label={t("sectionKind")}
           value={addKind}
           onChange={(e) => {
             const next = SECTION_KINDS.find((kind) => kind === e.target.value);
@@ -798,7 +831,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
         >
           {SECTION_KINDS.map((kind) => (
             <option key={kind} value={kind}>
-              {KIND_LABELS[kind]}
+              {t(KIND_LABEL_KEYS[kind])}
             </option>
           ))}
         </select>
@@ -815,7 +848,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
             ])
           }
         >
-          {STRINGS.addSection}
+          {t("addSection")}
         </button>
       </div>
     </div>

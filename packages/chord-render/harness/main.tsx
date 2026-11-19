@@ -32,7 +32,8 @@ function mount() {
   const host = document.getElementById("root");
   if (!host) return;
   const name = params.get("fixture");
-  const src = source(name);
+  // `cho` is an ad-hoc ChordPro source (bidi specs that need a song no fixture has).
+  const src = params.get("cho") ?? source(name);
   if (src === undefined) {
     host.innerHTML = "";
     const p = document.createElement("p");

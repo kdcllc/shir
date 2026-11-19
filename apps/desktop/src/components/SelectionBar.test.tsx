@@ -1,9 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { STRINGS, selectedCount } from "../strings";
+import { STRINGS } from "../strings";
+import { i18n } from "../i18n";
 import { SelectionBar } from "./SelectionBar";
 import type { SelectionBarProps } from "./SelectionBar";
+
+const selectedCount = (count: number) => i18n.t("selectedCount", { count });
 
 function setup(overrides: Partial<SelectionBarProps> = {}) {
   const props: SelectionBarProps = {

@@ -78,7 +78,7 @@ interface PosMeasure {
   end: boolean;
   /** Own text of the position element, without its chord box. */
   text: string;
-  /** Box of the grapheme text; of the element itself for the end slot. */
+  /** Box of the `[data-pos]` element itself (F36), not of its text Range. */
   rect: Rect;
 }
 
@@ -98,18 +98,11 @@ async function positions(page: Page, dom: number): Promise<PosMeasure[]> {
         (n): n is Text => n.nodeType === Node.TEXT_NODE,
       );
       const text = texts.map((n) => n.data).join("");
-      let rect = el.getBoundingClientRect();
-      const [only] = texts;
-      if (texts.length === 1 && only !== undefined && only.length > 0) {
-        const range = document.createRange();
-        range.selectNodeContents(only);
-        rect = range.getBoundingClientRect();
-      }
       return {
         pos: Number(el.getAttribute("data-pos")),
         end: el.hasAttribute("data-end-slot"),
         text,
-        rect: toRect(rect),
+        rect: toRect(el.getBoundingClientRect()),
       };
     });
   }, dom);

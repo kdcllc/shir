@@ -108,61 +108,45 @@ export const STRINGS = {
   chordClose: "Close",
   noLabel: "No label",
   sectionOther: "Other",
+  sortLabel: "Sort by",
+  sortTitle: "Title",
+  sortArtist: "Artist",
+  sortUpdated: "Recently updated",
+  libraryView: "Library view",
+  filterLanguage: "Language",
+  filterAll: "All",
+  filterHebrew: "Hebrew",
+  filterEnglish: "English",
+  filterMixed: "Mixed",
+  badgeHebrew: "HE",
+  badgeEnglish: "EN",
+  badgeMixed: "HE+EN",
+  noFilterMatches: "No songs in this language",
+  uiLanguage: "Interface language",
+  localeHebrew: "עברית",
+  localeEnglish: "English",
+  localeHebrewShort: "עב",
+  localeEnglishShort: "EN",
+  chordAddEmpty: "Add chord",
+  fileFilterSongs: "Song files",
 } as const;
 
-/** Diagnostics heading count: `1 problem`, otherwise `N problems`. */
-export function diagnosticsCount(n: number): string {
-  return n === 1 ? "1 problem" : `${n} problems`;
-}
-
-/** Import summary: `Imported 2 of 3 files`. */
-export function importSummary(saved: number, total: number): string {
-  return `Imported ${saved} of ${total} ${total === 1 ? "file" : "files"}`;
-}
-
-/** Queued files notice: `1 file needs alignment review`, otherwise `N files need alignment review`. */
-export function importQueued(n: number): string {
-  return n === 1
-    ? "1 file needs alignment review"
-    : `${n} files need alignment review`;
-}
-
-/** Delete button label for one song: `Delete <title>` (title bidi-isolated). */
-export function deleteSongNamed(title: string): string {
-  return `Delete \u2068${title}\u2069`;
-}
-
-/** Select checkbox label for one song: `Select <title>` (title bidi-isolated). */
-export function selectSongNamed(title: string): string {
-  return `Select \u2068${title}\u2069`;
-}
-
-/** Delete confirmation title for one song: `Delete <title>?` (title bidi-isolated). */
-export function deleteConfirmTitle(title: string): string {
-  return `Delete \u2068${title}\u2069?`;
-}
-
-/** Delete confirmation title for several songs: `Delete 3 songs?`. */
-export function deleteManyTitle(n: number): string {
-  return `Delete ${n} songs?`;
-}
-
-/** Select-mode count: `3 selected`. */
-export function selectedCount(n: number): string {
-  return `${n} selected`;
-}
-
-/** Delete status: `Deleted 1 song`, otherwise `Deleted N songs`. */
-export function deletedCount(n: number): string {
-  return n === 1 ? "Deleted 1 song" : `Deleted ${n} songs`;
-}
-
-/** Partial delete failure: `Could not delete 2 of 5 songs`. */
-export function deleteManyFailed(failed: number, total: number): string {
-  return `Could not delete ${failed} of ${total} songs`;
-}
-
-/** Accessible name of a visual editor line: `Line 4`. */
-export function lineLabel(n: number): string {
-  return `Line ${n}`;
-}
+/** i18next templates replacing the helpers below (`{{var}}` interpolation, `_one` / `_other` plurals). */
+export const TEMPLATES = {
+  diagnosticsCount_one: "{{count}} problem",
+  diagnosticsCount_other: "{{count}} problems",
+  importSummary_one: "Imported {{saved}} of {{count}} file",
+  importSummary_other: "Imported {{saved}} of {{count}} files",
+  importQueued_one: "{{count}} file needs alignment review",
+  importQueued_other: "{{count}} files need alignment review",
+  deleteSongNamed: "Delete \u2068{{title}}\u2069",
+  selectSongNamed: "Select \u2068{{title}}\u2069",
+  deleteConfirmTitle: "Delete \u2068{{title}}\u2069?",
+  deleteManyTitle: "Delete {{count}} songs?",
+  selectedCount: "{{count}} selected",
+  deletedCount_one: "Deleted {{count}} song",
+  deletedCount_other: "Deleted {{count}} songs",
+  deleteManyFailed_one: "Could not delete {{failed}} of {{count}} songs",
+  deleteManyFailed_other: "Could not delete {{failed}} of {{count}} songs",
+  lineLabel: "Line {{n}}",
+} as const;

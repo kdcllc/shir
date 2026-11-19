@@ -19,7 +19,7 @@ describe("CSS contract", () => {
   });
   it("lyrics use Noto Sans Hebrew first, chords JetBrains Mono", () => {
     expect(read("./SongView.module.css")).toMatch(
-      /font-family:\s*"Noto Sans Hebrew",\s*heebo,\s*sans-serif/,
+      /font-family:\s*"Noto Sans Hebrew",\s*Heebo,\s*sans-serif/,
     );
     expect(read("./ChordLine.module.css")).toMatch(
       /font-family:\s*"JetBrains Mono",\s*monospace/,
@@ -32,6 +32,11 @@ describe("CSS contract", () => {
       /@media print\s*{(?:[^{}]|{[^{}]*})*:global\(\[data-ui-chrome\]\)\s*{\s*display:\s*none\s*!important;/,
     );
     expect(css).toMatch(/break-inside:\s*avoid/);
+  });
+  it("lyric lines switch kerning off so editing mode wraps like read-only (F4)", () => {
+    expect(read("./ChordLine.module.css")).toMatch(
+      /\.lyric\s*{[^}]*font-kerning:\s*none/,
+    );
   });
   it("chord box is the only positioned chord element", () => {
     const css = read("./ChordLine.module.css");
