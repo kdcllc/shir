@@ -63,6 +63,13 @@
     "capo": null
   },
   {
+    "file": "packages/test-fixtures/fixtures/rtl_ltr_tail.cho",
+    "title": "זנב לטיני",
+    "artist": null,
+    "key": null,
+    "capo": null
+  },
+  {
     "file": "packages/test-fixtures/fixtures/sections_he.cho",
     "title": "שיר הערב",
     "artist": "להקת הדוגמה",

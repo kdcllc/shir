@@ -1,0 +1,57 @@
+{
+  "title": "זנב לטיני",
+  "lines": [
+    {
+      "kind": "remark",
+      "text": " Original text written for the Shir repository (CC0-1.0)"
+    },
+    {
+      "kind": "meta",
+      "name": "title",
+      "value": "זנב לטיני"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "lyric": "שיר של אהבה וhope",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Am"
+        },
+        {
+          "index": 7,
+          "chord": "F"
+        },
+        {
+          "index": 13,
+          "chord": "C"
+        },
+        {
+          "index": 17,
+          "chord": "G"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "lyric": "הלב שר בשקט עם you",
+      "chords": [
+        {
+          "index": 0,
+          "chord": "Em"
+        },
+        {
+          "index": 8,
+          "chord": "D"
+        },
+        {
+          "index": 18,
+          "chord": "C"
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,7 @@ const FIXTURE_NAMES = [
   "slash_chords_key",
   "aliases_input",
   "malformed_input",
+  "rtl_ltr_tail",
 ];
 
 describe("buildLibrary", () => {
@@ -177,7 +178,7 @@ describe("loadLibrary", () => {
     expect(lib.map((s) => s.id)).toContain("samples:demo-shir-bilingual");
   });
 
-  it("includes all 14 fixtures and no canonical ids", () => {
+  it("includes all 15 fixtures and no canonical ids", () => {
     const ids = tests.map((s) => s.id);
     for (const name of FIXTURE_NAMES) {
       expect(ids).toContain(`test-songs:${name}`);

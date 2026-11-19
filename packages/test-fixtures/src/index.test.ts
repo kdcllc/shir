@@ -212,7 +212,7 @@ const LINE_KINDS_COPY = [
 ] as const;
 
 describe("round-trip fixtures", () => {
-  it("freezes the six round-trip names in order", () => {
+  it("freezes the seven round-trip names in order", () => {
     expect([...ROUNDTRIP_FIXTURE_NAMES]).toEqual([
       "sections_he",
       "tab_block",
@@ -220,6 +220,7 @@ describe("round-trip fixtures", () => {
       "slash_chords_key",
       "aliases_input",
       "malformed_input",
+      "rtl_ltr_tail",
     ]);
     expect([...ALL_FIXTURE_NAMES]).toEqual([
       ...FIXTURE_NAMES,
@@ -264,6 +265,37 @@ describe("round-trip fixtures", () => {
     );
     for (const k of LINE_KINDS_COPY) expect(seen.has(k)).toBe(true);
     expect(LINE_KINDS_COPY).toHaveLength(10);
+  });
+  it("rtl_ltr_tail is a round-trip fixture, not a G1 fixture", () => {
+    expect(isFixtureName("rtl_ltr_tail")).toBe(true);
+    expect(
+      (ROUNDTRIP_FIXTURE_NAMES as readonly string[]).includes("rtl_ltr_tail"),
+    ).toBe(true);
+    expect((FIXTURE_NAMES as readonly string[]).includes("rtl_ltr_tail")).toBe(
+      false,
+    );
+  });
+  it("rtl_ltr_tail has a Hebrew line ending in a Latin word plus an end chord", () => {
+    const src = readFixture("rtl_ltr_tail");
+    expect(src).toMatch(/[\u0590-\u05FF][^\n]*[A-Za-z]\[[^\]]+\]\s*$/m);
+    const tails = lyricLines("rtl_ltr_tail").filter((l) => {
+      const a = anchors(l);
+      const last = a[a.length - 1];
+      return (
+        HEB.test(l.lyric ?? "") &&
+        /[A-Za-z]$/.test(l.lyric ?? "") &&
+        last !== undefined &&
+        last.index === graphemeCount(l.lyric ?? "")
+      );
+    });
+    expect(tails.length).toBeGreaterThanOrEqual(2);
+    expect(src).not.toMatch(/\{(meta:\s*)?direction/);
+  });
+  it("the removed phrase appears in no fixture once chords are stripped", () => {
+    const phrase = "\u05DC\u05D9\u05DC\u05D4 \u05E9\u05E7\u05D8";
+    for (const n of ALL_FIXTURE_NAMES) {
+      expect(readFixture(n).replace(/\[[^\]]*\]/g, "")).not.toContain(phrase);
+    }
   });
   it("raw goldens come from malformed_input", () => {
     const rawOwners = ROUNDTRIP_FIXTURE_NAMES.filter((n) =>
