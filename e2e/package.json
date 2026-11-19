@@ -1,0 +1,23 @@
+{
+  "name": "e2e",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "e2e": "wdio run wdio.conf.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@wdio/cli": "catalog:",
+    "@wdio/globals": "catalog:",
+    "@wdio/local-runner": "catalog:",
+    "@wdio/mocha-framework": "catalog:",
+    "@wdio/spec-reporter": "catalog:",
+    "expect-webdriverio": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "webdriverio": "catalog:"
+  }
+}

@@ -14,7 +14,8 @@
     "check:samples": "node scripts/check-samples.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "tauri": "pnpm --filter desktop tauri"
+    "tauri": "pnpm --filter desktop tauri",
+    "test:e2e": "pnpm --filter e2e run e2e"
   },
   "devDependencies": {
     "@eslint/js": "catalog:",

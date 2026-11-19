@@ -26,6 +26,7 @@ const WORKSPACES: Record<string, string> = {
   "packages/chord-core": "chord-core",
   "packages/chord-render": "chord-render",
   "packages/test-fixtures": "test-fixtures",
+  e2e: "e2e",
 };
 
 const rootScripts = readManifest(".").scripts ?? {};
@@ -97,6 +98,21 @@ function ciPnpmPairs(commands: string[]): string[] {
     }
   }
   return [...out].sort();
+}
+
+/** Project cargo subcommands: they must name the desktop manifest. */
+const PROJECT_CARGO = /\bcargo\s+(?:build|test|clippy|fmt|run|check|doc)\b/;
+
+/** CI commands that invoke a project cargo subcommand (not `cargo install` etc.). */
+function projectCargoCommands(commands: string[]): string[] {
+  return commands.filter((c) => PROJECT_CARGO.test(c));
+}
+
+/** Project cargo commands that lack the desktop manifest path. */
+function cargoWithoutManifest(commands: string[]): string[] {
+  return projectCargoCommands(commands).filter(
+    (c) => !c.includes("--manifest-path apps/desktop/src-tauri/Cargo.toml"),
+  );
 }
 
 /** Root scripts invoked as `pnpm <script>` / `pnpm run <script>` in CI commands. */
@@ -201,8 +217,8 @@ function resolvePair(pair: string): boolean {
 // ---------------------------------------------------------------------------
 
 describe("workspace packages", () => {
-  it("are exactly the four expected directories with the expected names", () => {
-    const found = ["apps", "packages"].flatMap((group) =>
+  it("are exactly the five expected directories with the expected names", () => {
+    const grouped = ["apps", "packages"].flatMap((group) =>
       readdirSync(abs(group), { withFileTypes: true })
         .filter(
           (e) =>
@@ -211,6 +227,10 @@ describe("workspace packages", () => {
         )
         .map((e) => `${group}/${e.name}`),
     );
+    // e2e/ is a top-level workspace, listed on its own in pnpm-workspace.yaml.
+    const found = existsSync(abs("e2e/package.json"))
+      ? [...grouped, "e2e"]
+      : grouped;
     expect(found.sort()).toEqual(Object.keys(WORKSPACES).sort());
     for (const [dir, name] of Object.entries(WORKSPACES)) {
       expect(readManifest(dir).name, dir).toBe(name);
@@ -341,12 +361,34 @@ describe("CI workflow <-> root scripts", () => {
     ]);
   });
 
-  it("every cargo invocation uses the desktop manifest path", () => {
-    const cargo = commands.filter((c) => /\bcargo\s/.test(c));
+  it("every project cargo invocation uses the desktop manifest path", () => {
+    const cargo = projectCargoCommands(commands);
     expect(cargo.length).toBeGreaterThanOrEqual(3);
-    for (const c of cargo) {
-      expect(c).toContain("--manifest-path apps/desktop/src-tauri/Cargo.toml");
-    }
+    expect(cargoWithoutManifest(commands)).toEqual([]);
+  });
+
+  it("the cargo check reports a manifest-less project command and skips cargo install", () => {
+    const manifest = "--manifest-path apps/desktop/src-tauri/Cargo.toml";
+    expect(cargoWithoutManifest(["cargo test"])).toEqual(["cargo test"]);
+    expect(cargoWithoutManifest(["cargo clippy --all-targets"])).toEqual([
+      "cargo clippy --all-targets",
+    ]);
+    expect(cargoWithoutManifest([`cargo test ${manifest}`])).toEqual([]);
+    expect(
+      cargoWithoutManifest([
+        "cargo install tauri-driver --locked --version 2.1.0",
+      ]),
+    ).toEqual([]);
+    expect(
+      projectCargoCommands([
+        "cargo install tauri-driver --locked --version 2.1.0",
+        `cargo fmt ${manifest} -- --check`,
+      ]),
+    ).toEqual([`cargo fmt ${manifest} -- --check`]);
+    expect(
+      commands.some((c) => /\bcargo\s+install\s+tauri-driver\b/.test(c)),
+      "real CI installs tauri-driver",
+    ).toBe(true);
   });
 });
 

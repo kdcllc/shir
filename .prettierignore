@@ -16,3 +16,4 @@ samples/**/*.cho
 **/test-results/**
 packages/chord-render/bidi/__screenshots__/**
 apps/desktop/src/bindings.ts
+**/e2e/logs/**
