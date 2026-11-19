@@ -4,7 +4,7 @@ use crate::db::{migrations, seed, DbError};
 use rusqlite::Connection;
 use std::io::Write;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 /// The app's single SQLite connection, or the error that kept it from opening.
 pub struct DbState {
@@ -63,7 +63,7 @@ impl DbState {
 
     /// The startup stderr line for an unopenable database, or `None` when it is healthy.
     pub fn unavailable_line(&self) -> Option<String> {
-        let guard = self.conn.lock().ok()?;
+        let guard = self.conn.lock().unwrap_or_else(PoisonError::into_inner);
         let e = guard.as_ref().err()?;
         // An `Unavailable` error already is the cause (app-data-dir branch); any other kind
         // keeps its own `Kind:` prefix. Either way no outer `Unavailable:` is added.
@@ -185,6 +185,19 @@ mod tests {
         assert!(line.contains("Storage: "), "{line}");
         assert!(!line.contains("Unavailable"), "{line}");
         assert_eq!(line.matches("database unavailable").count(), 1, "{line}");
+    }
+
+    #[test]
+    fn unavailable_line_survives_a_poisoned_mutex() {
+        let state = DbState::unavailable(DbError::unavailable("cannot resolve app data dir: nope"));
+        state.poison();
+        assert_eq!(
+            state.unavailable_line().as_deref(),
+            Some("shir: database unavailable: cannot resolve app data dir: nope")
+        );
+        let healthy = DbState::in_memory();
+        healthy.poison();
+        assert_eq!(healthy.unavailable_line(), None);
     }
 
     #[test]

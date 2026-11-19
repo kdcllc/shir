@@ -476,6 +476,10 @@ mod tests {
         let out = truncate_snippet(&spaced);
         assert_eq!(out, format!("{}\u{2026}", "a".repeat(159)));
         assert!(!out.trim_end_matches('\u{2026}').ends_with(' '));
+        // Several spaces at the cut, no marks to back off over: all are trimmed.
+        let multi = format!("{}   bcd", "a".repeat(157));
+        let out = truncate_snippet(&multi);
+        assert_eq!(out, format!("{}\u{2026}", "a".repeat(157)));
         // A space followed by marks that are backed off also leaves no trailing space.
         let marked = format!("{} \u{05B8}\u{05BC}ב", "a".repeat(158));
         let out = truncate_snippet(&marked);
