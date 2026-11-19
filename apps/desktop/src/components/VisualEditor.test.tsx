@@ -105,9 +105,12 @@ const inRow = (i: number) => within(row(i));
 const pos = (i: number, index: number) => find(row(i), `[data-pos="${index}"]`);
 const chordButton = (i: number, anchor: number) =>
   find(row(i), `[data-chord-button][data-anchor-index="${anchor}"]`);
-const lineInput = (i: number) =>
-  inRow(i).getByTestId<HTMLInputElement>("line-input");
-const chordInput = () => screen.getByTestId<HTMLInputElement>("chord-input");
+const asInput = (el: HTMLElement): HTMLInputElement => {
+  if (!(el instanceof HTMLInputElement)) throw new Error("not an input");
+  return el;
+};
+const lineInput = (i: number) => asInput(inRow(i).getByTestId("line-input"));
+const chordInput = () => asInput(screen.getByTestId("chord-input"));
 const picker = () => screen.queryByTestId("chord-picker");
 const caretPos = (i: number) =>
   row(i).querySelector("[data-caret]")?.getAttribute("data-pos");
@@ -147,7 +150,7 @@ describe("VisualEditor structure", () => {
     const css = here("./VisualEditor.module.css");
     const rule = /\.root\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     expect(rule).toContain(
-      'font-family: "Noto Sans Hebrew", heebo, sans-serif;',
+      'font-family: "Noto Sans Hebrew", Heebo, sans-serif;',
     );
     expect(rule).toContain("unicode-bidi: isolate;");
     const songView = here(
@@ -155,7 +158,7 @@ describe("VisualEditor structure", () => {
     );
     const song = /\.song\s*\{([^}]*)\}/.exec(songView)?.[1] ?? "";
     expect(song).toContain(
-      'font-family: "Noto Sans Hebrew", heebo, sans-serif;',
+      'font-family: "Noto Sans Hebrew", Heebo, sans-serif;',
     );
     expect(song).toContain("unicode-bidi: isolate;");
   });
@@ -172,6 +175,7 @@ describe("VisualEditor structure", () => {
         "line-edit-text",
         "line-add-below",
         "line-remove",
+        "row-add-chord",
         "chords-input",
         "comment-input",
         "visual-verbatim",
@@ -1613,5 +1617,136 @@ describe("VisualEditor overlap pass", () => {
     press(wrapper(0), "ArrowRight");
     expect(caretPos(0)).toBe("1");
     expect(passes()).toBe(first);
+  });
+});
+
+describe("VisualEditor double click, empty rows and row identity", () => {
+  const VERSE = "{start_of_verse}\none\n{end_of_verse}\n";
+  const CHORUS = "{start_of_chorus}\ntwo\n{end_of_chorus}\n";
+
+  it("a single click opens the picker at the clicked position", () => {
+    const { onEdit } = setup(parsed("words\n"));
+    fireEvent.click(pos(0, 2), { detail: 1 });
+    expect(row(0).contains(picker())).toBe(true);
+    submitChord("Am");
+    expect(onEdit.mock.calls).toEqual([
+      [[{ type: "addChord", line: 0, index: 2, chord: "Am" }]],
+    ]);
+  });
+
+  it("a real double click (click, click, dblclick) leaves no picker and does not remount it", () => {
+    const { onEdit } = setup(parsed("words\n"));
+    fireEvent.click(pos(0, 2), { detail: 1 });
+    const first = chordInput();
+    // The second click neither reopens nor remounts the picker.
+    fireEvent.click(pos(0, 2), { detail: 2 });
+    expect(chordInput()).toBe(first);
+    fireEvent.doubleClick(pos(0, 2), { detail: 2 });
+    expect(picker()).toBeNull();
+    expect(lineInput(0)).toHaveFocus();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("Enter on the untouched phantom row emits nothing and adds no line", () => {
+    const { onEdit, live } = setupLive(EN);
+    const last = EN.lines.length;
+    const count = rows().length;
+    fireEvent.click(wrapper(last));
+    press(lineInput(last), "Enter");
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(live.song.lines).toHaveLength(EN.lines.length);
+    expect(rows()).toHaveLength(count);
+  });
+
+  it("Enter on the phantom row with typed text still adds the line and a new row", () => {
+    const { live } = setupLive(EN);
+    const last = EN.lines.length;
+    fireEvent.click(wrapper(last));
+    type(lineInput(last), "new");
+    press(lineInput(last), "Enter");
+    expect(lyricAt(live.song, last)).toBe("new");
+    expect(live.song.lines).toHaveLength(last + 2);
+  });
+
+  it("an empty row has an add-chord button that opens the picker at 0", () => {
+    const { onEdit } = setup(parsed("words\n\n"));
+    const button = inRow(1).getByTestId("row-add-chord");
+    expect(button).toHaveAccessibleName(STRINGS.chordAddEmpty);
+    expect(button).toHaveAttribute("data-ui-chrome");
+    // Neither a lyric row nor the extra last row has one.
+    expect(inRow(0).queryByTestId("row-add-chord")).toBeNull();
+    expect(inRow(2).queryByTestId("row-add-chord")).toBeNull();
+    fireEvent.click(button);
+    expect(row(1).contains(picker())).toBe(true);
+    expect(screen.queryByTestId("line-input")).toBeNull();
+    submitChord("Am");
+    expect(onEdit.mock.calls).toEqual([
+      [[{ type: "addChord", line: 1, index: 0, chord: "Am" }]],
+    ]);
+  });
+
+  it("clicking elsewhere on an empty row still starts lyric editing", () => {
+    setup(parsed("words\n\n"));
+    fireEvent.click(wrapper(1));
+    expect(lineInput(1)).toHaveFocus();
+    expect(picker()).toBeNull();
+    expect(inRow(1).queryByTestId("row-add-chord")).toBeNull();
+  });
+
+  it("the picker keeps its draft and focus when an own edit shifts its row", () => {
+    const { live } = setupLive(parsed(`${VERSE}${CHORUS}`));
+    fireEvent.click(pos(4, 0));
+    const input = chordInput();
+    type(input, "E");
+    const up = inRow(3).getByTestId("section-up");
+    focus(up);
+    fireEvent.click(up);
+    expect(serializeSong(live.song)).toBe(`${CHORUS}${VERSE}`);
+    expect(row(1)).toHaveTextContent("two");
+    expect(row(1).contains(picker())).toBe(true);
+    // The same picker element, not a new one: draft kept, focus not stolen.
+    expect(chordInput()).toBe(input);
+    expect(input).toHaveValue("E");
+    expect(up).toHaveFocus();
+  });
+
+  it("the picker keeps its draft and focus when a row above is removed", () => {
+    setupLive(parsed("one\ntwo\nthree\n"));
+    fireEvent.click(pos(2, 0));
+    const input = chordInput();
+    type(input, "G");
+    const edit = inRow(1).getByTestId("line-edit-text");
+    focus(edit);
+    fireEvent.click(inRow(0).getByTestId("line-remove"));
+    expect(chordInput()).toBe(input);
+    expect(input).toHaveValue("G");
+    expect(row(1)).toHaveTextContent("three");
+    expect(row(1).contains(picker())).toBe(true);
+    expect(edit).toHaveFocus();
+  });
+
+  it("the picker keeps its draft when an outside reorder or insertion shifts its row", () => {
+    const onEdit = vi.fn<OnEdit>();
+    const view = render(
+      <VisualEditor song={parsed(`${VERSE}${CHORUS}`)} onEdit={onEdit} />,
+    );
+    fireEvent.click(pos(4, 0));
+    const input = chordInput();
+    type(input, "D");
+    view.rerender(
+      <VisualEditor song={parsed(`${CHORUS}${VERSE}`)} onEdit={onEdit} />,
+    );
+    expect(chordInput()).toBe(input);
+    expect(input).toHaveValue("D");
+    expect(row(1).contains(picker())).toBe(true);
+    view.rerender(
+      <VisualEditor
+        song={parsed(`{title: T}\n${CHORUS}${VERSE}`)}
+        onEdit={onEdit}
+      />,
+    );
+    expect(chordInput()).toBe(input);
+    expect(input).toHaveValue("D");
+    expect(row(2).contains(picker())).toBe(true);
   });
 });

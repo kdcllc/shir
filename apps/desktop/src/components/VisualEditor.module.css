@@ -1,7 +1,7 @@
 /* Same fonts and isolation as the song view (chord-render SongView.module.css). */
 .root {
   unicode-bidi: isolate;
-  font-family: "Noto Sans Hebrew", heebo, sans-serif;
+  font-family: "Noto Sans Hebrew", Heebo, sans-serif;
   color-scheme: light dark;
 }
 
@@ -93,11 +93,28 @@
   opacity: 1;
 }
 
+/* The empty row's "add chord" button; fades in like the row buttons. */
+.add {
+  opacity: 0;
+}
+
+.row:hover .add,
+.row:focus-within .add {
+  opacity: 1;
+}
+
+/*
+ * The picker sits in the flow below its row (own wrapped line), so it pushes
+ * the rows after it down instead of covering them, the "Add section" button
+ * below the last row included.
+ */
+.row[data-picker-open] {
+  flex-wrap: wrap;
+}
+
 .picker {
-  position: absolute;
-  z-index: 1;
-  inset-block-start: 100%;
-  inset-inline-start: 0.5rem;
+  order: 1;
+  flex: 0 0 100%;
 }
 
 .verbatim {

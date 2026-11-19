@@ -437,13 +437,23 @@ Visual tab:
   opens the chord picker to add a chord there (`addChord`); clicking a chord
   opens the picker for that chord. Clicking an empty row, double-clicking a
   row, pressing F2 or using `Edit lyrics` (`line-edit-text`) replaces the line
-  with a `dir="auto"` text input (`line-input`).
+  with a `dir="auto"` text input (`line-input`). A double-click on a lyric row
+  leaves no chord picker open: the second click of the double-click does not
+  reopen the picker the first click opened, and the `dblclick` closes it as
+  lyric-edit mode starts. An empty row (not the extra last row) also has an
+  `Add chord` button (`row-add-chord`, accessible name `chordAddEmpty`) that
+  opens the picker at position 0, so pointer users can add a chord before
+  typing text. Applying a chord (adding, replacing or choosing a suggestion)
+  closes the picker. The picker sits in the flow below its row, so it pushes the
+  rows after it down instead of covering them (`add-section` stays clickable
+  with the picker open on the last row).
 - In the `line-input` of a lyric or empty row, blur commits the text (`setLyric`). Enter commits and
   splits the line at the caret (`splitLine`), or inserts a line below
   (`insertLine`) when the caret is at the end, and editing continues on the
   next row. Backspace at the start joins the line to the lyric or empty line
   above (`joinLines`); on the extra last row, while it is empty, it only moves
-  editing to that line. ArrowUp and ArrowDown commit and move to the nearest
+  editing to that line; Enter there, while it is empty, does nothing (no
+  `insertLine`). ArrowUp and ArrowDown commit and move to the nearest
   lyric or empty row. Esc leaves the input without committing.
 - Keys on a focused row wrapper: ArrowLeft and ArrowRight move the caret one
   position to the visual left or right, Home and End move it to position 0 and
@@ -500,7 +510,10 @@ Visual tab:
   add, remove or move lines, and after reorders that keep the line count; the
   picker closes when its own line is removed. On a reorder that keeps the line
   count, a line follows its content only when that content occurs exactly once
-  in the changed span on both sides.
+  in the changed span on both sides. Every row has a stable identity (its React
+  key) that follows its line through the same moves, so a row that shifts stays
+  the same element: an open picker is not remounted, keeps its unsubmitted text,
+  and focus stays on the control the user clicked.
 
 Open files (`apps/desktop/src/importFiles.ts`, `importSongFiles`):
 
@@ -651,6 +664,7 @@ Coordinates have two meanings:
 | `line-edit-text`        | `<button>`                 | Starts editing the line's lyrics                                      |
 | `line-add-below`        | `<button>`                 | Inserts an empty line below                                           |
 | `line-remove`           | `<button>`                 | Removes the line                                                      |
+| `row-add-chord`         | `<button>`                 | Opens the chord picker at position 0 of an empty row                  |
 | `chords-input`          | `<input dir="ltr">`        | Chords of a chord-only line, space separated                          |
 | `comment-input`         | `<input dir="auto">`       | Text of a comment line                                                |
 | `visual-verbatim`       | `<pre>`                    | A line the visual editor shows read-only                              |

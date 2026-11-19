@@ -21,12 +21,13 @@ import { ChordLine, lineDirection, useChordOverlap } from "chord-render";
 import { useT } from "../i18n";
 import {
   caretMove,
+  followRowIds,
   graphemeIndexAt,
+  initialRowIds,
   initialUi,
   lyricOf,
   neighbourRow,
   reconcileUi,
-  rowKeys,
   textRows,
   visualStep,
 } from "../visualKeys";
@@ -271,6 +272,8 @@ interface RowProps {
   phantom?: boolean | undefined;
   /** A visual terminator: hidden from assistive technology. */
   terminator?: boolean | undefined;
+  /** The chord picker is open in this row. */
+  pickerOpen?: boolean | undefined;
   onFocus(index: number): void;
   children?: ReactNode;
 }
@@ -280,6 +283,7 @@ const Row = ({
   kind,
   phantom,
   terminator,
+  pickerOpen,
   onFocus,
   children,
 }: RowProps) => {
@@ -290,6 +294,7 @@ const Row = ({
       data-line-index={index}
       data-kind={kind}
       data-phantom={phantom === true ? "" : undefined}
+      data-picker-open={pickerOpen === true ? "" : undefined}
       aria-hidden={terminator === true ? "true" : undefined}
       onFocus={() => onFocus(index)}
     >
@@ -316,6 +321,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
   const rootRef = useRef(noRoot());
   const [seen, setSeen] = useState(song);
   const [ui, setUi] = useState(initialUi);
+  const [ids, setIds] = useState(() => initialRowIds(song));
   const [addKind, setAddKind] = useState(defaultKind);
 
   // Leaving lyric-edit mode mounts a fresh ChordLine without a song change,
@@ -329,6 +335,8 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
     // focus) or a change from outside; row indices follow their lines.
     setSeen(song);
     setUi(reconcileUi(ui, song, seen));
+    // Rows keep their identity (and so their picker and draft) when they shift.
+    setIds(followRowIds(ids, seen, song, ui.own));
   } else if (ui.pending !== null || ui.own) {
     // The edit was rejected (same song): the row stays as it is.
     setUi({ ...ui, pending: null, own: false });
@@ -368,7 +376,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
   }, [edit]);
 
   const count = song.lines.length;
-  const keys = rowKeys(song);
+  const keys = ids.keys;
   const spans = listSections(song);
   const wrappers = textRows(song);
 
@@ -449,6 +457,8 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
     };
 
     const onEnter = (draft: string, offset: number) => {
+      // The untouched phantom row is not a line yet: nothing to split or add.
+      if (phantom && draft === "") return;
       onEdit([
         ...setLyric(draft),
         offset < draft.length
@@ -556,6 +566,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
         index={i}
         kind={blank ? "empty" : "lyric"}
         phantom={phantom}
+        pickerOpen={picker !== null}
         onFocus={noteRow}
       >
         {edit !== null ? (
@@ -578,6 +589,11 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
             onFocus={onWrapperFocus}
             onBlur={onWrapperBlur}
             onKeyDown={onKeyDown}
+            // The second click of a double click (which enters lyric-edit
+            // mode) does not open or reopen the chord picker.
+            onClickCapture={(e) => {
+              if (e.detail >= 2) e.stopPropagation();
+            }}
             onClick={blank ? () => startEdit(i, "text", 0) : undefined}
             onDoubleClick={() => startEdit(i, "text", lyric.length)}
           >
@@ -594,6 +610,18 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
               }}
             />
           </div>
+        )}
+        {blank && !phantom && edit === null && (
+          <button
+            type="button"
+            className={styles.add}
+            data-testid="row-add-chord"
+            data-ui-chrome
+            aria-label={t("chordAddEmpty")}
+            onClick={() => openAdd(i, 0)}
+          >
+            {t("addGlyph")}
+          </button>
         )}
         {picker !== null && (
           <div className={styles.picker}>

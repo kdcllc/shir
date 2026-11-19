@@ -19,7 +19,7 @@ describe("CSS contract", () => {
   });
   it("lyrics use Noto Sans Hebrew first, chords JetBrains Mono", () => {
     expect(read("./SongView.module.css")).toMatch(
-      /font-family:\s*"Noto Sans Hebrew",\s*heebo,\s*sans-serif/,
+      /font-family:\s*"Noto Sans Hebrew",\s*Heebo,\s*sans-serif/,
     );
     expect(read("./ChordLine.module.css")).toMatch(
       /font-family:\s*"JetBrains Mono",\s*monospace/,
