@@ -1,0 +1,255 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      sha: ${{ github.event.workflow_run.head_sha }}
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Collect release inputs
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          inputs="$RUNNER_TEMP/release-inputs"
+          pulls="$inputs/pulls"
+          mkdir -p "$pulls"
+          git tag --list 'v*' > "$inputs/tags.txt"
+          git tag --list 'v*' --merged "$HEAD_SHA" > "$inputs/merged-tags.txt"
+          git tag --points-at "$HEAD_SHA" > "$inputs/head-tags.txt"
+          if tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' "$HEAD_SHA" 2>/dev/null); then
+            range="$tag..$HEAD_SHA"
+          else
+            range="$HEAD_SHA"
+          fi
+          git rev-list --first-parent "$range" > "$inputs/commits.txt"
+          while IFS= read -r sha; do
+            [ -n "$sha" ] || continue
+            gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" > "$pulls/$sha.json"
+          done < "$inputs/commits.txt"
+
+      - name: Plan release
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          inputs="$RUNNER_TEMP/release-inputs"
+          node scripts/release/release-plan.mjs plan \
+            --commits-file "$inputs/commits.txt" \
+            --pulls-dir "$inputs/pulls" \
+            --tags-file "$inputs/tags.txt" \
+            --merged-tags-file "$inputs/merged-tags.txt" \
+            --head-tags-file "$inputs/head-tags.txt" \
+            --tauri-conf apps/desktop/src-tauri/tauri.conf.json
+
+      - name: Build target list
+        id: targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "targets=$(node scripts/release/release-plan.mjs targets)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ${{ matrix.target.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        target: ${{ fromJSON(needs.plan.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 file
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.target.id }}
+
+      - name: Install dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Assert host architecture
+        shell: bash
+        env:
+          EXPECTED_TRIPLE: ${{ matrix.target.rustTriple }}
+        run: |
+          set -euo pipefail
+          host="$(rustc -vV | sed -n 's/^host: //p' | tr -d '\r')"
+          if [ "$host" != "$EXPECTED_TRIPLE" ]; then
+            echo "Host triple '$host' does not match expected '$EXPECTED_TRIPLE'" >&2
+            exit 1
+          fi
+
+      - name: Build bundle
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          BUNDLE: ${{ matrix.target.bundle }}
+        run: |
+          set -euo pipefail
+          node scripts/release/release-plan.mjs version-config --version "$VERSION" --out "$RUNNER_TEMP/release-version.json"
+          pnpm tauri build --bundles "$BUNDLE" --config "$RUNNER_TEMP/release-version.json"
+
+      - name: Collect asset
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          TARGET_ID: ${{ matrix.target.id }}
+          BUNDLE: ${{ matrix.target.bundle }}
+        run: |
+          set -euo pipefail
+          bundle_dir="apps/desktop/src-tauri/target/release/bundle"
+          shopt -s nullglob
+          if [ "$BUNDLE" = "nsis" ]; then
+            matches=("$bundle_dir"/nsis/*_"$VERSION"_*-setup.exe)
+          else
+            matches=("$bundle_dir"/appimage/*_"$VERSION"_*.AppImage)
+          fi
+          if [ "${#matches[@]}" -ne 1 ]; then
+            echo "Expected exactly one $BUNDLE bundle for $VERSION, found ${#matches[@]}" >&2
+            exit 1
+          fi
+          asset="$(node scripts/release/release-plan.mjs asset-name --target "$TARGET_ID" --version "$VERSION")"
+          mkdir -p dist
+          cp "${matches[0]}" "dist/$asset"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.target.id }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [plan, build]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Verify assets and write checksums
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          ids="$(node -p "JSON.parse(process.argv[1]).map((t) => t.id).join('\n')" "$(node scripts/release/release-plan.mjs targets)")"
+          expected=()
+          while IFS= read -r id; do
+            expected+=("$(node scripts/release/release-plan.mjs asset-name --target "$id" --version "$VERSION")")
+          done <<< "$ids"
+          cd release-assets
+          actual="$(ls -1 | sort)"
+          wanted="$(printf '%s\n' "${expected[@]}" | sort)"
+          if [ "$actual" != "$wanted" ]; then
+            echo "Unexpected release assets." >&2
+            echo "Expected:" >&2
+            echo "$wanted" >&2
+            echo "Found:" >&2
+            echo "$actual" >&2
+            exit 1
+          fi
+          sha256sum "${expected[@]}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+          node scripts/release/release-plan.mjs notes --version "$VERSION" --sums-file release-assets/SHA256SUMS.txt > notes.md
+
+      - name: Create release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null | grep -qx true; then
+            gh release delete "$TAG" --yes
+          fi
+          cd release-assets
+          assets=(Shir_"$VERSION"_*)
+          gh release create "$TAG" "${assets[@]}" SHA256SUMS.txt \
+            --target "$SHA" \
+            --title "Shir $VERSION" \
+            --notes-file ../notes.md \
+            --generate-notes \
+            --latest
