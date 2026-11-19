@@ -69,8 +69,8 @@ corepack enable
 ## Bidi tests: Playwright WebKit fails to launch
 
 `pnpm --filter chord-render test:bidi` needs the Playwright browsers and their host libraries. CI
-installs them with `pnpm --filter chord-render exec playwright install --with-deps chromium webkit`;
-run the same command once locally. The `--with-deps` flag installs system packages, so Playwright
+caches the browsers, runs `pnpm --filter chord-render exec playwright install --with-deps chromium webkit`
+on a cache miss and `playwright install-deps chromium webkit` on a hit; run the full command once locally. The `--with-deps` flag installs system packages, so Playwright
 asks for `sudo` permissions.
 
 To run the web suite's WebKit project (`test:web`, `apps/desktop/web/playwright.config.ts`) locally

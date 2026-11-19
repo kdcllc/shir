@@ -78,12 +78,14 @@ pwsh -File scripts/smoke/smoke-launch.ps1 -Binary apps/desktop/src-tauri/target/
 
 `.github/workflows/ci.yml` runs on pushes to `main`, pull requests and manual dispatch, on a
 matrix of `ubuntu-22.04` and `windows-latest`. Each job installs dependencies with
-`pnpm install --frozen-lockfile`, then runs lint, typecheck, test, stylelint, check:samples,
-format check, `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, on Linux only the
-Playwright browser install, `pnpm --filter chord-render test:bidi` and the desktop Playwright
-checks (`pnpm --filter desktop test:web`), a `pnpm tauri build --debug`, the platform's launch
-smoke, on Linux only the WebdriverIO E2E (`pnpm test:e2e`, with `webkit2gtk-driver` and
-`tauri-driver` pinned to 2.1.0), and uploads the debug bundles.
+`pnpm install --frozen-lockfile`, then runs `pnpm test` and `cargo test`. On Linux only it
+also runs lint, typecheck, stylelint, check:samples, format check, `cargo fmt --check`,
+`cargo clippy -D warnings`, the Playwright browser install (cached), `pnpm --filter chord-render
+test:bidi` and the desktop Playwright checks (`pnpm --filter desktop test:web`). Both then run a
+debug Tauri build (`pnpm tauri build --debug --no-bundle` on pull requests, with bundles on
+pushes and manual runs) and the platform's launch smoke. On Linux only it runs the WebdriverIO
+E2E (`pnpm test:e2e`, with `webkit2gtk-driver`, generated `he_IL`/`en_US` locales and
+`tauri-driver` pinned to 2.1.0). Debug bundles are uploaded when they were built.
 
 ## Bidi tests
 

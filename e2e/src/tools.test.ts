@@ -53,20 +53,21 @@ describe("missingToolMessage", () => {
 
 describe("searchDirs", () => {
   it("searches $CARGO_HOME/bin first, then PATH", () => {
-    expect(searchDirs({ CARGO_HOME: "/c", PATH: "/a:/b" }, "/h")).toEqual([
-      "/c/bin",
-      "/a",
-      "/b",
-    ]);
+    const env = { CARGO_HOME: "/c", PATH: ["/a", "/b"].join(path.delimiter) };
+    expect(searchDirs(env, "/h")).toEqual([path.join("/c", "bin"), "/a", "/b"]);
   });
 
   it("falls back to ~/.cargo/bin when CARGO_HOME is unset", () => {
-    expect(searchDirs({ PATH: "/a" }, "/h")).toEqual(["/h/.cargo/bin", "/a"]);
+    expect(searchDirs({ PATH: "/a" }, "/h")).toEqual([
+      path.join("/h", ".cargo", "bin"),
+      "/a",
+    ]);
   });
 });
 
 describe("findTool and resolveTools", () => {
-  it("finds only executable files", () => {
+  // accessSync(X_OK) ignores file modes on Windows, so the exec bit cannot be tested there.
+  it.skipIf(process.platform === "win32")("finds only executable files", () => {
     const root = tempRoot();
     fakeBin(path.join(root, "x"), "tool", 0o644);
     fakeBin(path.join(root, "y"), "tool");

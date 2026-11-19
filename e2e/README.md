@@ -13,6 +13,10 @@ profile, so the suite never reads or writes the user's real data.
   `cargo install tauri-driver --locked --version 2.1.0`
   (found in `$CARGO_HOME/bin`, default `~/.cargo/bin`, or on `PATH`).
 - A display: run under `xvfb-run -a`.
+- The `he_IL.UTF-8` locale, which the locale spec needs:
+  `sudo apt install locales && sudo locale-gen he_IL.UTF-8 en_US.UTF-8`
+  (check with `locale -a | grep -i he_IL`). Without it WebKitGTK reports en-US and
+  "starts in Hebrew on a fresh profile" fails. A VS Code snap terminal can hide this, as the snap sets `LOCPATH`.
 
 A missing `tauri-driver` or `WebKitWebDriver` stops the run at once with one line naming
 the tool and its install command.

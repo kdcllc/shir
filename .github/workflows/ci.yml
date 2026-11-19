@@ -50,35 +50,54 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Lint
+        if: runner.os == 'Linux'
         run: pnpm lint
 
       - name: Typecheck
+        if: runner.os == 'Linux'
         run: pnpm typecheck
 
       - name: Test
         run: pnpm test
 
       - name: Stylelint
+        if: runner.os == 'Linux'
         run: pnpm stylelint
 
       - name: Check samples
+        if: runner.os == 'Linux'
         run: pnpm check:samples
 
       - name: Format check
+        if: runner.os == 'Linux'
         run: pnpm format:check
 
       - name: Cargo fmt
+        if: runner.os == 'Linux'
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 
       - name: Cargo clippy
+        if: runner.os == 'Linux'
         run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - name: Cargo test
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
-      - name: Install Playwright browsers
+      - name: Cache Playwright browsers
         if: runner.os == 'Linux'
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browsers
+        if: runner.os == 'Linux' && steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter chord-render exec playwright install --with-deps chromium webkit
+
+      - name: Install Playwright system dependencies (cached browsers)
+        if: runner.os == 'Linux' && steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter chord-render exec playwright install-deps chromium webkit
 
       - name: Bidi geometry (chromium + webkit)
         if: runner.os == 'Linux'
@@ -106,7 +125,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Smoke and E2E only use target/debug/shir[.exe]; bundles are built off PRs only.
+      - name: Tauri debug build (no bundles)
+        if: github.event_name == 'pull_request'
+        run: pnpm tauri build --debug --no-bundle
+
       - name: Tauri debug build
+        if: github.event_name != 'pull_request'
         run: pnpm tauri build --debug
 
       - name: Launch smoke (Linux)
@@ -115,7 +140,10 @@ jobs:
 
       - name: Install E2E dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y webkit2gtk-driver
+        run: |
+          sudo apt-get install -y webkit2gtk-driver locales
+          sudo locale-gen he_IL.UTF-8 en_US.UTF-8
+          locale -a | grep -qix 'he_IL.utf8'
 
       - name: Cache tauri-driver (Linux)
         if: runner.os == 'Linux'
@@ -147,6 +175,7 @@ jobs:
         run: pwsh -File scripts/smoke/smoke-launch.ps1 -Binary apps/desktop/src-tauri/target/debug/shir.exe
 
       - name: Upload debug bundles
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: bundles-${{ matrix.os }}
