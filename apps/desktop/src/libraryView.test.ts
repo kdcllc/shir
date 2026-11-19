@@ -223,10 +223,11 @@ describe("readLibraryPrefs / storeLibraryPrefs", () => {
 
   it("stores exactly sort and language as JSON under the key", () => {
     const calls: [string, string][] = [];
-    storeLibraryPrefs(
-      { setItem: (k, v) => void calls.push([k, v]) },
-      { sort: "artist", language: "he", extra: 1 } as never,
-    );
+    storeLibraryPrefs({ setItem: (k, v) => void calls.push([k, v]) }, {
+      sort: "artist",
+      language: "he",
+      extra: 1,
+    } as never);
     expect(calls).toEqual([
       ["shir.library", '{"sort":"artist","language":"he"}'],
     ]);

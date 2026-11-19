@@ -59,7 +59,8 @@ export function sortSummaries(
       });
     case "updated":
       return [...items].sort((a, b) => {
-        if (a.updatedAt !== b.updatedAt) return a.updatedAt < b.updatedAt ? 1 : -1;
+        if (a.updatedAt !== b.updatedAt)
+          return a.updatedAt < b.updatedAt ? 1 : -1;
         return compareTitleThenId(a, b);
       });
   }
@@ -101,7 +102,11 @@ export function readLibraryPrefs(
     const raw = storage?.getItem(LIBRARY_PREFS_KEY);
     if (typeof raw !== "string") return { ...DEFAULT_LIBRARY_PREFS };
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
       return { ...DEFAULT_LIBRARY_PREFS };
     }
     const obj = parsed as Record<string, unknown>;
