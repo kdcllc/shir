@@ -18,7 +18,7 @@ describe("visual editor in the real engine", () => {
 
   it("F19: a real double-click on a lyric row enters lyric-edit mode without a chord picker", async () => {
     await openVisual(
-      "{title: Editor Probe}\n\n[C]Hello [G]darkness my old friend",
+      "{title: Editor Probe}\n\n[C]Morning [G]light on an open road",
     );
     const row = $(
       '[data-testid="visual-line"][data-kind="lyric"] [data-row-focus]',

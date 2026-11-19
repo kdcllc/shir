@@ -4,7 +4,7 @@ import { tid, waitForShell } from "../src/harness";
 import { createSong } from "../src/ui";
 
 const ENGLISH_SONG =
-  "{title: English Direction Probe}\n{artist: Probe}\n\n[C]Hello [G]darkness my old friend";
+  "{title: English Direction Probe}\n{artist: Probe}\n\n[C]Morning [G]light on an open road";
 const HEBREW_SONG =
   "{title: בדיקת כיוון}\n{artist: בודק}\n\n[Am]ערב רגוע על [F]הגגות";
 

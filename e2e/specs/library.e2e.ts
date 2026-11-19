@@ -7,7 +7,7 @@ import { createSong, textsOf } from "../src/ui";
 const HEBREW_SONG =
   "{title: שיר עברי}\n{artist: זמר}\n\n[Am]ערב רגוע על [F]הגגות";
 const ENGLISH_SONG =
-  "{title: Plain English}\n{artist: Anne Singer}\n\n[C]Hello [G]darkness my old friend";
+  "{title: Plain English}\n{artist: Anne Singer}\n\n[C]Morning [G]light on an open road";
 const MIXED_SONG =
   "{title: Mixed Probe}\n{artist: Mixed Artist}\n\n[C]Hello [G]world\n[Am]ערב רגוע על [F]הגגות";
 
