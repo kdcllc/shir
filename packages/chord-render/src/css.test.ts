@@ -33,6 +33,11 @@ describe("CSS contract", () => {
     );
     expect(css).toMatch(/break-inside:\s*avoid/);
   });
+  it("lyric lines switch kerning off so editing mode wraps like read-only (F4)", () => {
+    expect(read("./ChordLine.module.css")).toMatch(
+      /\.lyric\s*{[^}]*font-kerning:\s*none/,
+    );
+  });
   it("chord box is the only positioned chord element", () => {
     const css = read("./ChordLine.module.css");
     expect(css).toMatch(

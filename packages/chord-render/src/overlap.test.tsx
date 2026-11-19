@@ -99,7 +99,7 @@ function rect(x: number, w: number): DOMRect {
     y: 0,
     toJSON() {},
   };
-  return Object.assign(box, { ["left"]: x, ["right"]: x + w }) as DOMRect;
+  return Object.assign(box, { left: x, right: x + w }) as DOMRect;
 }
 
 beforeEach(() => {

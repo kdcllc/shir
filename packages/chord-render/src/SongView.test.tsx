@@ -78,6 +78,73 @@ describe("SongView line kinds", () => {
     );
   });
 
+  describe("section label direction (N15)", () => {
+    const section = (label: string): SongLine => ({
+      kind: "section",
+      edge: "start",
+      section: "chorus",
+      label,
+    });
+    const labelOf = (song: SongModel) => {
+      const { container } = render(<SongView song={song} />);
+      const p = container.querySelector('[data-line="section"]');
+      if (!p) throw new Error("no section label");
+      return p;
+    };
+
+    it("takes the explicit song direction and isolates the label", () => {
+      const p = labelOf({
+        direction: "rtl",
+        lines: [
+          section("Chorus"),
+          { kind: "lyric", lyric: "hello", chords: [] },
+        ],
+      });
+      expect(p.getAttribute("dir")).toBe("rtl");
+      expect(p.children).toHaveLength(1);
+      expect(p.firstElementChild?.tagName).toBe("BDI");
+      expect(p.firstElementChild?.textContent).toBe("Chorus");
+    });
+
+    it("resolves a directive-less Hebrew song to rtl", () => {
+      const p = labelOf({
+        lines: [
+          section("Chorus"),
+          { kind: "lyric", lyric: "שלום עולם", chords: [] },
+        ],
+      });
+      expect(p.getAttribute("dir")).toBe("rtl");
+      expect(p.firstElementChild?.tagName).toBe("BDI");
+    });
+
+    it("resolves a directive-less English song with a Hebrew label to ltr", () => {
+      const p = labelOf({
+        lines: [
+          section("פזמון"),
+          { kind: "lyric", lyric: "hello world", chords: [] },
+        ],
+      });
+      expect(p.getAttribute("dir")).toBe("ltr");
+      expect(p.firstElementChild?.tagName).toBe("BDI");
+      expect(p.firstElementChild?.textContent).toBe("פזמון");
+    });
+
+    it("uses the first lyric line with a strong character, ltr when none", () => {
+      expect(
+        labelOf({
+          lines: [
+            section("Chorus"),
+            { kind: "lyric", lyric: "123 !!", chords: [] },
+            { kind: "lyric", lyric: "שלום", chords: [] },
+          ],
+        }).getAttribute("dir"),
+      ).toBe("rtl");
+      expect(labelOf({ lines: [section("פזמון")] }).getAttribute("dir")).toBe(
+        "ltr",
+      );
+    });
+  });
+
   it("does not use HTML injection for text", () => {
     const { container } = render(
       <SongView

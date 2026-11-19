@@ -2,6 +2,7 @@ import type { SongLine, SongModel } from "chord-core";
 import { useRef } from "react";
 import { ChordLine, EmptyLine } from "../src/ChordLine";
 import { useChordOverlap } from "../src/overlap";
+import { SectionLabel } from "../src/SectionLabel";
 import styles from "../src/SongView.module.css";
 
 /** The last editing callback, recorded on `window.__lastEdit` for the bidi specs. */
@@ -39,9 +40,7 @@ function renderLine(line: SongLine, i: number, song: SongModel) {
       );
     case "section":
       return line.edge === "start" ? (
-        <p key={i} data-line="section" data-section={line.section} dir="auto">
-          {line.label ?? line.section}
-        </p>
+        <SectionLabel key={i} line={line} song={song} />
       ) : null;
     case "tab":
       return (

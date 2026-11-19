@@ -2,6 +2,7 @@ import type { SongLine, SongModel } from "chord-core";
 import { useRef } from "react";
 import { ChordLine, EmptyLine } from "./ChordLine";
 import { useChordOverlap } from "./overlap";
+import { SectionLabel } from "./SectionLabel";
 import styles from "./SongView.module.css";
 
 export interface SongViewProps {
@@ -24,9 +25,7 @@ function renderLine(line: SongLine, i: number, song: SongModel) {
       );
     case "section":
       return line.edge === "start" ? (
-        <p key={i} data-line="section" data-section={line.section} dir="auto">
-          {line.label ?? line.section}
-        </p>
+        <SectionLabel key={i} line={line} song={song} />
       ) : null;
     case "tab":
       return (
