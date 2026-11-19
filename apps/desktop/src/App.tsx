@@ -9,6 +9,7 @@ import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
 import { Editor } from "./components/Editor";
 import type { ImportSeed } from "./components/Editor";
 import { LibraryControls } from "./components/LibraryControls";
+import { LocaleToggle } from "./components/LocaleToggle";
 import { SearchBox } from "./components/SearchBox";
 import { SelectionBar } from "./components/SelectionBar";
 import { SongHeader } from "./components/SongHeader";
@@ -617,10 +618,13 @@ export function App() {
   return (
     <div className={styles.root}>
       <div className={styles.sidebar}>
-        <h1 className={styles.heading} data-ui-chrome>
-          {t("appName")} {t("separator")}{" "}
-          <bdi lang="he">{t("appNameHebrew")}</bdi>
-        </h1>
+        <div className={styles["heading-row"]}>
+          <h1 className={styles.heading} data-ui-chrome>
+            {t("appName")} {t("separator")}{" "}
+            <bdi lang="he">{t("appNameHebrew")}</bdi>
+          </h1>
+          <LocaleToggle />
+        </div>
         {showLoading && <p data-ui-chrome>{t("loadingLibrary")}</p>}
         {showBundled && (
           <>

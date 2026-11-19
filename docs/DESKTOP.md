@@ -12,8 +12,23 @@ inline-start side under the app heading `<h1>`, rendered as
 mode only), it replaces the song view in the song pane (see § Editor and
 import).
 
-- App chrome is `lang="en" dir="ltr"`, taken from `apps/desktop/index.html`
-  (B8).
+- App chrome starts as `lang="en" dir="ltr"` from `apps/desktop/index.html`
+  (B8); the interface language is then set at startup from the stored or
+  system locale.
+- The sidebar heading row holds the `<h1>` and the language toggle
+  (`locale-toggle`: an `עב` / `EN` button pair in a `role="group"` named
+  `uiLanguage`, the current language `aria-pressed="true"`). The row wraps at
+  the 12rem minimum sidebar width. Clicking the other language switches the
+  interface at once, stores `shir.locale`, and sets `<html lang dir>`
+  (`he` / `rtl`, `en` / `ltr`).
+- Mirroring comes only from the document direction plus logical CSS: in Hebrew
+  the sidebar sits on the right of the song pane with its border on the
+  inline-end side. There is no `scaleX(-1)`, no `direction:` override and no
+  `:lang()` selector; the Hebrew chrome font stack (`"Noto Sans Hebrew"`,
+  `heebo`, then the system stack) is applied by `html[lang="he"]`. Songs keep
+  their own direction (`SongView` root and lines, B1–B8), user-text inputs keep
+  `dir="auto"`, and chord names, diagrams and the `−` `+` `←` `→` glyphs are
+  not mirrored.
 - CSS uses logical properties only.
 - The production CSP `style-src 'self'` forbids `<style>` elements and
   `style="…"` attribute strings. `dangerouslySetInnerHTML` is banned separately
@@ -558,6 +573,9 @@ Coordinates have two meanings:
 | `diagnostics`           | diagnostics panel          | The diagnostics panel, absent when there are no diagnostics           |
 | `diagnostic-item`       | list item                  | One per diagnostic                                                    |
 | `song-pane`             | `<main>`                   | The song pane                                                         |
+| `locale-toggle`         | `<div role="group">`       | The interface-language toggle in the sidebar heading row              |
+| `locale-he`             | `<button>`                 | Switch to Hebrew; `aria-pressed="true"` when Hebrew is current        |
+| `locale-en`             | `<button>`                 | Switch to English; `aria-pressed="true"` when English is current      |
 | `search-input`          | `<input type="search">`    | The sidebar search box (disabled in bundled mode)                     |
 | `search-empty`          | `<p>`                      | Shown when a search has zero hits                                     |
 | `search-unavailable`    | `<p>`                      | Notice shown in bundled mode: search is unavailable                   |
