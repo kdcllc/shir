@@ -4,11 +4,24 @@ import type {
   ErrorKind,
   Language,
   SearchHit,
+  Setlist,
+  SetlistItem,
+  SetlistSummary,
   Song,
   SongSummary,
 } from "./bindings";
 
-export type { DbError, ErrorKind, Language, SearchHit, Song, SongSummary };
+export type {
+  DbError,
+  ErrorKind,
+  Language,
+  SearchHit,
+  Setlist,
+  SetlistItem,
+  SetlistSummary,
+  Song,
+  SongSummary,
+};
 
 export type StorageErrorKind = ErrorKind | "Ipc";
 
@@ -80,6 +93,63 @@ export async function deleteSong(id: string): Promise<void> {
 
 export function searchSongs(query: string): Promise<SearchHit[]> {
   return run(() => commands.searchSongs(query));
+}
+
+export function listSetlists(): Promise<SetlistSummary[]> {
+  return run(() => commands.listSetlists());
+}
+
+export function getSetlist(id: string): Promise<Setlist> {
+  return run(() => commands.getSetlist(id));
+}
+
+export function createSetlist(name: string): Promise<Setlist> {
+  return run(() => commands.createSetlist(name));
+}
+
+export function renameSetlist(id: string, name: string): Promise<Setlist> {
+  return run(() => commands.renameSetlist(id, name));
+}
+
+export async function deleteSetlist(id: string): Promise<void> {
+  await run(() => commands.deleteSetlist(id));
+}
+
+export function duplicateSetlist(id: string, name: string): Promise<Setlist> {
+  return run(() => commands.duplicateSetlist(id, name));
+}
+
+export function addSetlistItems(
+  setlistId: string,
+  songIds: string[],
+): Promise<Setlist> {
+  return run(() => commands.addSetlistItems(setlistId, songIds));
+}
+
+export function removeSetlistItem(
+  setlistId: string,
+  itemId: string,
+): Promise<Setlist> {
+  return run(() => commands.removeSetlistItem(setlistId, itemId));
+}
+
+export function reorderSetlistItems(
+  setlistId: string,
+  itemIds: string[],
+): Promise<Setlist> {
+  return run(() => commands.reorderSetlistItems(setlistId, itemIds));
+}
+
+/** `capo: null` means "use the song's own capo". */
+export function updateSetlistItem(
+  setlistId: string,
+  itemId: string,
+  transpose: number,
+  capo: number | null,
+): Promise<Setlist> {
+  return run(() =>
+    commands.updateSetlistItem(setlistId, itemId, transpose, capo),
+  );
 }
 
 /** Forwards a webview error to the app's stderr. Never rejects. */

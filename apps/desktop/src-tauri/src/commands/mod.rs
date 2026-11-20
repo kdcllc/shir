@@ -5,6 +5,7 @@
 )]
 
 pub mod files;
+pub mod setlists;
 pub mod state;
 
 use crate::db::{repo, search, DbError, ErrorKind, SaveSongInput, SearchHit, Song, SongSummary};
@@ -104,8 +105,8 @@ pub fn log_webview_error_to(message: &str, out: &mut dyn Write) {
     let _ = writeln!(out, "{}", webview_log_line(message));
 }
 
-/// The tauri-specta builder: the five storage commands plus `read_text_file` and
-/// `log_webview_error`, `Result` error handling, and the error types (so `ErrorKind` is
+/// The tauri-specta builder: the song, setlist and file commands plus
+/// `log_webview_error` (always last), `Result` error handling, and the error types (so `ErrorKind` is
 /// present in TS even where only nested).
 pub fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
@@ -116,6 +117,17 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             delete_song,
             search_songs,
             files::read_text_file,
+            files::save_export_docx,
+            setlists::list_setlists,
+            setlists::get_setlist,
+            setlists::create_setlist,
+            setlists::rename_setlist,
+            setlists::delete_setlist,
+            setlists::duplicate_setlist,
+            setlists::add_setlist_items,
+            setlists::remove_setlist_item,
+            setlists::reorder_setlist_items,
+            setlists::update_setlist_item,
             log_webview_error
         ])
         .error_handling(ErrorHandlingMode::Result)
@@ -190,6 +202,40 @@ mod tests {
     }
 
     #[test]
+    fn setlist_round_trip_through_every_impl() {
+        use setlists::*;
+        let st = DbState::in_memory();
+        let song = save_song_impl(&st, &input("{title: Hello}\n[C]La")).unwrap();
+        assert!(list_setlists_impl(&st).unwrap().is_empty());
+        let created = create_setlist_impl(&st, "Friday").unwrap();
+        assert_eq!(created.name, "Friday");
+        let renamed = rename_setlist_impl(&st, &created.id, "Shabbat").unwrap();
+        assert_eq!(renamed.name, "Shabbat");
+        let ids = vec![song.id.clone(), song.id.clone()];
+        let added = add_setlist_items_impl(&st, &created.id, &ids).unwrap();
+        assert_eq!(added.items.len(), 2);
+        let (a, b) = (added.items[0].id.clone(), added.items[1].id.clone());
+        let reordered =
+            reorder_setlist_items_impl(&st, &created.id, &[b.clone(), a.clone()]).unwrap();
+        assert_eq!(reordered.items[0].id, b);
+        let updated = update_setlist_item_impl(&st, &created.id, &a, 2, Some(3)).unwrap();
+        let item = updated.items.iter().find(|i| i.id == a).unwrap();
+        assert_eq!((item.transpose, item.capo), (2, Some(3)));
+        let removed = remove_setlist_item_impl(&st, &created.id, &b).unwrap();
+        assert_eq!(removed.items.len(), 1);
+        let copy = duplicate_setlist_impl(&st, &created.id, "Copy").unwrap();
+        assert_eq!(copy.items.len(), 1);
+        assert_eq!(get_setlist_impl(&st, &copy.id).unwrap(), copy);
+        assert_eq!(list_setlists_impl(&st).unwrap().len(), 2);
+        delete_setlist_impl(&st, &created.id).unwrap();
+        assert_eq!(
+            get_setlist_impl(&st, &created.id).unwrap_err().kind,
+            ErrorKind::NotFound
+        );
+        assert_eq!(list_setlists_impl(&st).unwrap().len(), 1);
+    }
+
+    #[test]
     fn unavailable_state_fails_every_command() {
         let st = DbState::unavailable(DbError::storage("boom"));
         let errs = [
@@ -198,6 +244,16 @@ mod tests {
             list_songs_impl(&st).unwrap_err(),
             delete_song_impl(&st, "i").unwrap_err(),
             search_songs_impl(&st, "q").unwrap_err(),
+            setlists::list_setlists_impl(&st).unwrap_err(),
+            setlists::get_setlist_impl(&st, "i").unwrap_err(),
+            setlists::create_setlist_impl(&st, "n").unwrap_err(),
+            setlists::rename_setlist_impl(&st, "i", "n").unwrap_err(),
+            setlists::delete_setlist_impl(&st, "i").unwrap_err(),
+            setlists::duplicate_setlist_impl(&st, "i", "n").unwrap_err(),
+            setlists::add_setlist_items_impl(&st, "i", &["s".to_string()]).unwrap_err(),
+            setlists::remove_setlist_item_impl(&st, "i", "j").unwrap_err(),
+            setlists::reorder_setlist_items_impl(&st, "i", &["j".to_string()]).unwrap_err(),
+            setlists::update_setlist_item_impl(&st, "i", "j", 0, None).unwrap_err(),
         ];
         for e in errs {
             assert_eq!(e.kind, ErrorKind::Unavailable);
@@ -295,20 +351,31 @@ mod tests {
     }
 
     #[test]
-    fn exported_ts_has_exactly_the_seven_commands() {
+    fn exported_ts_has_exactly_the_eighteen_commands() {
         let ts = exported_ts();
         let mut fields = command_fields(&ts);
         fields.sort();
         assert_eq!(
             fields,
             [
+                "addSetlistItems",
+                "createSetlist",
+                "deleteSetlist",
                 "deleteSong",
+                "duplicateSetlist",
+                "getSetlist",
                 "getSong",
+                "listSetlists",
                 "listSongs",
                 "logWebviewError",
                 "readTextFile",
+                "removeSetlistItem",
+                "renameSetlist",
+                "reorderSetlistItems",
+                "saveExportDocx",
                 "saveSong",
-                "searchSongs"
+                "searchSongs",
+                "updateSetlistItem"
             ],
             "{ts}"
         );
@@ -323,6 +390,9 @@ mod tests {
             "DbError",
             "FileError",
             "FileErrorKind",
+            "Setlist",
+            "SetlistSummary",
+            "SetlistItem",
         ] {
             assert!(ts.contains(&format!("type {t} ")), "missing type {t}");
         }

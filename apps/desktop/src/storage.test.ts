@@ -5,14 +5,26 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 import { invoke } from "@tauri-apps/api/core";
 import {
   StorageError,
+  addSetlistItems,
+  createSetlist,
+  deleteSetlist,
   deleteSong,
+  duplicateSetlist,
+  getSetlist,
   getSong,
+  listSetlists,
   listSongs,
   logWebviewError,
+  removeSetlistItem,
+  renameSetlist,
+  reorderSetlistItems,
   saveSong,
   searchSongs,
+  updateSetlistItem,
   type ErrorKind,
   type SearchHit,
+  type Setlist,
+  type SetlistSummary,
   type Song,
   type SongSummary,
 } from "./storage";
@@ -195,5 +207,147 @@ describe("storage client", () => {
       throw new TypeError("invoke is not a function");
     });
     await expect(logWebviewError("x")).resolves.toBeUndefined();
+  });
+
+  describe("setlists", () => {
+    const setlist: Setlist = {
+      id: "l1",
+      name: "Friday",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      items: [],
+    };
+    const summaryRow: SetlistSummary = {
+      id: "l1",
+      name: "Friday",
+      itemCount: 0,
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+
+    const calls: [
+      string,
+      () => Promise<unknown>,
+      string,
+      Record<string, unknown> | undefined,
+      unknown,
+    ][] = [
+      [
+        "listSetlists",
+        () => listSetlists(),
+        "list_setlists",
+        undefined,
+        [summaryRow],
+      ],
+      [
+        "getSetlist",
+        () => getSetlist("l1"),
+        "get_setlist",
+        { id: "l1" },
+        setlist,
+      ],
+      [
+        "createSetlist",
+        () => createSetlist("Friday"),
+        "create_setlist",
+        { name: "Friday" },
+        setlist,
+      ],
+      [
+        "renameSetlist",
+        () => renameSetlist("l1", "שבת"),
+        "rename_setlist",
+        { id: "l1", name: "שבת" },
+        setlist,
+      ],
+      [
+        "duplicateSetlist",
+        () => duplicateSetlist("l1", "Copy"),
+        "duplicate_setlist",
+        { id: "l1", name: "Copy" },
+        setlist,
+      ],
+      [
+        "addSetlistItems",
+        () => addSetlistItems("l1", ["s1", "s2"]),
+        "add_setlist_items",
+        { setlistId: "l1", songIds: ["s1", "s2"] },
+        setlist,
+      ],
+      [
+        "removeSetlistItem",
+        () => removeSetlistItem("l1", "i1"),
+        "remove_setlist_item",
+        { setlistId: "l1", itemId: "i1" },
+        setlist,
+      ],
+      [
+        "reorderSetlistItems",
+        () => reorderSetlistItems("l1", ["i2", "i1"]),
+        "reorder_setlist_items",
+        { setlistId: "l1", itemIds: ["i2", "i1"] },
+        setlist,
+      ],
+      [
+        "updateSetlistItem (capo)",
+        () => updateSetlistItem("l1", "i1", -2, 3),
+        "update_setlist_item",
+        { setlistId: "l1", itemId: "i1", transpose: -2, capo: 3 },
+        setlist,
+      ],
+      [
+        "updateSetlistItem (null capo)",
+        () => updateSetlistItem("l1", "i1", 0, null),
+        "update_setlist_item",
+        { setlistId: "l1", itemId: "i1", transpose: 0, capo: null },
+        setlist,
+      ],
+    ];
+
+    it.each(calls)(
+      "%s invokes the right command",
+      async (_n, call, cmd, args, ret) => {
+        mockInvoke.mockResolvedValue(ret);
+        await expect(call()).resolves.toEqual(ret);
+        expect(mockInvoke).toHaveBeenCalledTimes(1);
+        expect(mockInvoke).toHaveBeenCalledWith(cmd, args, undefined);
+      },
+    );
+
+    it("deleteSetlist invokes delete_setlist and resolves void", async () => {
+      mockInvoke.mockResolvedValue(null);
+      await expect(deleteSetlist("l1")).resolves.toBeUndefined();
+      expect(mockInvoke).toHaveBeenCalledWith(
+        "delete_setlist",
+        { id: "l1" },
+        undefined,
+      );
+    });
+
+    const all: [string, () => Promise<unknown>][] = [
+      ...calls.map(([n, c]) => [n, c] as [string, () => Promise<unknown>]),
+      ["deleteSetlist", () => deleteSetlist("l1")],
+    ];
+
+    it.each(all)(
+      "%s maps an error result to StorageError",
+      async (_n, call) => {
+        mockInvoke.mockRejectedValue({ kind: "NotFound", message: "gone" });
+        const e = await caught(call());
+        expect(e).toBeInstanceOf(StorageError);
+        expect((e as StorageError).kind).toBe("NotFound");
+        expect((e as StorageError).message).toBe("gone");
+      },
+    );
+
+    it.each(all)(
+      "%s maps a rejection to Ipc StorageError",
+      async (_n, call) => {
+        mockInvoke.mockRejectedValue(new Error("ipc down"));
+        const e = await caught(call());
+        expect(e).toBeInstanceOf(StorageError);
+        expect((e as StorageError).kind).toBe("Ipc");
+        expect((e as StorageError).message).toBe("ipc down");
+      },
+    );
   });
 });
