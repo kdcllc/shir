@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 /// Current UTC time as exactly `YYYY-MM-DDTHH:MM:SS.mmmZ` (24 bytes), so that
 /// lexicographic order equals chronological order.
-fn now_timestamp() -> String {
+pub(crate) fn now_timestamp() -> String {
     format_timestamp(OffsetDateTime::now_utc())
 }
 
@@ -34,7 +34,7 @@ fn language_str(l: Language) -> &'static str {
     }
 }
 
-fn language_from(s: &str) -> Result<Language, DbError> {
+pub(crate) fn language_from(s: &str) -> Result<Language, DbError> {
     match s {
         "he" => Ok(Language::He),
         "en" => Ok(Language::En),
@@ -75,7 +75,7 @@ fn song_from_row(row: &Row<'_>) -> rusqlite::Result<Song> {
     })
 }
 
-fn validate_id(id: &str) -> Result<(), DbError> {
+pub(crate) fn validate_id(id: &str) -> Result<(), DbError> {
     // `Uuid::parse_str` also accepts simple/braced/urn forms; 36 chars means hyphenated.
     if id.len() == 36 && Uuid::parse_str(id).is_ok() {
         Ok(())
@@ -253,7 +253,15 @@ pub fn delete_song(conn: &mut Connection, id: &str) -> Result<(), DbError> {
         return Err(DbError::not_found(format!("song {id}")));
     };
     tx.execute("DELETE FROM songs_fts WHERE rowid = ?1", [rowid])?;
+    // Setlists holding this song lose their entries through the FK cascade; capture them
+    // first so their positions can be renumbered dense afterwards.
+    let affected = super::setlists::setlists_containing_song(&tx, id)?;
     tx.execute("DELETE FROM songs WHERE id = ?1", [id])?;
+    let now = now_timestamp();
+    for setlist_id in &affected {
+        super::setlists::renumber_items(&tx, setlist_id)?;
+        super::setlists::touch(&tx, setlist_id, &now)?;
+    }
     tx.commit()?;
     Ok(())
 }

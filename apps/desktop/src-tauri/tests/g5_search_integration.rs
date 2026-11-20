@@ -174,7 +174,7 @@ fn v1_file_upgrades_to_v2_rebuilds_index_and_seeds() {
     let uv: i64 = state
         .with_conn(|c| Ok(c.query_row("PRAGMA user_version", [], |r| r.get(0))?))
         .expect("uv");
-    assert_eq!(uv, 2);
+    assert_eq!(uv, 3);
     let hits = search_songs_impl(&state, "צהל").expect("search");
     assert!(
         hits.iter().any(|h| h.song.id == "old1"),
