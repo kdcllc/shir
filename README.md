@@ -3,6 +3,28 @@
 Shir is an offline-first Hebrew + English guitar chord manager for Ubuntu 22.04+ and
 Windows 10/11. It is a Tauri 2 + React 19 desktop app in a pnpm monorepo.
 
+## Download and install
+
+Installers are published on the **Releases** page of this GitHub repository. Pick the download
+that matches your CPU: x64 (Intel/AMD 64-bit) or arm64/aarch64 (ARM 64-bit). Each release lists
+these files, where `<version>` is the release version:
+
+| Platform | Architecture | Download                                 |
+| -------- | ------------ | ---------------------------------------- |
+| Windows  | x64          | `Shir_<version>_windows_x64-setup.exe`   |
+| Windows  | arm64        | `Shir_<version>_windows_arm64-setup.exe` |
+| Linux    | x86_64       | `Shir_<version>_linux_x86_64.AppImage`   |
+| Linux    | aarch64      | `Shir_<version>_linux_aarch64.AppImage`  |
+
+- **Windows** — run the `setup.exe` installer. The installers are unsigned, so SmartScreen shows
+  "Windows protected your PC": click **More info**, then **Run anyway**.
+- **Linux** — make the AppImage executable, then run it (`chmod +x Shir_<version>_linux_x86_64.AppImage`,
+  then `./Shir_<version>_linux_x86_64.AppImage`). AppImages need FUSE 2 (`libfuse2`, or
+  `libfuse2t64` on Ubuntu 24.04).
+- **Verify your download** — each release also has `SHA256SUMS.txt`, and the release notes repeat
+  the checksums. On Linux, run `sha256sum -c --ignore-missing SHA256SUMS.txt` next to the
+  download. On Windows, run `Get-FileHash .\<file> -Algorithm SHA256` in PowerShell and compare.
+
 ## Prerequisites
 
 - **Node 24** — pinned in `.nvmrc` and enforced by `engines` in `package.json` (`>=24 <25`).
@@ -86,6 +108,36 @@ debug Tauri build (`pnpm tauri build --debug --no-bundle` on pull requests, with
 pushes and manual runs) and the platform's launch smoke. On Linux only it runs the WebdriverIO
 E2E (`pnpm test:e2e`, with `webkit2gtk-driver`, generated `he_IL`/`en_US` locales and
 `tauri-driver` pinned to 2.1.0). Debug bundles are uploaded when they were built.
+
+## Releases
+
+`.github/workflows/release.yml` (workflow `Release`) runs after the `CI` workflow completes
+successfully for a push to `main` of this repository. It plans the release, builds the installers
+and publishes them; runs are serialized (concurrency group `release`; a run in progress is never cancelled, and a newer queued run replaces a pending one).
+
+- **Release rule** — a release is made when the first-parent history of the commit since the latest
+  `vX.Y.Z` tag contains at least one merged PR into `main` from a `feat/` or `fix/` branch.
+  A release therefore includes every unreleased `feat/` and `fix/` PR since the last tag, so a
+  cancelled or failed CI run only delays a release. A commit that already has a `vX.Y.Z` tag is never
+  released again, and a commit that is not a descendant of the latest release tag never releases.
+- **Version** — the bump is the highest of the `release:major`, `release:minor` and `release:patch`
+  labels on those PRs; a PR with no such label counts as a patch. The first release uses the
+  `version` in `apps/desktop/src-tauri/tauri.conf.json`. The labels must exist in the repository;
+  create them once with `gh label create release:major` (and `release:minor`, `release:patch`).
+- **Builds** — four native runners, one per target: `windows-latest` (x64), `windows-11-arm`
+  (arm64), `ubuntu-22.04` (x86_64) and `ubuntu-22.04-arm` (aarch64). Each job first checks that
+  `rustc`'s host triple matches the target, then runs
+  `pnpm tauri build --bundles <nsis|appimage> --config <file>`. The version is injected through that
+  generated config file, so nothing is committed back to the repository.
+- **Publishing** — the release is tagged `vX.Y.Z` at the released commit, marked Latest, and has the
+  four installers plus `SHA256SUMS.txt`. The release notes contain install instructions and the
+  checksums, together with GitHub-generated notes. The installers are unsigned.
+- **Recovery** — a failed run publishes nothing, and a leftover draft release for the same tag is
+  deleted before the release is created; a published release is never deleted automatically. To roll
+  back a bad release, delete the release (`gh release delete vX.Y.Z`) and then its tag
+  (`git push origin :refs/tags/vX.Y.Z`).
+- **Tests** — the release logic is covered by `scripts/release/release-plan.test.ts` and the
+  workflow by `scripts/release-contract.test.ts`; both run with `pnpm test`.
 
 ## Bidi tests
 
