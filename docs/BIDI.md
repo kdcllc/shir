@@ -186,6 +186,38 @@ Under `@media print` in `SongView.module.css`: black text on no background, `bre
 on lines, chord boxes stay absolutely positioned above their lyric (`inset-block-end: 100%`), and
 `[data-ui-chrome]` is hidden with `display: none !important`. Checklist item 6 covers it.
 
+Export print root (`apps/desktop/src/export/PrintDocument.module.css`, `printExport.ts`). The setlist
+and song exports (Print, Export PDF) mount a `PrintDocument` (`data-print-root`) appended to `body`.
+On screen it is laid out off-screen at `inline-size: 180mm` (A4 minus the 15 mm margins), never
+`display: none` or `visibility: hidden`, so the B4 overlap pass measures real boxes before printing.
+`printExport` sets `:root[data-printing="export"]`, then waits for the fonts and for every song body's `data-overlap-pass` to reach 1 (2 s cap) and two animation frames, and calls `window.print()`. Under
+`@media print` with `data-printing="export"`, `#root` is `display: none !important`, the print root
+becomes static with `inline-size: auto`, and each song after the first starts on a new page
+(`break-before: page`). `@page { size: a4; margin: 15mm }` is global.
+
+## Word export
+
+`buildDocx` (`apps/desktop/src/export/docx.ts`) maps the rules onto Word output. The export model
+comes from chord-core (`directionalCells`, `packages/chord-core/src/export.ts`).
+
+- **B1** A chord paragraph is never `w:bidi` (a trailing neutral such as `#` would take the
+  paragraph's RTL direction and read "#F"). In an RTL cell it is right-aligned and the cell's end
+  margin sits on its visual end.
+- **B3** A lyric line with at least one chord is a borderless two-row table (chords above lyric) whose cells are each a single
+  direction. An RTL line's table is `w:bidiVisual` with table alignment right. Characters are never
+  reordered: each maximal group of consecutive cells opposite to the line direction is emitted in
+  reverse logical order as whole cells. Inside lyric-line tables, `w:bidi` and `w:rtl` are set only on
+  RTL cells. Outside them a paragraph is `w:bidi`/`w:rtl` when its own direction is RTL: a section label takes the song direction, a comment the first strong direction of its text, a chordless lyric line its line direction, and the setlist cover the interface language's direction (`ExportMeta.dir`).
+- **B6** A chord-only line is a one-row table in the song direction, each chord LTR.
+- Column widths (`columnWidths.ts`) are estimated from Liberation Sans advance widths
+  (`fontMetrics.ts`) times 1.1 plus 60 twips, and scaled down proportionally only when the sum exceeds
+  the printable width of 9638 twips.
+
+Verified scope: the layout was checked against LibreOffice, which reads `w:tcMar` left and right as
+physical sides and is what the chord-cell margins target. Word's reading of `w:tcMar` inside a
+`w:bidiVisual` table is unverified, and a very long lyric line stays one table row instead of
+wrapping (`docx.ts`).
+
 ## Verifying
 
 ```sh

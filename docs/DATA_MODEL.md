@@ -7,9 +7,9 @@ stored verbatim; everything else is derived from it on every save.
 
 ## Schema
 
-Two migrations in `apps/desktop/src-tauri/migrations/`: `0001_init.sql` (V1) and
-`0002_app_meta_fts_rebuild.sql` (V2). They are forward-only: never edit a
-shipped migration, append a new one.
+Three migrations in `apps/desktop/src-tauri/migrations/`: `0001_init.sql` (V1),
+`0002_app_meta_fts_rebuild.sql` (V2) and `0003_setlists.sql` (V3). They are
+forward-only: never edit a shipped migration, append a new one.
 
 `songs` is a `STRICT` table:
 
@@ -36,13 +36,30 @@ triggers: Rust writes the FTS row, because normalization happens in Rust.
 V2 adds `app_meta`, a `STRICT` key-value table: `key` TEXT primary key not
 null, `value` TEXT not null.
 
+V3 adds two `STRICT` tables for setlists. `setlists`: `id` TEXT primary key,
+`name` TEXT with `CHECK (length(trim(name)) BETWEEN 1 AND 200)`, `created_at`
+and `updated_at` TEXT, all not null. `setlist_items` (one entry per song
+occurrence):
+
+| Column       | Type    | Rules                                                               |
+| ------------ | ------- | ------------------------------------------------------------------- |
+| `id`         | TEXT    | Primary key, not null.                                              |
+| `setlist_id` | TEXT    | Not null; references `setlists (id)` `ON DELETE CASCADE`.           |
+| `song_id`    | TEXT    | Not null; references `songs (id)` `ON DELETE CASCADE`.              |
+| `position`   | INTEGER | Not null; `CHECK` it is at least 0; unique per setlist.             |
+| `transpose`  | INTEGER | Not null, default 0; `CHECK` it is between -11 and 11.              |
+| `capo`       | INTEGER | Nullable (null means the song's own capo); `CHECK` null or 0 to 24. |
+
+The indexes are `idx_setlist_items_song_id` on `setlist_items (song_id)` and
+`idx_setlists_updated_at` on `setlists (updated_at)`.
+
 ## Migrations and opening
 
-`src/db/migrations.rs` uses `rusqlite_migration` and embeds `0001_init.sql` and
-`0002_app_meta_fts_rebuild.sql` with `include_str!`. V2 is an
+`src/db/migrations.rs` uses `rusqlite_migration` and embeds `0001_init.sql`,
+`0002_app_meta_fts_rebuild.sql` and `0003_setlists.sql` with `include_str!`. V2 is an
 `M::up_with_hook` migration: its hook runs `repo::rebuild_fts` inside the
 migration transaction, so a failed rebuild rolls back and leaves
-`user_version` at 1. The latest `user_version` is 2. `open(path)`:
+`user_version` at 1. The latest `user_version` is 3. `open(path)`:
 
 1. Creates the parent directories.
 2. Opens the file and sets `journal_mode = WAL`.
@@ -98,18 +115,22 @@ an entry in `apps/desktop/src-tauri/src/db/seed.rs`, and
 shape, that the embedded seed set equals the songs on disk, that the local QA
 directory is ignored and untracked, that 0002 creates `app_meta`, and that the sha256 of
 `0001_init.sql` is unchanged. `scripts/g5b-contract.test.ts` pins the `log_webview_error`
+wiring. `scripts/g10-contract.test.ts` pins the setlist and export-command
 wiring.
 
 ## Repository rules
 
-`src/db/repo.rs` provides save, get, list and delete.
+`src/db/repo.rs` provides save, get, list and delete; `src/db/setlists.rs`
+provides the setlist operations (see Setlists below).
 
 - **Save** creates a song when no `id` is given, with a lowercase UUIDv7 id.
   With an `id` it runs an SQL `UPDATE`: a missing id gives `NotFound`, and
   `created_at` is kept. The `songs` row and its `songs_fts` row (same rowid)
   are written in one transaction.
 - **Delete** removes both rows in one transaction; a missing id gives
-  `NotFound`.
+  `NotFound`. The `ON DELETE CASCADE` removes the song's setlist entries; in
+  the same transaction the affected setlists are renumbered densely and their
+  `updated_at` is touched.
 - **List** returns summaries ordered by `updated_at DESC, id DESC`.
 - The ChordPro text is stored verbatim.
 - Save gives `Invalid` for empty, whitespace-only or BOM-only text, and for
@@ -120,6 +141,24 @@ wiring.
   are not case-insensitive.
 - Timestamps are UTC, exactly `YYYY-MM-DDTHH:MM:SS.mmmZ`, so text order equals
   time order.
+
+## Setlists
+
+`src/db/setlists.rs` provides:
+
+- **List** returns summaries ordered by `updated_at DESC, id DESC`; **get**
+  returns one setlist.
+- **Create**, **rename**, **delete** and **duplicate**. Names are trimmed and
+  counted in characters (1 to 200).
+- **Add items** appends songs at the end; the same song may appear more than
+  once.
+- **Remove item** renumbers the remaining positions densely.
+- **Reorder** takes the exact permutation of the setlist's item ids, or gives
+  `Invalid`; it rewrites positions with an offset scheme so the unique
+  `(setlist_id, position)` constraint holds throughout.
+- **Update item** changes an entry's `transpose` and `capo`.
+- Every mutation touches the setlist's `updated_at`.
+- A malformed id gives `Invalid`; an unknown id gives `NotFound`.
 
 ## Search
 
@@ -165,11 +204,12 @@ one of `NotFound`, `Invalid`, `Storage`, `Migration` or `Unavailable`.
 
 ## Commands and startup
 
-`src/commands/mod.rs` defines five async Tauri commands: `save_song`,
-`get_song`, `list_songs`, `delete_song` and `search_songs`. They share one
-`DbState` (`src/commands/state.rs`), a `Mutex<Result<Connection, DbError>>`.
-A sixth command, `log_webview_error`, is synchronous: it writes one line
-`shir: webview: <text>` to stderr, returns nothing and does not use `DbState`.
+There are 18 Tauri commands. `src/commands/mod.rs` defines five async
+commands: `save_song`, `get_song`, `list_songs`, `delete_song` and
+`search_songs`. They share one `DbState` (`src/commands/state.rs`), a
+`Mutex<Result<Connection, DbError>>`. A sixth command, `log_webview_error`, is
+synchronous: it writes one line `shir: webview: <text>` to stderr, returns
+nothing and does not use `DbState`.
 It delegates to `log_webview_error_to(message, &mut dyn Write)`, which takes the
 writer and ignores write failures.
 Control characters in the text become spaces, and the text is capped at 2000
@@ -178,25 +218,44 @@ A seventh command, `read_text_file` (`src/commands/files.rs`), is also
 synchronous and does not use `DbState`: it reads a user-picked file as UTF-8
 text with plain `std::fs`. Only regular files up to 1 MiB (1,048,576 bytes)
 are accepted, one leading BOM is removed and line endings are untouched. A
-failure is a `FileError` `{kind, message}` whose `kind` is `TooLarge`,
-`NotUtf8` or `Io`.
+failure is a `FileError` `{kind, message}` whose `kind` is `TooLarge`, `NotUtf8` or `Io` (the `FileErrorKind` value `Invalid` is returned only by `save_export_docx`).
+
+Ten setlist commands live in `src/commands/setlists.rs`: `list_setlists`,
+`get_setlist`, `create_setlist`, `rename_setlist`, `delete_setlist`,
+`duplicate_setlist`, `add_setlist_items`, `remove_setlist_item`,
+`reorder_setlist_items` and `update_setlist_item`. Each is
+`#[tauri::command(async)]` and uses `DbState`.
+
+`save_export_docx(default_name, filter_name, bytes)` (`src/commands/files.rs`)
+is `#[tauri::command(async)]` and does not use `DbState`. It validates the bytes
+first: empty or over 20 MiB gives a `FileError` of kind `Invalid`. The default
+name is sanitized to a bare `.docx` name. The native save dialog is opened in
+Rust, so the webview never supplies a path. A cancelled dialog returns `null`. A chosen name that already ends in `.docx` is used as is (the dialog confirmed any overwrite); otherwise `.docx` is appended and, when that path already exists, the first free `<name> (2).docx`, `(3)`, ... is used. The file is written atomically (temporary file, then rename) and never through a
+symlink, and the written path is returned.
 
 The database file is `<app_data_dir>/shir.db` (app identifier
 `com.kdcllc.shir`). If it cannot be opened, startup logs one line,
-`shir: database unavailable: <cause>`, and the five storage commands return
-`Unavailable`; `log_webview_error` and `read_text_file` are unaffected because
-they do not use `DbState`. `open_db_state` writes that line through
+`shir: database unavailable: <cause>`, and the five storage commands and the ten
+setlist commands return `Unavailable`; `log_webview_error`, `read_text_file`
+and `save_export_docx` are unaffected because they do not use `DbState`. `open_db_state` writes that line through
 `report_unavailable(&DbState, &mut dyn Write)` (`src/lib.rs`) with stderr; the
 line comes from `DbState::unavailable_line`, which still works after a poisoned
 lock.
 `DbState::open` opens, migrates, then seeds (see Seeding). In
-the storage commands, a poisoned lock returns `Storage`.
+the commands that use `DbState`, a poisoned lock returns `Storage`.
 
-`build.rs` lists the seven commands, and `capabilities/default.json` grants
+`build.rs` lists all 18 commands, `collect_commands!` registers them with
+`log_webview_error` last, and `capabilities/default.json` grants
 `core:default`, `dialog:allow-open` (the `tauri-plugin-dialog` file picker,
 registered in `src/lib.rs`), `allow-save-song`, `allow-get-song`,
 `allow-list-songs`, `allow-delete-song`, `allow-search-songs`,
-`allow-read-text-file` and `allow-log-webview-error` to the main window.
+`allow-read-text-file`, `allow-save-export-docx`, `allow-list-setlists`,
+`allow-get-setlist`, `allow-create-setlist`, `allow-rename-setlist`,
+`allow-delete-setlist`, `allow-duplicate-setlist`, `allow-add-setlist-items`,
+`allow-remove-setlist-item`, `allow-reorder-setlist-items`,
+`allow-update-setlist-item` and `allow-log-webview-error` to the main window.
+There is no `dialog:allow-save` and no fs plugin: the save dialog is opened from
+Rust.
 
 ## Bindings
 
@@ -216,7 +275,11 @@ Debug builds also rewrite the file at startup, only when the content differs.
 `getSong`, `listSongs`, `deleteSong` and `searchSongs`; `searchSongs` returns
 `SearchHit[]`. A failure of one of these five throws a
 `StorageError` whose `kind` is an `ErrorKind` or `"Ipc"` (the call itself
-failed). It also exports `logWebviewError(message)`, which forwards a webview
+failed). It also exports ten setlist wrappers (`listSetlists`, `getSetlist`,
+`createSetlist`, `renameSetlist`, `deleteSetlist`, `duplicateSetlist`,
+`addSetlistItems`, `removeSetlistItem`, `reorderSetlistItems`,
+`updateSetlistItem`) and the `Setlist`, `SetlistSummary` and `SetlistItem`
+types. It also exports `logWebviewError(message)`, which forwards a webview
 error to the app's stderr and never rejects; the webview error forwarder uses
 it. The desktop app calls `listSongs`, `getSong` and `searchSongs` for the
 sidebar, `saveSong` for the editor and file import, and `deleteSong` for song
@@ -227,7 +290,9 @@ deletion: once the delete confirmation dialog is confirmed, `deleteMany`
 `apps/desktop/src/files.ts` wraps the generated `readTextFile` command as
 `readTextFile(path)` and the dialog plugin as `pickSongFiles()`. A failure of
 `readTextFile` throws a `FileReadError` whose `kind` is a `FileErrorKind`
-(`TooLarge`, `NotUtf8`, `Io`) or `"Ipc"` (the call itself failed).
+(`TooLarge`, `NotUtf8`, `Io`, `Invalid`) or `"Ipc"` (the call itself failed). `readTextFile` itself never receives `Invalid`.
+It also exports `saveExportDocx`, which wraps `save_export_docx`; a failure
+throws a `FileWriteError` whose `kind` is `Invalid`, `Io` or `"Ipc"`.
 
 ## Invariants
 
@@ -240,7 +305,11 @@ deletion: once the delete confirmation dialog is confirmed, `deleteMany`
   Rowid reuse after a delete is safe only because the song row and its FTS row
   are deleted in one transaction.
 - After V2 a G4 build refuses the database (newer `user_version`), so there is
-  no downgrade.
+  no downgrade. V3 is one-way in the same way: an older build refuses a V3
+  database.
+- Deleting a song or a setlist cascades to `setlist_items`; after a song
+  delete the affected setlists are renumbered densely, so positions stay
+  contiguous from 0.
 - The V2 rebuild keeps the rowid link: it runs DELETE plus INSERT per rowid,
   never `REPLACE`.
 - A future migration that rebuilds the `songs` table must also rebuild
