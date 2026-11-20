@@ -234,7 +234,7 @@ describe("(c) EN / HE parity", () => {
 
   it("has the plural bases the rule is about", () => {
     const bases = Object.keys(en).filter((k) => k.endsWith("_one"));
-    expect(bases.length).toBe(5);
+    expect(bases.length).toBe(8);
     expect(vars(en["deleteManyFailed_other"]!)).toEqual(
       new Set(["failed", "count"]),
     );

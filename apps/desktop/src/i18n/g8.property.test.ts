@@ -40,6 +40,8 @@ const t = (key: string, lng: "en" | "he", count: number): string =>
 describe("g8 plural coverage", () => {
   it("covers the expected template bases", () => {
     expect(countBases).toEqual([
+      "addToSetlistTitle",
+      "addedToSetlist",
       "deleteManyFailed",
       "deleteManyTitle",
       "deletedCount",
@@ -47,13 +49,17 @@ describe("g8 plural coverage", () => {
       "importQueued",
       "importSummary",
       "selectedCount",
+      "setlistItemCount",
     ]);
     expect(pluralBases).toEqual([
+      "addToSetlistTitle",
+      "addedToSetlist",
       "deleteManyFailed",
       "deletedCount",
       "diagnosticsCount",
       "importQueued",
       "importSummary",
+      "setlistItemCount",
     ]);
   });
 
