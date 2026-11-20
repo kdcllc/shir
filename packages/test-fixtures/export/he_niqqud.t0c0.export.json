@@ -1,0 +1,56 @@
+{
+  "title": "שיר השלום",
+  "capo": 0,
+  "transpose": 0,
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Am",
+          "text": "שָׁלוֹם לכָם "
+        },
+        {
+          "chord": "G",
+          "text": "בַּביִת החדש"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "F",
+          "text": "שִׁיר קָטן "
+        },
+        {
+          "chord": "E",
+          "text": "בֹּקר רָגוע"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Dm",
+          "text": "שִׁמְשׁ זהב "
+        },
+        {
+          "chord": "Am",
+          "text": "ושָׁלוֹם"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "title": "צפוף",
+  "capo": 0,
+  "transpose": 0,
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Am7/G",
+          "text": "ש"
+        },
+        {
+          "chord": "Cmaj7",
+          "text": "מ"
+        },
+        {
+          "chord": "Dsus4",
+          "text": "י"
+        },
+        {
+          "chord": "F#m7",
+          "text": "ם "
+        },
+        {
+          "chord": "Am7/G",
+          "text": "א"
+        },
+        {
+          "chord": "Cmaj7",
+          "text": "ו"
+        },
+        {
+          "chord": "Dsus4",
+          "text": "ר "
+        },
+        {
+          "chord": "F#m7",
+          "text": "ע"
+        },
+        {
+          "chord": "Am7/G",
+          "text": "ל"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Am",
+          "text": "ושוב חוזר השיר"
+        }
+      ]
+    }
+  ]
+}

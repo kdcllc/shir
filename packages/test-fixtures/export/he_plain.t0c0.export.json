@@ -1,0 +1,73 @@
+{
+  "title": "שיר הבוקר",
+  "capo": 0,
+  "transpose": 0,
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Am",
+          "text": "הבוקר עולה על ה"
+        },
+        {
+          "chord": "G",
+          "text": "עיר"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "F",
+          "text": "השמש מאירה את הרח"
+        },
+        {
+          "chord": "E",
+          "text": "וב"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "text": "ואנחנו שרים "
+        },
+        {
+          "chord": "Dm",
+          "text": "יחד בשק"
+        },
+        {
+          "chord": "Am",
+          "text": "ט"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "C",
+          "text": "והחלום נשאר איתנו"
+        },
+        {
+          "chord": "G",
+          "text": ""
+        }
+      ]
+    }
+  ]
+}

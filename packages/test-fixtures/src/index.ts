@@ -185,3 +185,76 @@ export interface EditCase {
 export function readEditCases(): EditCase[] {
   return JSON.parse(readFileSync(EDIT_CASES_PATH, "utf8")) as EditCase[];
 }
+
+/**
+ * One golden export case: `<fixture>` exported at `transpose`/`capo` equals the
+ * `ExportSong` JSON (without `model`) in `export/<file>`.
+ */
+export interface ExportGoldenCase {
+  fixture: FixtureName;
+  transpose: number;
+  capo: number;
+  file: string;
+}
+
+/** The golden export cases, in a fixed order. */
+export const EXPORT_GOLDEN_CASES: readonly ExportGoldenCase[] = [
+  {
+    fixture: "he_plain",
+    transpose: 0,
+    capo: 0,
+    file: "he_plain.t0c0.export.json",
+  },
+  {
+    fixture: "he_niqqud",
+    transpose: 0,
+    capo: 0,
+    file: "he_niqqud.t0c0.export.json",
+  },
+  {
+    fixture: "mixed_he_en",
+    transpose: 2,
+    capo: 0,
+    file: "mixed_he_en.t2c0.export.json",
+  },
+  {
+    fixture: "chord_only_line",
+    transpose: 0,
+    capo: 0,
+    file: "chord_only_line.t0c0.export.json",
+  },
+  {
+    fixture: "sections_he",
+    transpose: -3,
+    capo: 2,
+    file: "sections_he.t-3c2.export.json",
+  },
+  {
+    fixture: "dense_chords",
+    transpose: 0,
+    capo: 0,
+    file: "dense_chords.t0c0.export.json",
+  },
+  {
+    fixture: "rtl_ltr_tail",
+    transpose: 0,
+    capo: 0,
+    file: "rtl_ltr_tail.t0c0.export.json",
+  },
+];
+
+/** Absolute path of `<package>/export/<file>`. */
+export function exportGoldenPath(file: string): string {
+  if (!EXPORT_GOLDEN_CASES.some((c) => c.file === file)) {
+    throw new TypeError(`Unknown export golden: ${String(file)}`);
+  }
+  return fileURLToPath(new URL(`../export/${file}`, import.meta.url));
+}
+
+/** Parsed export golden (an `ExportSong` without `model`) of a case or file name. */
+export function readExportGolden(
+  caseOrFile: ExportGoldenCase | string,
+): unknown {
+  const file = typeof caseOrFile === "string" ? caseOrFile : caseOrFile.file;
+  return JSON.parse(readFileSync(exportGoldenPath(file), "utf8")) as unknown;
+}
