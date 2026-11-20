@@ -10,9 +10,29 @@ import type { SongModel } from "chord-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { loadLibrary } from "./library";
-import { pickSongFiles, readTextFile } from "./files";
-import { getSong, listSongs, saveSong, searchSongs } from "./storage";
-import type { SearchHit, Song, SongSummary } from "./storage";
+import { pickSongFiles, readTextFile, saveExportDocx } from "./files";
+import {
+  addSetlistItems,
+  createSetlist,
+  deleteSetlist,
+  deleteSong,
+  duplicateSetlist,
+  getSetlist,
+  getSong,
+  listSetlists,
+  listSongs,
+  reorderSetlistItems,
+  saveSong,
+  searchSongs,
+  updateSetlistItem,
+} from "./storage";
+import type {
+  SearchHit,
+  Setlist,
+  SetlistSummary,
+  Song,
+  SongSummary,
+} from "./storage";
 import { STRINGS } from "./strings";
 import { signalUiReady } from "./uiReady";
 
@@ -23,10 +43,21 @@ vi.mock("./storage", () => ({
   searchSongs: vi.fn(),
   saveSong: vi.fn(),
   deleteSong: vi.fn(),
+  listSetlists: vi.fn(() => Promise.resolve([])),
+  getSetlist: vi.fn(),
+  createSetlist: vi.fn(),
+  renameSetlist: vi.fn(),
+  deleteSetlist: vi.fn(() => Promise.resolve()),
+  duplicateSetlist: vi.fn(),
+  addSetlistItems: vi.fn(),
+  removeSetlistItem: vi.fn(),
+  reorderSetlistItems: vi.fn(),
+  updateSetlistItem: vi.fn(),
 }));
 vi.mock("./files", () => ({
   pickSongFiles: vi.fn(),
   readTextFile: vi.fn(),
+  saveExportDocx: vi.fn(),
 }));
 
 /** Bundled mode: the library cannot be listed. Resolves once the list is shown. */
@@ -859,5 +890,503 @@ describe("App editor", () => {
     const converted = await screen.findByTestId("import-converted");
     expect(converted.textContent).toContain("eng.txt");
     expect(screen.queryByTestId("import-queued")).toBeNull();
+  });
+});
+
+describe("App setlists (database mode)", () => {
+  /** In-memory stand-in for the setlist commands. */
+  let current: Setlist | undefined;
+  let counter: number;
+
+  const item = (songId: string): Setlist["items"][number] => ({
+    id: `i${++counter}`,
+    songId,
+    position: 0,
+    transpose: 0,
+    capo: null,
+    title: songId,
+    artist: null,
+    key: null,
+    songCapo: null,
+    language: "en",
+  });
+  const setItems = (items: Setlist["items"]): Setlist => {
+    current = { ...current!, items };
+    return current;
+  };
+  const summaries = (): SetlistSummary[] =>
+    current === undefined
+      ? []
+      : [
+          {
+            id: current.id,
+            name: current.name,
+            itemCount: current.items.length,
+            updatedAt: "",
+          },
+        ];
+
+  beforeEach(() => {
+    current = undefined;
+    counter = 0;
+    vi.mocked(signalUiReady).mockClear();
+    vi.mocked(listSongs).mockReset();
+    vi.mocked(getSong).mockReset();
+    vi.mocked(searchSongs).mockReset();
+    useDb();
+    vi.mocked(listSetlists).mockImplementation(() =>
+      Promise.resolve(summaries()),
+    );
+    vi.mocked(getSetlist).mockImplementation(() => Promise.resolve(current!));
+    vi.mocked(createSetlist).mockImplementation((name) => {
+      current = {
+        id: "sl1",
+        name,
+        createdAt: "",
+        updatedAt: "",
+        items: [],
+      };
+      return Promise.resolve(current);
+    });
+    vi.mocked(addSetlistItems).mockImplementation((_id, songIds) =>
+      Promise.resolve(setItems([...current!.items, ...songIds.map(item)])),
+    );
+    vi.mocked(reorderSetlistItems).mockImplementation((_id, order) =>
+      Promise.resolve(
+        setItems(order.map((id) => current!.items.find((i) => i.id === id)!)),
+      ),
+    );
+    vi.mocked(updateSetlistItem).mockImplementation(
+      (_id, itemId, transpose, capo) =>
+        Promise.resolve(
+          setItems(
+            current!.items.map((i) =>
+              i.id === itemId ? { ...i, transpose, capo } : i,
+            ),
+          ),
+        ),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("creates a setlist, adds two songs, moves one, transposes one and prints", async () => {
+    render(<App />);
+    await screen.findByTestId("song-title");
+    expect(listSetlists).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("tab-songs")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    // Create from the Setlists tab; the new setlist opens in the main pane.
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    fireEvent.change(screen.getByTestId("setlist-name-input"), {
+      target: { value: "Sunday" },
+    });
+    fireEvent.click(screen.getByTestId("setlist-create"));
+    await screen.findByTestId("setlist-editor");
+    expect(createSetlist).toHaveBeenCalledExactlyOnceWith("Sunday");
+    expect(screen.queryByTestId("song-title")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByTestId("setlist-select")).toHaveAttribute(
+        "aria-current",
+        "true",
+      ),
+    );
+
+    // Select two songs in select mode and add them in library order.
+    fireEvent.click(screen.getByTestId("tab-songs"));
+    fireEvent.click(screen.getByTestId("select-songs"));
+    const rows = screen.getAllByTestId("song-item");
+    expect(rows).toHaveLength(3);
+    fireEvent.click(screen.getAllByTestId("song-check")[2]!);
+    fireEvent.click(screen.getAllByTestId("song-check")[0]!);
+    fireEvent.click(screen.getByTestId("add-selected-to-setlist"));
+    fireEvent.click(screen.getAllByTestId("add-to-setlist-option")[0]!);
+    fireEvent.click(screen.getByTestId("add-to-setlist-confirm"));
+    await waitFor(() => expect(addSetlistItems).toHaveBeenCalledTimes(1));
+    expect(addSetlistItems).toHaveBeenCalledWith("sl1", ["c", "b"]);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("setlist-entry")).toHaveLength(2),
+    );
+    expect(screen.getByTestId("app-status").textContent).toBe(
+      "Added 2 songs to the setlist",
+    );
+    // Select mode stays as it was.
+    expect(screen.getByTestId("selection-count")).toBeInTheDocument();
+
+    // Move the second entry up, then transpose it.
+    fireEvent.click(screen.getAllByTestId("setlist-entry-up")[1]!);
+    await waitFor(() => expect(reorderSetlistItems).toHaveBeenCalledTimes(1));
+    expect(reorderSetlistItems).toHaveBeenCalledWith("sl1", ["i2", "i1"]);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("setlist-entry-title")[0]!.textContent).toBe(
+        "b",
+      ),
+    );
+    fireEvent.click(screen.getAllByTestId("setlist-entry-transpose-up")[0]!);
+    await waitFor(() =>
+      expect(updateSetlistItem).toHaveBeenCalledWith("sl1", "i2", 1, null),
+    );
+
+    // Print: every song is fetched, then the print root is mounted while window.print runs.
+    const during: boolean[] = [];
+    window.print = vi.fn(() => {
+      during.push(document.querySelector("[data-print-container]") !== null);
+    }) as unknown as typeof window.print;
+    vi.mocked(getSong).mockClear();
+    fireEvent.click(screen.getByTestId("setlist-print"));
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1), {
+      timeout: 6000,
+    });
+    expect(during).toEqual([true]);
+    expect(getSong).toHaveBeenCalledTimes(2);
+  }, 15000);
+  /** A setlist with two entries for songs "a" and "b", already stored. */
+  function seed() {
+    current = {
+      id: "sl1",
+      name: "Sunday",
+      createdAt: "",
+      updatedAt: "",
+      items: [item("a"), item("b")],
+    };
+    current.items[0] = { ...current.items[0]!, transpose: 2, capo: 3 };
+  }
+
+  async function renderSeeded() {
+    seed();
+    render(<App />);
+    await screen.findByTestId("song-title");
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    fireEvent.click(await screen.findByTestId("setlist-select"));
+    await screen.findByTestId("setlist-editor");
+  }
+
+  it("renders no setlist UI in bundled mode", async () => {
+    await renderBundled();
+    expect(screen.queryByTestId("sidebar-tabs")).toBeNull();
+    expect(screen.queryByTestId("song-add-to-setlist")).toBeNull();
+    expect(listSetlists).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last state and shows a notice when a call fails", async () => {
+    vi.mocked(createSetlist).mockRejectedValue(new Error("boom"));
+    render(<App />);
+    await screen.findByTestId("song-title");
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    fireEvent.change(screen.getByTestId("setlist-name-input"), {
+      target: { value: "Sunday" },
+    });
+    fireEvent.click(screen.getByTestId("setlist-create"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.setlistSaveFailed,
+    );
+    expect(screen.queryByTestId("setlist-editor")).toBeNull();
+  });
+
+  it("opens a song from an entry with its transpose and capo, unsaved", async () => {
+    await renderSeeded();
+    fireEvent.click(screen.getAllByTestId("setlist-entry-title")[0]!);
+    await screen.findByTestId("song-title");
+    expect(screen.queryByTestId("setlist-editor")).toBeNull();
+    expect(screen.getByTestId("tab-songs")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("capo-select")).toHaveValue("3");
+    expect(screen.getByTestId("transpose-value").textContent).toContain("2");
+    expect(saveSong).not.toHaveBeenCalled();
+  });
+
+  it("re-fetches the open setlist after a song is deleted", async () => {
+    await renderSeeded();
+    fireEvent.click(screen.getByTestId("tab-songs"));
+    fireEvent.click(screen.getByTestId("select-songs"));
+    fireEvent.click(screen.getAllByTestId("song-check")[2]!);
+    vi.mocked(deleteSong).mockImplementation(() => {
+      setItems(current!.items.filter((i) => i.songId !== "b"));
+      return Promise.resolve();
+    });
+    vi.mocked(getSetlist).mockClear();
+    vi.mocked(listSetlists).mockClear();
+    fireEvent.click(screen.getByTestId("delete-selected"));
+    fireEvent.click(screen.getByTestId("confirm-delete-yes"));
+    await waitFor(() => expect(getSetlist).toHaveBeenCalledWith("sl1"));
+    expect(listSetlists).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getAllByTestId("setlist-entry")).toHaveLength(1),
+    );
+  });
+
+  it("saves a Word file and names the saved file; cancel and errors", async () => {
+    await renderSeeded();
+    vi.mocked(saveExportDocx).mockResolvedValueOnce("/tmp/Sunday (2).docx");
+    fireEvent.click(screen.getByTestId("setlist-export-word"));
+    await waitFor(() =>
+      expect(screen.getByTestId("app-status").textContent).toBe(
+        "Saved \u2068Sunday (2).docx\u2069",
+      ),
+    );
+    expect(vi.mocked(saveExportDocx).mock.calls[0]![0]).toBe("Sunday.docx");
+    expect(vi.mocked(saveExportDocx).mock.calls[0]![1]).toBe(
+      STRINGS.fileFilterWord,
+    );
+
+    vi.mocked(saveExportDocx).mockResolvedValueOnce(null);
+    fireEvent.click(screen.getByTestId("setlist-export-word"));
+    await waitFor(() => expect(saveExportDocx).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId("app-status")).toBeNull());
+    expect(screen.queryByTestId("app-notice")).toBeNull();
+
+    vi.mocked(saveExportDocx).mockRejectedValueOnce(new Error("disk"));
+    fireEvent.click(screen.getByTestId("setlist-export-word"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.exportFailed,
+    );
+  }, 15000);
+
+  it("aborts a setlist export when a song cannot be fetched", async () => {
+    await renderSeeded();
+    window.print = vi.fn() as unknown as typeof window.print;
+    vi.mocked(getSong).mockRejectedValue(new Error("gone"));
+    fireEvent.click(screen.getByTestId("setlist-print"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.exportFailed,
+    );
+    expect(window.print).not.toHaveBeenCalled();
+  });
+
+  it("exports the open song without a cover, with the PDF hint", async () => {
+    render(<App />);
+    await screen.findByTestId("song-title");
+    expect(screen.getByTestId("song-pdf-hint").textContent).toBe(
+      STRINGS.pdfHint,
+    );
+    let cover: boolean | undefined;
+    window.print = vi.fn(() => {
+      cover = document.querySelector("[data-print-cover]") !== null;
+    }) as unknown as typeof window.print;
+    fireEvent.click(screen.getByTestId("song-export-pdf"));
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1), {
+      timeout: 6000,
+    });
+    expect(cover).toBe(false);
+  }, 15000);
+  it("deletes the open setlist and stays on the Setlists tab", async () => {
+    await renderSeeded();
+    vi.mocked(deleteSetlist).mockImplementation(() => {
+      current = undefined;
+      return Promise.resolve();
+    });
+    fireEvent.click(screen.getByTestId("setlist-delete"));
+    fireEvent.click(screen.getByTestId("confirm-delete-setlist-yes"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("setlist-editor")).toBeNull(),
+    );
+    expect(deleteSetlist).toHaveBeenCalledExactlyOnceWith("sl1");
+    expect(screen.getByTestId("tab-setlists")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(await screen.findByTestId("setlists-empty")).toBeInTheDocument();
+  });
+
+  it("duplicates a setlist with the suffix and opens the copy", async () => {
+    await renderSeeded();
+    vi.mocked(duplicateSetlist).mockImplementation((_id, name) => {
+      current = { ...current!, id: "sl2", name };
+      return Promise.resolve(current);
+    });
+    fireEvent.click(screen.getByTestId("setlist-duplicate"));
+    await waitFor(() =>
+      expect(duplicateSetlist).toHaveBeenCalledExactlyOnceWith(
+        "sl1",
+        `Sunday ${STRINGS.duplicateSuffix}`,
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("setlist-editor").querySelector("h2")!.textContent,
+      ).toBe(`Sunday ${STRINGS.duplicateSuffix}`),
+    );
+  });
+
+  it("disables the editor controls while a storage call is pending", async () => {
+    await renderSeeded();
+    let finish: (value: Setlist) => void = () => undefined;
+    vi.mocked(updateSetlistItem).mockImplementation(
+      () =>
+        new Promise<Setlist>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    expect(screen.getAllByTestId("setlist-entry-up")[1]).toBeEnabled();
+    fireEvent.click(screen.getAllByTestId("setlist-entry-transpose-up")[1]!);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("setlist-entry-up")[1]).toBeDisabled(),
+    );
+    expect(
+      screen.getAllByTestId("setlist-entry-transpose-up")[0],
+    ).toBeDisabled();
+    finish(current!);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("setlist-entry-up")[1]).toBeEnabled(),
+    );
+  });
+
+  it("keeps the entry's capo when its transpose changes", async () => {
+    await renderSeeded();
+    fireEvent.click(screen.getAllByTestId("setlist-entry-transpose-up")[0]!);
+    await waitFor(() =>
+      expect(updateSetlistItem).toHaveBeenCalledExactlyOnceWith(
+        "sl1",
+        "i1",
+        3,
+        3,
+      ),
+    );
+  });
+
+  it("adds the open song to an existing setlist from its header", async () => {
+    seed();
+    render(<App />);
+    await screen.findByTestId("song-title");
+    fireEvent.click(screen.getByTestId("song-add-to-setlist"));
+    fireEvent.click(screen.getAllByTestId("add-to-setlist-option")[0]!);
+    fireEvent.click(screen.getByTestId("add-to-setlist-confirm"));
+    await waitFor(() =>
+      expect(addSetlistItems).toHaveBeenCalledExactlyOnceWith("sl1", ["c"]),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("app-status").textContent).toBe(
+        "Added 1 song to the setlist",
+      ),
+    );
+    expect(screen.queryByTestId("add-to-setlist")).toBeNull();
+  });
+
+  it("lists the new setlist and shows a notice when create-then-add fails", async () => {
+    render(<App />);
+    await screen.findByTestId("song-title");
+    vi.mocked(addSetlistItems).mockRejectedValue(new Error("boom"));
+    fireEvent.click(screen.getByTestId("song-add-to-setlist"));
+    fireEvent.change(screen.getByTestId("add-to-setlist-name"), {
+      target: { value: "Fresh" },
+    });
+    fireEvent.click(screen.getByTestId("add-to-setlist-confirm"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.setlistSaveFailed,
+    );
+    expect(createSetlist).toHaveBeenCalledExactlyOnceWith("Fresh");
+    expect(screen.queryByTestId("app-status")).toBeNull();
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    expect(await screen.findAllByTestId("setlist-row")).toHaveLength(1);
+  });
+
+  it("Export PDF mounts the print root in PDF mode, Print leaves the title", async () => {
+    await renderSeeded();
+    document.title = "Shir";
+    const seen: { title: string; root: boolean; cover: boolean }[] = [];
+    window.print = vi.fn(() => {
+      seen.push({
+        title: document.title,
+        root: document.querySelector("[data-print-root]") !== null,
+        cover: document.querySelector("[data-print-cover]") !== null,
+      });
+    }) as unknown as typeof window.print;
+    fireEvent.click(screen.getByTestId("setlist-export-pdf"));
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1), {
+      timeout: 6000,
+    });
+    expect(seen[0]).toEqual({ title: "Sunday", root: true, cover: true });
+    await waitFor(() =>
+      expect(screen.getByTestId("setlist-export-pdf")).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByTestId("setlist-print"));
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(2), {
+      timeout: 6000,
+    });
+    expect(seen[1]!.title).not.toBe("Sunday");
+  }, 20000);
+
+  describe("open-song export", () => {
+    const chordsIn = (root: ParentNode) =>
+      [...root.querySelectorAll("[data-song] [data-chord]")].map(
+        (el) => el.textContent,
+      );
+
+    async function transposedSong() {
+      render(<App />);
+      await screen.findByTestId("song-title");
+      fireEvent.click(screen.getAllByTestId("song-item")[1]!); // Alpha
+      await waitFor(() =>
+        expect(screen.getByTestId("song-title").textContent).toBe("Alpha"),
+      );
+      fireEvent.click(screen.getByTestId("transpose-up"));
+      fireEvent.click(screen.getByTestId("transpose-up"));
+      fireEvent.change(screen.getByTestId("capo-select"), {
+        target: { value: "1" },
+      });
+    }
+
+    it.each(["song-print", "song-export-pdf"])(
+      "%s prints the current transpose and capo",
+      async (id) => {
+        await transposedSong();
+        const viewed = chordsIn(screen.getByTestId("song-pane"));
+        expect(viewed.length).toBeGreaterThan(0);
+        expect(viewed).not.toEqual(["C", "F"]);
+        let printed: (string | null)[] = [];
+        window.print = vi.fn(() => {
+          printed = chordsIn(document.querySelector("[data-print-container]")!);
+        }) as unknown as typeof window.print;
+        fireEvent.click(screen.getByTestId(id));
+        await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1), {
+          timeout: 6000,
+        });
+        expect(printed).toEqual(viewed);
+      },
+      15000,
+    );
+
+    it("prints with lang=he and dir=rtl under the Hebrew locale", async () => {
+      await transposedSong();
+      fireEvent.click(screen.getByTestId("locale-he"));
+      let attrs = "";
+      window.print = vi.fn(() => {
+        const root = document.querySelector("[data-print-root]")!;
+        attrs = `${root.getAttribute("lang")}/${root.getAttribute("dir")}`;
+      }) as unknown as typeof window.print;
+      try {
+        fireEvent.click(screen.getByTestId("song-print"));
+        await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1), {
+          timeout: 6000,
+        });
+        expect(attrs).toBe("he/rtl");
+      } finally {
+        fireEvent.click(screen.getByTestId("locale-en"));
+      }
+    }, 15000);
+  });
+
+  it("shows export feedback in bundled mode", async () => {
+    await renderBundled();
+    vi.mocked(saveExportDocx).mockRejectedValueOnce(new Error("disk"));
+    fireEvent.click(screen.getByTestId("song-export-word"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.exportFailed,
+    );
+    vi.mocked(saveExportDocx).mockResolvedValueOnce("/x/y/Demo (2).docx");
+    fireEvent.click(screen.getByTestId("song-export-word"));
+    await waitFor(() =>
+      expect(screen.getByTestId("app-status").textContent).toBe(
+        "Saved ⁨Demo (2).docx⁩",
+      ),
+    );
+    expect(screen.queryByTestId("app-notice")).toBeNull();
   });
 });

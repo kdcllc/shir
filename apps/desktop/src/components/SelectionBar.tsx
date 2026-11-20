@@ -11,6 +11,7 @@ export interface SelectionBarProps {
   onStart(): void;
   onSelectAll(): void;
   onDelete(): void;
+  onAddToSetlist(): void;
   onDone(): void;
   /** Receives the Select button, so the owner can focus it. */
   startRef?: DialogFocus["first"] | undefined;
@@ -24,6 +25,7 @@ export function SelectionBar({
   onStart,
   onSelectAll,
   onDelete,
+  onAddToSetlist,
   onDone,
   startRef,
 }: SelectionBarProps) {
@@ -51,6 +53,15 @@ export function SelectionBar({
           </p>
           <button type="button" data-testid="select-all" onClick={onSelectAll}>
             {t("selectAll")}
+          </button>
+          <button
+            type="button"
+            data-testid="add-selected-to-setlist"
+            data-ui-chrome
+            disabled={count === 0}
+            onClick={onAddToSetlist}
+          >
+            {t("addToSetlist")}
           </button>
           <button
             type="button"

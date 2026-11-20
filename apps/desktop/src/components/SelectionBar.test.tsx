@@ -16,6 +16,7 @@ function setup(overrides: Partial<SelectionBarProps> = {}) {
     onStart: vi.fn(),
     onSelectAll: vi.fn(),
     onDelete: vi.fn(),
+    onAddToSetlist: vi.fn(),
     onDone: vi.fn(),
     ...overrides,
   };
@@ -47,6 +48,7 @@ describe("SelectionBar", () => {
     expect(ids()).toEqual([
       "selection-count",
       "select-all",
+      "add-selected-to-setlist",
       "delete-selected",
       "select-done",
     ]);
@@ -60,6 +62,9 @@ describe("SelectionBar", () => {
     );
     expect(screen.getByTestId("delete-selected").textContent).toBe(
       STRINGS.deleteSelected,
+    );
+    expect(screen.getByTestId("add-selected-to-setlist").textContent).toBe(
+      STRINGS.addToSetlist,
     );
     expect(screen.getByTestId("select-done").textContent).toBe(
       STRINGS.selectDone,
@@ -97,6 +102,24 @@ describe("SelectionBar", () => {
   it("disables Delete selected while busy even with a selection", () => {
     setup({ selecting: true, count: 3, busy: true });
     expect(screen.getByTestId("delete-selected")).toBeDisabled();
+  });
+
+  it("Add to setlist is disabled at count 0 and calls its callback otherwise", () => {
+    const props = setup({ selecting: true, count: 0 });
+    const add = screen.getByTestId("add-selected-to-setlist");
+    expect(add).toBeDisabled();
+    fireEvent.click(add);
+    expect(props.onAddToSetlist).not.toHaveBeenCalled();
+  });
+
+  it("Add to setlist calls only its callback with a selection", () => {
+    const props = setup({ selecting: true, count: 2 });
+    const add = screen.getByTestId("add-selected-to-setlist");
+    expect(add).toBeEnabled();
+    expect(add).toHaveAttribute("data-ui-chrome");
+    fireEvent.click(add);
+    expect(props.onAddToSetlist).toHaveBeenCalledTimes(1);
+    expect(props.onDelete).not.toHaveBeenCalled();
   });
 
   it("startRef receives the Select button", () => {
