@@ -10,74 +10,76 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 
 ## Pinned versions
 
-| Component                                | Package                         | Version                                  | Ecosystem | Status         |
-| ---------------------------------------- | ------------------------------- | ---------------------------------------- | --------- | -------------- |
-| Node.js                                  | `node`                          | 24.20.0                                  | toolchain | installed (G0) |
-| pnpm                                     | `pnpm`                          | 10.34.9                                  | toolchain | installed (G0) |
-| Rust                                     | `rustc`                         | 1.97.1                                   | toolchain | installed (G0) |
-| TypeScript                               | `typescript`                    | 6.0.3                                    | npm       | installed (G0) |
-| Vite                                     | `vite`                          | 8.3.8                                    | npm       | installed (G0) |
-| Vite React plugin                        | `@vitejs/plugin-react`          | 6.3.0                                    | npm       | installed (G0) |
-| React                                    | `react`                         | 19.3.1                                   | npm       | installed (G0) |
-| React DOM                                | `react-dom`                     | 19.3.1                                   | npm       | installed (G0) |
-| React types                              | `@types/react`                  | 19.3.0                                   | npm       | installed (G0) |
-| React DOM types                          | `@types/react-dom`              | 19.3.0                                   | npm       | installed (G0) |
-| Node types                               | `@types/node`                   | 26.6.6                                   | npm       | installed (G0) |
-| Vitest                                   | `vitest`                        | 5.1.0                                    | npm       | installed (G0) |
-| jsdom                                    | `jsdom`                         | 31.0.0                                   | npm       | installed (G0) |
-| Testing Library React                    | `@testing-library/react`        | 16.3.3                                   | npm       | installed (G0) |
-| Testing Library DOM                      | `@testing-library/dom`          | 10.4.2                                   | npm       | installed (G0) |
-| Testing Library jest-dom                 | `@testing-library/jest-dom`     | 7.0.1                                    | npm       | installed (G0) |
-| ESLint                                   | `eslint`                        | 10.14.0                                  | npm       | installed (G0) |
-| ESLint JS config                         | `@eslint/js`                    | 10.0.1                                   | npm       | installed (G0) |
-| typescript-eslint                        | `typescript-eslint`             | 8.72.2                                   | npm       | installed (G0) |
-| ESLint React Hooks plugin                | `eslint-plugin-react-hooks`     | 7.1.1                                    | npm       | installed (G0) |
-| ESLint React Refresh plugin              | `eslint-plugin-react-refresh`   | 0.5.7                                    | npm       | installed (G0) |
-| globals                                  | `globals`                       | 17.14.0                                  | npm       | installed (G0) |
-| stylelint                                | `stylelint`                     | 17.16.0                                  | npm       | installed (G0) |
-| stylelint standard config                | `stylelint-config-standard`     | 40.0.0                                   | npm       | installed (G0) |
-| stylelint CSS Modules config             | `stylelint-config-css-modules`  | 4.6.0                                    | npm       | installed (G0) |
-| stylelint logical properties             | `stylelint-use-logical`         | 2.1.3                                    | npm       | installed (G0) |
-| Prettier                                 | `prettier`                      | 3.10.1                                   | npm       | installed (G0) |
-| Tauri CLI                                | `@tauri-apps/cli`               | 2.12.4                                   | npm       | installed (G0) |
-| Tauri JS API                             | `@tauri-apps/api`               | 2.12.4                                   | npm       | installed (G0) |
-| Tauri core                               | `tauri`                         | 2.12.5                                   | crate     | installed (G0) |
-| Tauri build script                       | `tauri-build`                   | 2.7.4                                    | crate     | installed (G0) |
-| Tauri dialog plugin                      | `tauri-plugin-dialog`           | 2.8.4                                    | crate     | installed (G6) |
-| Tauri dialog plugin JS                   | `@tauri-apps/plugin-dialog`     | 2.8.4                                    | npm       | installed (G6) |
-| Serde                                    | `serde`                         | 1.0.229                                  | crate     | installed (G0) |
-| Serde JSON                               | `serde_json`                    | 1.0.154                                  | crate     | installed (G0) |
-| ChordSheetJS                             | `chordsheetjs`                  | 18.0.0                                   | npm       | removed (G2)   |
-| fast-check                               | `fast-check`                    | 4.10.2                                   | npm       | planned        |
-| Zustand                                  | `zustand`                       | 5.1.0                                    | npm       | planned        |
-| TanStack Router                          | `@tanstack/react-router`        | 1.170.46                                 | npm       | planned        |
-| i18next                                  | `i18next`                       | 27.1.1                                   | npm       | installed (G8) |
-| react-i18next                            | `react-i18next`                 | 18.0.1                                   | npm       | installed (G8) |
-| SVGuitar                                 | `svguitar`                      | 2.10.1                                   | npm       | planned (G3)   |
-| Chord fingering data (HEAD commit)       | `tabsy-gr/chords-db`            | 43f8b4a7ba7b61b90bb48f8721ae918a4f421d64 | data      | planned (G3)   |
-| SQLite bindings (bundled)                | `rusqlite`                      | 0.41.1                                   | crate     | installed (G4) |
-| Migrations                               | `rusqlite_migration`            | 2.7.0                                    | crate     | installed (G4) |
-| Migrations (not chosen in G4)            | `refinery`                      | 0.10.0                                   | crate     | not used (G4)  |
-| Specta (rc, no stable 2.x release)       | `specta`                        | 2.0.0-rc.28                              | crate     | installed (G4) |
-| tauri-specta (rc, no stable 2.x release) | `tauri-specta`                  | 2.0.0-rc.29                              | crate     | installed (G4) |
-| Specta TypeScript exporter               | `specta-typescript`             | 0.0.15                                   | crate     | installed (G4) |
-| UUID (v7 ids)                            | `uuid`                          | 1.29.2                                   | crate     | installed (G4) |
-| Time formatting                          | `time`                          | 0.3.55                                   | crate     | installed (G4) |
-| Unicode normalization                    | `unicode-normalization`         | 0.1.26                                   | crate     | installed (G4) |
-| Error derive                             | `thiserror`                     | 2.0.21                                   | crate     | installed (G4) |
-| Temp files (dev-dependency)              | `tempfile`                      | 3.27.0                                   | crate     | installed (G4) |
-| Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | installed (G1) |
-| WebdriverIO                              | `webdriverio`                   | 10.1.0                                   | npm       | installed (G8) |
-| WDIO CLI                                 | `@wdio/cli`                     | 10.1.0                                   | npm       | installed (G8) |
-| WDIO globals                             | `@wdio/globals`                 | 10.1.0                                   | npm       | installed (G8) |
-| WDIO local runner                        | `@wdio/local-runner`            | 10.1.0                                   | npm       | installed (G8) |
-| WDIO Mocha framework                     | `@wdio/mocha-framework`         | 10.1.0                                   | npm       | installed (G8) |
-| WDIO spec reporter                       | `@wdio/spec-reporter`           | 10.1.0                                   | npm       | installed (G8) |
-| WDIO assertions (pinned for Node floor)  | `expect-webdriverio`            | 8.0.0                                    | npm       | installed (G8) |
-| WDIO Tauri service                       | `@wdio/tauri-service`           | 1.5.1                                    | npm       | not used (G8)  |
-| Tauri WebDriver server (cargo install)   | `tauri-driver`                  | 2.1.0                                    | tool      | installed (G8) |
-| Tauri updater plugin                     | `tauri-plugin-updater`          | 2.14.1                                   | crate     | planned (G10)  |
-| Noto Sans Hebrew                         | `@fontsource/noto-sans-hebrew`  | 5.3.0                                    | npm       | installed (G1) |
-| Noto Serif Hebrew                        | `@fontsource/noto-serif-hebrew` | 5.3.0                                    | npm       | installed (G1) |
-| Heebo                                    | `@fontsource/heebo`             | 5.3.0                                    | npm       | installed (G1) |
-| JetBrains Mono                           | `@fontsource/jetbrains-mono`    | 5.3.0                                    | npm       | installed (G1) |
+| Component                                | Package                         | Version                                  | Ecosystem | Status          |
+| ---------------------------------------- | ------------------------------- | ---------------------------------------- | --------- | --------------- |
+| Node.js                                  | `node`                          | 24.20.0                                  | toolchain | installed (G0)  |
+| pnpm                                     | `pnpm`                          | 10.34.9                                  | toolchain | installed (G0)  |
+| Rust                                     | `rustc`                         | 1.97.1                                   | toolchain | installed (G0)  |
+| TypeScript                               | `typescript`                    | 6.0.3                                    | npm       | installed (G0)  |
+| Vite                                     | `vite`                          | 8.3.8                                    | npm       | installed (G0)  |
+| Vite React plugin                        | `@vitejs/plugin-react`          | 6.3.0                                    | npm       | installed (G0)  |
+| React                                    | `react`                         | 19.3.1                                   | npm       | installed (G0)  |
+| React DOM                                | `react-dom`                     | 19.3.1                                   | npm       | installed (G0)  |
+| React types                              | `@types/react`                  | 19.3.0                                   | npm       | installed (G0)  |
+| React DOM types                          | `@types/react-dom`              | 19.3.0                                   | npm       | installed (G0)  |
+| Node types                               | `@types/node`                   | 26.6.6                                   | npm       | installed (G0)  |
+| Vitest                                   | `vitest`                        | 5.1.0                                    | npm       | installed (G0)  |
+| jsdom                                    | `jsdom`                         | 31.0.0                                   | npm       | installed (G0)  |
+| Testing Library React                    | `@testing-library/react`        | 16.3.3                                   | npm       | installed (G0)  |
+| Testing Library DOM                      | `@testing-library/dom`          | 10.4.2                                   | npm       | installed (G0)  |
+| Testing Library jest-dom                 | `@testing-library/jest-dom`     | 7.0.1                                    | npm       | installed (G0)  |
+| ESLint                                   | `eslint`                        | 10.14.0                                  | npm       | installed (G0)  |
+| ESLint JS config                         | `@eslint/js`                    | 10.0.1                                   | npm       | installed (G0)  |
+| typescript-eslint                        | `typescript-eslint`             | 8.72.2                                   | npm       | installed (G0)  |
+| ESLint React Hooks plugin                | `eslint-plugin-react-hooks`     | 7.1.1                                    | npm       | installed (G0)  |
+| ESLint React Refresh plugin              | `eslint-plugin-react-refresh`   | 0.5.7                                    | npm       | installed (G0)  |
+| globals                                  | `globals`                       | 17.14.0                                  | npm       | installed (G0)  |
+| stylelint                                | `stylelint`                     | 17.16.0                                  | npm       | installed (G0)  |
+| stylelint standard config                | `stylelint-config-standard`     | 40.0.0                                   | npm       | installed (G0)  |
+| stylelint CSS Modules config             | `stylelint-config-css-modules`  | 4.6.0                                    | npm       | installed (G0)  |
+| stylelint logical properties             | `stylelint-use-logical`         | 2.1.3                                    | npm       | installed (G0)  |
+| Prettier                                 | `prettier`                      | 3.10.1                                   | npm       | installed (G0)  |
+| Tauri CLI                                | `@tauri-apps/cli`               | 2.12.4                                   | npm       | installed (G0)  |
+| Tauri JS API                             | `@tauri-apps/api`               | 2.12.4                                   | npm       | installed (G0)  |
+| Tauri core                               | `tauri`                         | 2.12.5                                   | crate     | installed (G0)  |
+| Tauri build script                       | `tauri-build`                   | 2.7.4                                    | crate     | installed (G0)  |
+| Tauri dialog plugin                      | `tauri-plugin-dialog`           | 2.8.4                                    | crate     | installed (G6)  |
+| Tauri dialog plugin JS                   | `@tauri-apps/plugin-dialog`     | 2.8.4                                    | npm       | installed (G6)  |
+| Serde                                    | `serde`                         | 1.0.229                                  | crate     | installed (G0)  |
+| Serde JSON                               | `serde_json`                    | 1.0.154                                  | crate     | installed (G0)  |
+| ChordSheetJS                             | `chordsheetjs`                  | 18.0.0                                   | npm       | removed (G2)    |
+| fast-check                               | `fast-check`                    | 4.10.2                                   | npm       | planned         |
+| Zustand                                  | `zustand`                       | 5.1.0                                    | npm       | planned         |
+| TanStack Router                          | `@tanstack/react-router`        | 1.170.46                                 | npm       | planned         |
+| i18next                                  | `i18next`                       | 27.1.1                                   | npm       | installed (G8)  |
+| react-i18next                            | `react-i18next`                 | 18.0.1                                   | npm       | installed (G8)  |
+| SVGuitar                                 | `svguitar`                      | 2.10.1                                   | npm       | planned (G3)    |
+| Chord fingering data (HEAD commit)       | `tabsy-gr/chords-db`            | 43f8b4a7ba7b61b90bb48f8721ae918a4f421d64 | data      | planned (G3)    |
+| SQLite bindings (bundled)                | `rusqlite`                      | 0.41.1                                   | crate     | installed (G4)  |
+| Migrations                               | `rusqlite_migration`            | 2.7.0                                    | crate     | installed (G4)  |
+| Migrations (not chosen in G4)            | `refinery`                      | 0.10.0                                   | crate     | not used (G4)   |
+| Specta (rc, no stable 2.x release)       | `specta`                        | 2.0.0-rc.28                              | crate     | installed (G4)  |
+| tauri-specta (rc, no stable 2.x release) | `tauri-specta`                  | 2.0.0-rc.29                              | crate     | installed (G4)  |
+| Specta TypeScript exporter               | `specta-typescript`             | 0.0.15                                   | crate     | installed (G4)  |
+| UUID (v7 ids)                            | `uuid`                          | 1.29.2                                   | crate     | installed (G4)  |
+| Time formatting                          | `time`                          | 0.3.55                                   | crate     | installed (G4)  |
+| Unicode normalization                    | `unicode-normalization`         | 0.1.26                                   | crate     | installed (G4)  |
+| Error derive                             | `thiserror`                     | 2.0.21                                   | crate     | installed (G4)  |
+| Temp files (dev-dependency)              | `tempfile`                      | 3.27.0                                   | crate     | installed (G4)  |
+| Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | installed (G1)  |
+| WebdriverIO                              | `webdriverio`                   | 10.1.0                                   | npm       | installed (G8)  |
+| WDIO CLI                                 | `@wdio/cli`                     | 10.1.0                                   | npm       | installed (G8)  |
+| WDIO globals                             | `@wdio/globals`                 | 10.1.0                                   | npm       | installed (G8)  |
+| WDIO local runner                        | `@wdio/local-runner`            | 10.1.0                                   | npm       | installed (G8)  |
+| WDIO Mocha framework                     | `@wdio/mocha-framework`         | 10.1.0                                   | npm       | installed (G8)  |
+| WDIO spec reporter                       | `@wdio/spec-reporter`           | 10.1.0                                   | npm       | installed (G8)  |
+| WDIO assertions (pinned for Node floor)  | `expect-webdriverio`            | 8.0.0                                    | npm       | installed (G8)  |
+| WDIO Tauri service                       | `@wdio/tauri-service`           | 1.5.1                                    | npm       | not used (G8)   |
+| Tauri WebDriver server (cargo install)   | `tauri-driver`                  | 2.1.0                                    | tool      | installed (G8)  |
+| Tauri updater plugin                     | `tauri-plugin-updater`          | 2.14.1                                   | crate     | planned (G10)   |
+| Noto Sans Hebrew                         | `@fontsource/noto-sans-hebrew`  | 5.3.0                                    | npm       | installed (G1)  |
+| Noto Serif Hebrew                        | `@fontsource/noto-serif-hebrew` | 5.3.0                                    | npm       | installed (G1)  |
+| Heebo                                    | `@fontsource/heebo`             | 5.3.0                                    | npm       | installed (G1)  |
+| JetBrains Mono                           | `@fontsource/jetbrains-mono`    | 5.3.0                                    | npm       | installed (G1)  |
+| docx (Word export)                       | `docx`                          | 9.15.2                                   | npm       | installed (G10) |
+| fflate (test-only unzip)                 | `fflate`                        | 0.8.3                                    | npm       | installed (G10) |
