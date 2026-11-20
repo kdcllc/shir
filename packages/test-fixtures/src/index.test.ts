@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_FIXTURE_NAMES,
   EDIT_CASES_PATH,
+  EXPORT_GOLDEN_CASES,
   FIXTURE_NAMES,
   ROUNDTRIP_FIXTURE_NAMES,
   canonicalPath,
@@ -18,6 +19,7 @@ import {
   readCanonical,
   readDiagnostics,
   readEditCases,
+  readExportGolden,
   readFixture,
   readGolden,
   type FixtureName,
@@ -507,5 +509,45 @@ describe("edit cases", () => {
         expect(finalFormErrors(line.replace(/\[[^\]]*\]/g, ""))).toEqual([]);
       }
     }
+  });
+});
+
+describe("export goldens", () => {
+  const EXPORT_DIR = fileURLToPath(new URL("../export/", import.meta.url));
+
+  it("lists the seven cases with matching file names", () => {
+    expect(EXPORT_GOLDEN_CASES.map((c) => c.fixture)).toEqual([
+      "he_plain",
+      "he_niqqud",
+      "mixed_he_en",
+      "chord_only_line",
+      "sections_he",
+      "dense_chords",
+      "rtl_ltr_tail",
+    ]);
+    for (const c of EXPORT_GOLDEN_CASES) {
+      expect(isFixtureName(c.fixture)).toBe(true);
+      expect(c.file).toBe(
+        `${c.fixture}.t${String(c.transpose)}c${String(c.capo)}.export.json`,
+      );
+    }
+  });
+  it("every listed file exists and parses as an ExportSong without model", () => {
+    for (const c of EXPORT_GOLDEN_CASES) {
+      expect(readdirSync(EXPORT_DIR)).toContain(c.file);
+      const g = readExportGolden(c) as Record<string, unknown>;
+      expect(g).toBeTypeOf("object");
+      expect(Array.isArray(g.lines)).toBe(true);
+      expect("model" in g).toBe(false);
+      expect(readExportGolden(c.file)).toEqual(g);
+    }
+  });
+  it("every file in export/ is listed (no orphans)", () => {
+    expect(readdirSync(EXPORT_DIR).sort()).toEqual(
+      EXPORT_GOLDEN_CASES.map((c) => c.file).sort(),
+    );
+  });
+  it("rejects unknown golden files", () => {
+    expect(() => readExportGolden("nope.export.json")).toThrow(TypeError);
   });
 });

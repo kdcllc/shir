@@ -12,6 +12,10 @@ pub mod normalize;
 pub mod repo;
 pub mod search;
 pub mod seed;
+pub mod setlists;
 
 pub use error::{DbError, ErrorKind};
-pub use model::{Language, SaveSongInput, SearchHit, Song, SongSummary, MAX_CHORDPRO_BYTES};
+pub use model::{
+    Language, SaveSongInput, SearchHit, Setlist, SetlistItem, SetlistSummary, Song, SongSummary,
+    MAX_CHORDPRO_BYTES,
+};

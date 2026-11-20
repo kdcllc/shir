@@ -59,6 +59,44 @@ pub struct SaveSongInput {
     pub chordpro: String,
 }
 
+/// A setlist as shown in lists.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetlistSummary {
+    pub id: String,
+    pub name: String,
+    pub item_count: u32,
+    pub updated_at: String,
+}
+
+/// One setlist entry with its song's display fields joined from `songs`.
+/// `capo: None` means "use the song's own capo" (`song_capo`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetlistItem {
+    pub id: String,
+    pub song_id: String,
+    pub position: u32,
+    pub transpose: i8,
+    pub capo: Option<u8>,
+    pub title: String,
+    pub artist: Option<String>,
+    pub key: Option<String>,
+    pub song_capo: Option<u8>,
+    pub language: Language,
+}
+
+/// A setlist with its entries ordered by position.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Setlist {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub items: Vec<SetlistItem>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

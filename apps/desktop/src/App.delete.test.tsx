@@ -33,10 +33,21 @@ vi.mock("./storage", () => ({
   searchSongs: vi.fn(),
   saveSong: vi.fn(),
   deleteSong: vi.fn(),
+  listSetlists: vi.fn(() => Promise.resolve([])),
+  getSetlist: vi.fn(),
+  createSetlist: vi.fn(),
+  renameSetlist: vi.fn(),
+  deleteSetlist: vi.fn(() => Promise.resolve()),
+  duplicateSetlist: vi.fn(),
+  addSetlistItems: vi.fn(),
+  removeSetlistItem: vi.fn(),
+  reorderSetlistItems: vi.fn(),
+  updateSetlistItem: vi.fn(),
 }));
 vi.mock("./files", () => ({
   pickSongFiles: vi.fn(),
   readTextFile: vi.fn(),
+  saveExportDocx: vi.fn(),
 }));
 
 function summary(id: string, title: string, artist: string | null = null) {

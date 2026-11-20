@@ -18,6 +18,7 @@ pub fn migrations() -> Migrations<'static> {
                     .map_err(|e| HookError::Hook(e.message))
             },
         ),
+        M::up(include_str!("../../migrations/0003_setlists.sql")),
     ])
 }
 
@@ -90,7 +91,7 @@ mod tests {
     #[test]
     fn in_memory_applies_latest() {
         let c = open_in_memory().unwrap();
-        assert_eq!(user_version(&c), 2);
+        assert_eq!(user_version(&c), 3);
         assert!(table_exists(&c, "songs"));
         assert!(table_exists(&c, "songs_fts"));
         assert!(table_exists(&c, "app_meta"));
@@ -109,7 +110,7 @@ mod tests {
         let mut c = open_in_memory().unwrap();
         assert!(migrate(&mut c).is_ok());
         assert!(migrate(&mut c).is_ok());
-        assert_eq!(user_version(&c), 2);
+        assert_eq!(user_version(&c), 3);
     }
 
     #[test]
@@ -130,10 +131,10 @@ mod tests {
                 .query_row("PRAGMA busy_timeout", [], |r| r.get(0))
                 .unwrap();
             assert_eq!(bt, 5000);
-            assert_eq!(user_version(&c), 2);
+            assert_eq!(user_version(&c), 3);
         }
         let c = open(&path).unwrap();
-        assert_eq!(user_version(&c), 2);
+        assert_eq!(user_version(&c), 3);
         assert!(table_exists(&c, "songs_fts"));
     }
 
@@ -197,7 +198,7 @@ mod tests {
         )
         .unwrap();
         migrate(&mut c).unwrap();
-        assert_eq!(user_version(&c), 2);
+        assert_eq!(user_version(&c), 3);
         assert_eq!(count(&c, "songs"), 1);
         assert_eq!(count(&c, "app_meta"), 0);
         // The V2 hook does not run again: the song added after V2 stays without an FTS row.
@@ -232,7 +233,7 @@ mod tests {
 
         migrate(&mut c).unwrap();
 
-        assert_eq!(user_version(&c), 2);
+        assert_eq!(user_version(&c), 3);
         assert_eq!(crate::db::search::search_songs(&c, "צהל").unwrap().len(), 1);
         assert_eq!(count(&c, "songs_fts"), count(&c, "songs"));
         let (a, b): (i64, i64) = c
@@ -254,5 +255,164 @@ mod tests {
         assert_eq!(err.kind, ErrorKind::Migration);
         assert_eq!(user_version(&c), 1);
         assert!(!table_exists(&c, "app_meta"));
+    }
+
+    fn v2_only(c: &mut Connection) {
+        let all = migrations();
+        all.to_version(c, 2).unwrap();
+    }
+
+    fn insert_setlist(c: &Connection, name: &str) -> rusqlite::Result<usize> {
+        c.execute(
+            "INSERT INTO setlists (id, name, created_at, updated_at) VALUES ('l', ?1, 't', 't')",
+            [name],
+        )
+    }
+
+    fn insert_item(
+        c: &Connection,
+        id: &str,
+        position: &str,
+        transpose: &str,
+        capo: &str,
+    ) -> rusqlite::Result<usize> {
+        c.execute(
+            &format!(
+                "INSERT INTO setlist_items (id, setlist_id, song_id, position, transpose, capo) \
+                 VALUES ('{id}', 'l', 'a', {position}, {transpose}, {capo})"
+            ),
+            [],
+        )
+    }
+
+    #[test]
+    fn v2_upgrade_adds_setlists_and_keeps_songs_and_fts() {
+        let mut c = Connection::open_in_memory().unwrap();
+        c.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        v2_only(&mut c);
+        assert_eq!(user_version(&c), 2);
+        assert!(!table_exists(&c, "setlists"));
+        c.execute(
+            "INSERT INTO songs (id, chordpro, title, language, created_at, updated_at) \
+             VALUES ('s1', '{title: One}', 'One', 'en', 't1', 't2')",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO songs_fts (rowid, title_norm, artist_norm, lyrics_norm) \
+             SELECT rowid, 'one', '', 'words' FROM songs",
+            [],
+        )
+        .unwrap();
+        let snapshot = |c: &Connection| -> String {
+            c.query_row(
+                "SELECT s.rowid || '|' || s.id || '|' || s.chordpro || '|' || s.title || '|' || \
+                 s.created_at || '|' || s.updated_at || '|' || f.title_norm || '|' || f.lyrics_norm \
+                 FROM songs s JOIN songs_fts f ON f.rowid = s.rowid",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        let before = snapshot(&c);
+        let (songs_before, fts_before) = (count(&c, "songs"), count(&c, "songs_fts"));
+
+        migrate(&mut c).unwrap();
+
+        assert_eq!(user_version(&c), 3);
+        assert!(table_exists(&c, "setlists"));
+        assert!(table_exists(&c, "setlist_items"));
+        assert_eq!(snapshot(&c), before);
+        assert_eq!(count(&c, "songs"), songs_before);
+        assert_eq!(count(&c, "songs_fts"), fts_before);
+        assert_eq!(count(&c, "setlists"), 0);
+        for t in ["setlists", "setlist_items"] {
+            let sql: String = c
+                .query_row("SELECT sql FROM sqlite_master WHERE name = ?1", [t], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            assert!(sql.contains("STRICT"), "{t} must be STRICT: {sql}");
+        }
+    }
+
+    #[test]
+    fn v3_rerun_keeps_setlist_rows() {
+        let mut c = open_in_memory().unwrap();
+        insert_song(&c, "en", "NULL").unwrap();
+        insert_setlist(&c, "Sunday").unwrap();
+        insert_item(&c, "i1", "0", "0", "NULL").unwrap();
+        migrate(&mut c).unwrap();
+        assert_eq!(user_version(&c), 3);
+        assert_eq!(count(&c, "setlists"), 1);
+        assert_eq!(count(&c, "setlist_items"), 1);
+    }
+
+    #[test]
+    fn setlist_name_check_rejects_only_bad_names() {
+        let c = open_in_memory().unwrap();
+        assert!(insert_setlist(&c, "x").is_ok(), "1 char is valid");
+        c.execute("DELETE FROM setlists", []).unwrap();
+        assert!(insert_setlist(&c, &"a".repeat(200)).is_ok(), "200 is valid");
+        c.execute("DELETE FROM setlists", []).unwrap();
+        assert!(insert_setlist(&c, &"a".repeat(201)).is_err(), "201 chars");
+        assert!(insert_setlist(&c, "     ").is_err(), "spaces only");
+        assert!(insert_setlist(&c, "").is_err(), "empty");
+    }
+
+    #[test]
+    fn setlist_item_checks_reject_only_their_own_bad_value() {
+        let c = open_in_memory().unwrap();
+        insert_song(&c, "en", "NULL").unwrap();
+        insert_setlist(&c, "Sunday").unwrap();
+        // Boundary values that must be accepted.
+        assert!(insert_item(&c, "ok1", "0", "11", "24").is_ok());
+        assert!(insert_item(&c, "ok2", "1", "-11", "0").is_ok());
+        assert!(insert_item(&c, "ok3", "2", "0", "NULL").is_ok());
+        // Each row below violates exactly one rule.
+        assert!(
+            insert_item(&c, "b1", "3", "12", "NULL").is_err(),
+            "transpose 12"
+        );
+        assert!(
+            insert_item(&c, "b2", "3", "-12", "NULL").is_err(),
+            "transpose -12"
+        );
+        assert!(insert_item(&c, "b3", "3", "0", "25").is_err(), "capo 25");
+        assert!(insert_item(&c, "b4", "3", "0", "-1").is_err(), "capo -1");
+        assert!(
+            insert_item(&c, "b5", "-1", "0", "NULL").is_err(),
+            "position -1"
+        );
+        assert!(
+            insert_item(&c, "b6", "3", "0", "1.5").is_err(),
+            "STRICT capo type"
+        );
+        assert!(
+            insert_item(&c, "b7", "2", "0", "NULL").is_err(),
+            "duplicate position"
+        );
+        assert!(
+            insert_item(&c, "b8", "3", "0", "NULL").is_ok(),
+            "control: 3 is free"
+        );
+        assert!(
+            c.execute(
+                "INSERT INTO setlist_items (id, setlist_id, song_id, position) \
+                 VALUES ('b9', 'l', 'missing', 4)",
+                [],
+            )
+            .is_err(),
+            "song FK"
+        );
+        assert!(
+            c.execute(
+                "INSERT INTO setlist_items (id, setlist_id, song_id, position) \
+                 VALUES ('b10', 'missing', 'a', 4)",
+                [],
+            )
+            .is_err(),
+            "setlist FK"
+        );
     }
 }

@@ -10,7 +10,13 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: (...a: unknown[]) => open(...a),
 }));
 
-import { FileReadError, pickSongFiles, readTextFile } from "./files";
+import {
+  FileReadError,
+  FileWriteError,
+  pickSongFiles,
+  readTextFile,
+  saveExportDocx,
+} from "./files";
 import { i18n } from "./i18n";
 
 beforeEach(() => {
@@ -51,6 +57,70 @@ describe("readTextFile", () => {
     const err = await readTextFile("/x").catch((e: unknown) => e);
     expect((err as FileReadError).kind).toBe("Ipc");
     expect((err as FileReadError).message).toBe("boom");
+  });
+});
+
+describe("isFileError accepts Invalid", () => {
+  it("readTextFile keeps an Invalid error result as Invalid, not Ipc", async () => {
+    invoke.mockImplementation(() =>
+      Promise.reject({ kind: "Invalid", message: "m" }),
+    );
+    const err = await readTextFile("/x").catch((e: unknown) => e);
+    expect((err as FileReadError).kind).toBe("Invalid");
+  });
+});
+
+describe("saveExportDocx", () => {
+  it("invokes save_export_docx with number[] bytes and returns the saved path", async () => {
+    invoke.mockResolvedValue("/home/u/set.docx");
+    await expect(
+      saveExportDocx("set.docx", "Word", new Uint8Array([1, 2, 255])),
+    ).resolves.toBe("/home/u/set.docx");
+    expect(invoke.mock.calls[0]![0]).toBe("save_export_docx");
+    expect(invoke.mock.calls[0]![1]).toEqual({
+      defaultName: "set.docx",
+      filterName: "Word",
+      bytes: [1, 2, 255],
+    });
+  });
+
+  it("resolves null when the user cancels", async () => {
+    invoke.mockResolvedValue(null);
+    await expect(
+      saveExportDocx("a.docx", "Word", new Uint8Array([1])),
+    ).resolves.toBeNull();
+  });
+
+  it.each(["Invalid", "Io"] as const)(
+    "maps a %s error result to FileWriteError",
+    async (kind) => {
+      invoke.mockImplementation(() => Promise.reject({ kind, message: "m" }));
+      const err = await saveExportDocx("a", "W", new Uint8Array([1])).catch(
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(FileWriteError);
+      expect((err as FileWriteError).kind).toBe(kind);
+      expect((err as FileWriteError).message).toBe("m");
+    },
+  );
+
+  it("maps an IPC failure to kind Ipc", async () => {
+    invoke.mockImplementation(() => Promise.reject(new Error("no ipc")));
+    const err = await saveExportDocx("a", "W", new Uint8Array([1])).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(FileWriteError);
+    expect((err as FileWriteError).kind).toBe("Ipc");
+    expect((err as FileWriteError).message).toBe("no ipc");
+  });
+
+  it("maps a non-error rejection to kind Ipc", async () => {
+    invoke.mockImplementation(() => Promise.reject("boom"));
+    const err = await saveExportDocx("a", "W", new Uint8Array([1])).catch(
+      (e: unknown) => e,
+    );
+    expect((err as FileWriteError).kind).toBe("Ipc");
+    expect((err as FileWriteError).message).toBe("boom");
   });
 });
 

@@ -13,11 +13,14 @@ const pluralBases = Object.keys(en)
 describe("EN / HE key parity", () => {
   it("has a non-trivial plural base set", () => {
     expect(pluralBases.sort()).toEqual([
+      "addToSetlistTitle",
+      "addedToSetlist",
       "deleteManyFailed",
       "deletedCount",
       "diagnosticsCount",
       "importQueued",
       "importSummary",
+      "setlistItemCount",
     ]);
   });
 

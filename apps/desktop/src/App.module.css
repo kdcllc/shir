@@ -108,3 +108,10 @@
 .delete-status:empty {
   margin-block: 0;
 }
+
+.hint {
+  margin-block: 0;
+  align-self: center;
+  font-size: 0.85rem;
+  color: GrayText;
+}

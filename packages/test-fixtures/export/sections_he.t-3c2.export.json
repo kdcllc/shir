@@ -1,0 +1,109 @@
+{
+  "title": "שיר הערב",
+  "capo": 2,
+  "transpose": -3,
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "label": "בית 1",
+      "direction": "rtl"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Em",
+          "text": "הערב יורד על ה"
+        },
+        {
+          "chord": "D",
+          "text": "נהר"
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "C",
+          "text": "והכוכבים עולים "
+        },
+        {
+          "chord": "B",
+          "text": "לאט"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "label": "chorus",
+      "direction": "rtl"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "G",
+          "text": "שירו איתי "
+        },
+        {
+          "chord": "D",
+          "text": "שוב"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "comment",
+      "text": "חוזרים פעמיים",
+      "direction": "rtl"
+    },
+    {
+      "kind": "comment",
+      "text": "בשקט",
+      "direction": "rtl"
+    },
+    {
+      "kind": "comment",
+      "text": "סולו בסוף",
+      "direction": "rtl"
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "section",
+      "label": "bridge",
+      "direction": "rtl"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Am",
+          "text": "הרוח נושבת "
+        },
+        {
+          "chord": "Em",
+          "text": "רחוק"
+        }
+      ]
+    }
+  ],
+  "artist": "להקת הדוגמה",
+  "soundingKey": "F#m",
+  "shapeKey": "Em"
+}

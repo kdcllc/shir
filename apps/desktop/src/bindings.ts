@@ -14,6 +14,21 @@ export const commands = {
 	searchSongs: (query: string, options?: InvokeOptions) => typedError<SearchHit_Serialize[], DbError>(__TAURI_INVOKE("search_songs", { query }, options)),
 	/**  Read a text file picked by the user. */
 	readTextFile: (path: string, options?: InvokeOptions) => typedError<string, FileError>(__TAURI_INVOKE("read_text_file", { path }, options)),
+	/**
+	 *  Ask for a save location in a native dialog opened here (the webview never supplies a
+	 *  path) and write the Word document `bytes` there. `Ok(None)` when the user cancels.
+	 */
+	saveExportDocx: (defaultName: string, filterName: string, bytes: number[], options?: InvokeOptions) => typedError<string | null, FileError>(__TAURI_INVOKE("save_export_docx", { defaultName, filterName, bytes }, options)),
+	listSetlists: (options?: InvokeOptions) => typedError<SetlistSummary[], DbError>(__TAURI_INVOKE("list_setlists", undefined, options)),
+	getSetlist: (id: string, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("get_setlist", { id }, options)),
+	createSetlist: (name: string, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("create_setlist", { name }, options)),
+	renameSetlist: (id: string, name: string, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("rename_setlist", { id, name }, options)),
+	deleteSetlist: (id: string, options?: InvokeOptions) => typedError<null, DbError>(__TAURI_INVOKE("delete_setlist", { id }, options)),
+	duplicateSetlist: (id: string, name: string, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("duplicate_setlist", { id, name }, options)),
+	addSetlistItems: (setlistId: string, songIds: string[], options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("add_setlist_items", { setlistId, songIds }, options)),
+	removeSetlistItem: (setlistId: string, itemId: string, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("remove_setlist_item", { setlistId, itemId }, options)),
+	reorderSetlistItems: (setlistId: string, itemIds: string[], options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("reorder_setlist_items", { setlistId, itemIds }, options)),
+	updateSetlistItem: (setlistId: string, itemId: string, transpose: number, capo: number | null, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("update_setlist_item", { setlistId, itemId, transpose, capo }, options)),
 	/**  Forward a webview error to stderr. Never fails. */
 	logWebviewError: (message: string, options?: InvokeOptions) => __TAURI_INVOKE<void>("log_webview_error", { message }, options),
 };
@@ -34,8 +49,10 @@ export type FileError = {
 	message: string,
 };
 
-/**  Category of a file-read failure. */
-export type FileErrorKind = "TooLarge" | "NotUtf8" | "Io";
+/**  Category of a file failure. */
+export type FileErrorKind = "TooLarge" | "NotUtf8" | "Io" | 
+/**  The request itself is unacceptable (for example an empty or oversized payload). */
+"Invalid";
 
 /**  Dominant script of a song's lyrics. */
 export type Language = "he" | "en" | "mixed";
@@ -77,6 +94,75 @@ export type SearchHit_Deserialize = {
 export type SearchHit_Serialize = {
 	song: SongSummary_Serialize,
 	snippet: string | null,
+};
+
+/**  A setlist with its entries ordered by position. */
+export type Setlist = Setlist_Serialize | Setlist_Deserialize;
+
+/**
+ *  One setlist entry with its song's display fields joined from `songs`.
+ *  `capo: None` means "use the song's own capo" (`song_capo`).
+ */
+export type SetlistItem = SetlistItem_Serialize | SetlistItem_Deserialize;
+
+/**
+ *  One setlist entry with its song's display fields joined from `songs`.
+ *  `capo: None` means "use the song's own capo" (`song_capo`).
+ */
+export type SetlistItem_Deserialize = {
+	id: string,
+	songId: string,
+	position: number,
+	transpose: number,
+	capo?: number | null,
+	title: string,
+	artist?: string | null,
+	key?: string | null,
+	songCapo?: number | null,
+	language: Language,
+};
+
+/**
+ *  One setlist entry with its song's display fields joined from `songs`.
+ *  `capo: None` means "use the song's own capo" (`song_capo`).
+ */
+export type SetlistItem_Serialize = {
+	id: string,
+	songId: string,
+	position: number,
+	transpose: number,
+	capo: number | null,
+	title: string,
+	artist: string | null,
+	key: string | null,
+	songCapo: number | null,
+	language: Language,
+};
+
+/**  A setlist as shown in lists. */
+export type SetlistSummary = {
+	id: string,
+	name: string,
+	itemCount: number,
+	updatedAt: string,
+};
+
+/**  A setlist with its entries ordered by position. */
+export type Setlist_Deserialize = {
+	id: string,
+	name: string,
+	createdAt: string,
+	updatedAt: string,
+	items: SetlistItem_Deserialize[],
+};
+
+/**  A setlist with its entries ordered by position. */
+export type Setlist_Serialize = {
+	id: string,
+	name: string,
+	createdAt: string,
+	updatedAt: string,
+	items: SetlistItem_Serialize[],
 };
 
 /**  A stored song with its full ChordPro source. */

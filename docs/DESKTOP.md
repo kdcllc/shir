@@ -10,7 +10,9 @@ and the Hebrew resource is `apps/desktop/src/i18n/he.ts`.
 Two panes. The song list (`<nav>`, accessible name `Songs`) sits on the
 inline-start side under the app heading `<h1>`, rendered as
 `{appName} {separator} <bdi lang="he">{appNameHebrew}</bdi>`, which shows as
-`Shir · שיר`. The song pane is `<main>`. While the editor is open (database
+`Shir · שיר`. In database mode a Songs / Setlists switch (`SidebarTabs`) sits
+under the heading; the Setlists view shows `SetlistsPanel` in the sidebar and
+`SetlistEditor` in the song pane (§ Setlists view). The song pane is `<main>`. While the editor is open (database
 mode only), it replaces the song view in the song pane (see § Editor and
 import).
 
@@ -48,7 +50,11 @@ import).
   checkbox and the row delete button, the delete status, the header delete
   button, the delete dialog, the editor tabs, the song-details form, the chord
   picker, the section controls and the visual editor's row buttons, inputs,
-  hint and footer.
+  hint and footer. The setlist surfaces carry it too: the Songs / Setlists
+  switch, the setlists panel and its rows, the setlist editor's export buttons
+  and entries, the add-to-setlist and delete-setlist dialogs, the open song's
+  Add to setlist, Print, Export PDF and Export Word buttons with their PDF hint,
+  the setlist PDF hint and the app-status line.
 - Colour rule: every colour declaration that uses `color-mix()` or the `Mark`
   system colour has a fallback declaration of the same property, on the same
   selector, outside any `@supports` block. The fallback uses only the colours
@@ -155,6 +161,8 @@ Database-mode states:
   rows now listed: the search hits once a search has completed, or the listed
   (filtered) library rows while the library is shown, and nothing while the
   search error or the empty-result message is shown),
+  `Add to setlist` (`add-selected-to-setlist`, disabled when nothing is
+  selected; opens `AddToSetlistDialog` for the selected songs),
   `Delete selected` (`delete-selected`, disabled when nothing is selected) and
   `Done` (`select-done`, leaves select mode and clears the selection). Each row
   shows a checkbox (`song-check`, accessible name `selectSongNamed`)
@@ -223,6 +231,12 @@ Header alignment:
   inline-start edge and keeps its own text direction.
 - The key/capo line is `dir="ltr"`. The title and artist keep `dir="auto"`.
 
+The header actions (`data-ui-chrome`) hold, in database mode, `Edit`, `Delete`
+and `Add to setlist` (`song-add-to-setlist`, opens `AddToSetlistDialog` for the
+open song), and in both modes `Print`, `Export PDF`, `Export Word` and the
+`pdfHint` text (`song-pdf-hint`). The three export buttons are disabled while a
+setlist call or export is running.
+
 Then come the view controls, the diagnostics panel when there are diagnostics,
 and `SongView` with the viewed song.
 
@@ -243,6 +257,76 @@ and `SongView` with the viewed song.
 
 Selecting another song applies the same reset. The rendered song is
 `viewSong(song, { transpose, capo }).song`. The library `song` is never mutated.
+
+## Setlists view
+
+Database mode only. The `SidebarTabs` switch chooses between the Songs view
+(search, library controls and song list) and the Setlists view. In the Setlists
+view the sidebar shows `SetlistsPanel`; opening a setlist shows `SetlistEditor`
+in the song pane, with the `pdfHint` text (`setlist-pdf-hint`) above it (§
+Components, Setlists). `App` owns the state and runs one setlist call or export
+at a time; a failed setlist call leaves the state as it was and shows an
+`app-notice` alert.
+
+- Add to setlist: `AddToSetlistDialog` adds the open song (header) or the
+  selected songs (select mode, in library order) to an existing setlist or to a
+  newly created one. After a successful add the `app-status` line (`role="status"`,
+  `data-ui-chrome`, shown in database and bundled mode) shows `addedToSetlist`.
+- Opening an entry (the entry's title button) opens its song in the Songs view
+  at that entry's transpose and capo, found by the entry's item id, so a song
+  that appears twice opens at the entry clicked.
+- Print, Export PDF and Export Word on the open setlist export a cover page plus
+  one song per page; the entries use their own transpose and capo, and a `null`
+  capo falls back to the song's own capo, then 0
+  (`apps/desktop/src/setlists.ts`, `entriesToExport`).
+
+`apps/desktop/src/setlists.ts` also exports `moveItem` (one-place reorder that
+ignores a move past either end), `duplicateName` (name, a space and the suffix,
+cut on a grapheme boundary to at most 200 characters) and `songToExport`.
+
+## Print and export
+
+Available in both database and bundled modes for the open song, and in database
+mode for the open setlist. Both go through the shared document model of
+chord-core (`buildExportDocument`, `buildExportSong`, `directionalCells`;
+`packages/chord-core/src/export.ts`). The open song exports at its current
+transpose and capo, without a cover page, under the song's title. A failure
+shows the `exportFailed` alert in `app-notice`.
+
+- Print and Export PDF (`apps/desktop/src/export/printExport.ts`): both open
+  the webview's print dialog; Export PDF additionally sets `document.title` to
+  the export file name (without extension) while the dialog is open, so the
+  dialog proposes it, and the `pdfHint` text tells the user to choose "Save as
+  PDF". `printExport` mounts `PrintDocument` (`data-print-root`) appended to
+  `<body>`, laid out off-screen at 180 mm (A4 minus 15 mm margins) so that
+  chord-render's overlap pass runs, sets `:root[data-printing="export"]`, waits for the fonts, the overlap pass (2 s cap) and two animation frames, and calls `window.print()`. The print CSS hides `#root`, shows the print root,
+  starts every song on a new page (`break-before: page`) and sets
+  `@page { size: A4; margin: 15mm }`, which is global. Cleanup runs on
+  `afterprint` or, for webviews that never fire it, on the first pointer or key
+  input after `print()` returned.
+- Export Word (`apps/desktop/src/export/docx.ts`, `buildDocx`; `saveDocx.ts`):
+  a cover page (setlist only) and one song per page. Lyric lines with at least one chord are borderless
+  two-row tables of single-direction cells from `directionalCells`; RTL tables
+  are `w:bidiVisual` with the table right-aligned, and cell groups of the
+  opposite direction are reversed as whole cells, never as strings. `w:bidi` /
+  `w:rtl` are set only on RTL lyric cells inside those tables; chord paragraphs
+  are never bidi (B1) and sit right-aligned in RTL cells; a chord-only line is
+  a one-row table in the song direction (B6). Outside those tables a paragraph is bidirectional / right-to-left when its own direction is RTL: a section label takes the song direction, a comment the first strong direction of its text, a chordless lyric line its line direction, and the setlist cover the interface language's direction (`ExportMeta.dir`). Column widths come from Liberation Sans advance widths
+  (`fontMetrics.ts`) times 1.1 plus 60 twips, scaled down proportionally only
+  when the sum exceeds 9638 twips (`columnWidths.ts`).
+- `exportFileName(title, ext)` (`fileName.ts`) replaces forbidden characters
+  with `-`, collapses whitespace, caps the name at 100 graphemes and falls back
+  to `setlist`.
+- `saveDocx` builds the file and calls `saveExportDocx(defaultName, filterName,
+bytes)` from `files.ts`. The native save dialog opens in the backend; the
+  webview never supplies a path. It resolves the saved path, or `null` when the
+  user cancels (no status is shown then). A failure throws `FileWriteError`
+  whose `kind` is `Invalid` (the backend refused the payload), `Io` or `"Ipc"`;
+  the read path (`readTextFile`, § Editor and import) keeps its own list. After
+  a save, `app-status` shows `exportSaved` with the file's base name.
+- The `apps/desktop/src/export/index.ts` module exports `PrintDocument`,
+  `printExport`, `buildDocx`, `exportFileName`, `saveDocx` and the
+  `ExportLabels` / `ExportMeta` types.
 
 ## Components
 
@@ -269,8 +353,9 @@ Each component lives at `apps/desktop/src/components/<Name>.tsx`.
   `focusIndex`, so that the owner can focus it.
 - `SelectionBar`: the `selection-bar` element. It shows `Select` outside select
   mode and the count, `Select all`, `Delete selected` and `Done` in select mode
-  (see § Library). `Delete selected` is disabled when `count` is 0 or `busy` is
-  set. The optional `startRef` receives the `Select` button, so that the owner
+  (see § Library) and, in select mode, `Add to setlist`
+  (`add-selected-to-setlist`, disabled when `count` is 0). `Delete selected` is
+  disabled when `count` is 0 or `busy` is set. The optional `startRef` receives the `Select` button, so that the owner
   can focus it.
 - `ConfirmDelete`: the delete confirmation dialog described in § Library. It
   never uses `window.confirm`.
@@ -351,7 +436,8 @@ SongIndex { items: readonly SongIndexItem[]; selectedId: string | undefined;
 LibraryControls { sort: SortOrder; language: LanguageFilter;
   onSort(next: SortOrder): void; onLanguage(next: LanguageFilter): void }
 SelectionBar { selecting: boolean; count: number; busy: boolean;
-  onStart(): void; onSelectAll(): void; onDelete(): void; onDone(): void;
+  onStart(): void; onSelectAll(): void; onDelete(): void;
+  onAddToSetlist(): void; onDone(): void;
   startRef?: RefObject<HTMLButtonElement | null> | undefined }
 ConfirmDelete { title: string; onCancel(): void; onConfirm(): void }
 SongHeader { title: string; artist?: string; soundingKey?: string;
@@ -379,6 +465,63 @@ SectionControls { section: string; label?: string | undefined;
   literal: boolean; canMoveUp: boolean; canMoveDown: boolean;
   onRename(section: SectionKind, label: string): void;
   onMove(direction: "up" | "down"): void; onRemove(): void }
+```
+
+### Setlists
+
+Controlled components in `apps/desktop/src/components/`; the owner (`App`) holds
+every state and calls storage. None of them calls storage or IPC, and every
+control carries `data-ui-chrome`.
+
+- `SidebarTabs`: the `sidebar-tabs` `role="tablist"` with a Songs and a Setlists
+  tab (`tab-songs`, `tab-setlists`). Arrow keys select the visually next or
+  previous tab (`dir="rtl"` swaps them; no wrap), `Home` and `End` jump to the
+  ends.
+- `SetlistsPanel`: the sidebar list of setlists. Each row (keyed by setlist id)
+  shows the name in a `<bdi>` and the `setlistItemCount` text, with Rename
+  (inline input, Enter commits the trimmed name, Escape cancels, an empty or
+  over-200-character name is rejected), Duplicate and Delete. Delete opens
+  `ConfirmDeleteSetlist`; only its confirm button calls `onDelete`. The create
+  form's button is disabled while the trimmed name is empty or longer than 200
+  characters (counted in characters, not bytes) or `busy`.
+- `SetlistEditor`: the main-pane editor. It shows the name, the Print / Export
+  PDF / Export Word buttons and an `<ol>` of entries keyed by item id, each with
+  position, title (opens the song), artist, effective sounding key
+  (`transposeKey(key, transpose)`, only when the song has one), transpose
+  (−11..+11), capo (`Song default (N)` = `null`, 0..12 and the song's own capo
+  when 13..24), Move up / Move down (disabled at the ends), Remove and a drag
+  handle. Alt+ArrowUp / Alt+ArrowDown on a focused row move it and keep focus on
+  it after the owner re-renders the new order. Moves are announced in the
+  `setlist-announce` live region.
+- `useReorderDrag(ids, onReorder)` (`useReorderDrag.ts`): pointer-event
+  reordering (no HTML5 drag API). Pointerdown on a handle captures the pointer,
+  the target index is the number of other rows whose block-axis midpoint is above
+  the pointer (the same in LTR and RTL), the target row gets `data-drop`
+  (`before` / `after`), pointerup calls `onReorder(newIds, movedId)` only when the
+  order changed, and `Escape` or `pointercancel` aborts without a call.
+- `AddToSetlistDialog`: modal (`useDialogFocus`, with Tab cycling over every
+  enabled control) with a radio per setlist plus a New setlist radio and name
+  input. The confirm button is disabled until the choice is valid (an existing
+  setlist, or a new name of 1..200 characters) and while `busy`.
+- `ConfirmDeleteSetlist`: an in-app `alertdialog` naming the setlist and stating
+  that its songs are not deleted; focus behaves like `ConfirmDelete`.
+
+```ts
+SidebarTabs { view: "songs" | "setlists"; onChange(view: "songs" | "setlists"): void }
+SetlistsPanel { setlists: readonly SetlistSummary[]; selectedId: string | null;
+  busy: boolean; onSelect(id: string): void; onCreate(name: string): void;
+  onRename(id: string, name: string): void; onDuplicate(id: string): void;
+  onDelete(id: string): void }
+SetlistEditor { setlist: Setlist; busy: boolean;
+  onReorder(itemIds: string[]): void; onMove(itemId: string, delta: -1 | 1): void;
+  onTranspose(itemId: string, transpose: number): void;
+  onCapo(itemId: string, capo: number | null): void;
+  onRemove(itemId: string): void; onOpenSong(songId: string, itemId: string): void;
+  onPrint(): void; onExportPdf(): void; onExportWord(): void }
+AddToSetlistDialog { setlists: readonly SetlistSummary[]; songCount: number;
+  busy: boolean; onCancel(): void; onAdd(setlistId: string): void;
+  onCreateAndAdd(name: string): void }
+ConfirmDeleteSetlist { name: string; onCancel(): void; onConfirm(): void }
 ```
 
 ## Editor and import
@@ -604,253 +747,337 @@ Coordinates have two meanings:
 
 ## Test ids
 
-| Test id                 | Element                    | Meaning                                                               |
-| ----------------------- | -------------------------- | --------------------------------------------------------------------- |
-| `song-list`             | `<nav>`                    | The song list                                                         |
-| `song-item`             | song `<button>`            | One per song; `aria-current="true"` on the selected one               |
-| `song-header`           | header container           | Song pane header                                                      |
-| `song-title`            | `<h2>`                     | Song title                                                            |
-| `song-artist`           | artist element             | Song artist, present only when the song has one                       |
-| `sounding-key`          | `<span>`                   | Sounding key (`<bdi dir="ltr">`) or the `No key` text                 |
-| `shape-key`             | `<bdi>`                    | Shape key in the controls, present only when defined                  |
-| `capo-value`            | header capo display        | Current capo (view state), shown only when > 0                        |
-| `transpose-down`        | `<button>`                 | Transpose down by one semitone                                        |
-| `transpose-up`          | `<button>`                 | Transpose up by one semitone                                          |
-| `transpose-value`       | value element              | Current signed transpose (`0`, `+2`, `-3`)                            |
-| `capo-select`           | `<select>`                 | Capo choice                                                           |
-| `reset-view`            | `<button>`                 | Resets transpose to 0 and capo to the song's capo                     |
-| `diagnostics`           | diagnostics panel          | The diagnostics panel, absent when there are no diagnostics           |
-| `diagnostic-item`       | list item                  | One per diagnostic                                                    |
-| `song-pane`             | `<main>`                   | The song pane                                                         |
-| `locale-toggle`         | `<div role="group">`       | The interface-language toggle in the sidebar heading row              |
-| `locale-he`             | `<button>`                 | Switch to Hebrew; `aria-pressed="true"` when Hebrew is current        |
-| `locale-en`             | `<button>`                 | Switch to English; `aria-pressed="true"` when English is current      |
-| `search-input`          | `<input type="search">`    | The sidebar search box (disabled in bundled mode)                     |
-| `search-empty`          | `<p>`                      | Shown when a search has zero hits                                     |
-| `search-unavailable`    | `<p>`                      | Notice shown in bundled mode: search is unavailable                   |
-| `song-snippet`          | `<span>`                   | Lyric line of a search hit, rendered as text, only when non-null      |
-| `song-index`            | `<ul>`                     | The `SongIndex` list of the listed (sorted, filtered) DB songs        |
-| `search-results`        | `<ul>`                     | The `SongIndex` list holding the ranked search hits                   |
-| `search-pending`        | `<p role="status">`        | Live region: `Searching…` while a query is pending, else empty        |
-| `new-song`              | `<button>`                 | Sidebar: opens an empty editor (database mode only)                   |
-| `open-files`            | `<button>`                 | Sidebar: picks song files and imports them (database mode only)       |
-| `import-report`         | `<section>`                | Sidebar summary of the last file import                               |
-| `import-summary`        | `<p role="status">`        | `Imported N of M files` (saved files only)                            |
-| `import-queued`         | `<p role="status">`        | `N files need alignment review`, only when files are queued           |
-| `import-converted`      | `<div>`                    | File names of converted `.txt` files that were saved at once          |
-| `import-skipped`        | `<div>`                    | File names of queued files skipped without saving                     |
-| `import-failed`         | `<p role="alert">`         | One per failed file: file name and error message                      |
-| `app-notice`            | `<p role="alert">`         | Sidebar error: file dialog, edit load, list refresh or delete failure |
-| `edit-song`             | `<button>`                 | Next to the song header: opens the selected song in the editor        |
-| `editor`                | `<section>`                | The editor pane (replaces the song view while editing)                |
-| `reviewing-file`        | `<p>`                      | Name of the queued file under review, only for queued files           |
-| `editor-save`           | `<button>`                 | Saves the text; disabled while saving                                 |
-| `editor-cancel`         | `<button>`                 | Cancels the editor (skips a queued file)                              |
-| `editor-paste`          | `<button>`                 | Reads the clipboard and converts it through the importer              |
-| `editor-convert`        | `<button>`                 | Converts the current text through the importer                        |
-| `editor-flip`           | `<button>`                 | Flip alignment, only after an import with RTL chords                  |
-| `editor-status`         | `<p role="status">`        | Live region: `Already ChordPro` message, else empty                   |
-| `editor-paste-error`    | `<p role="alert">`         | Shown when the clipboard cannot be read                               |
-| `editor-save-error`     | `<p role="alert">`         | Shown when saving failed, with the error message                      |
-| `import-warnings`       | `<section>`                | The list of import warnings                                           |
-| `import-warning`        | list item                  | One per import warning, with its line number                          |
-| `editor-input`          | `<textarea dir="auto">`    | The ChordPro text area                                                |
-| `editor-preview`        | `<div role="region">`      | Live preview rendered by `SongView` after a 300 ms debounce           |
-| `confirm-discard`       | `<div role="alertdialog">` | Unsaved-changes confirmation dialog                                   |
-| `confirm-keep`          | `<button>`                 | Keep editing                                                          |
-| `confirm-discard-yes`   | `<button>`                 | Discard the changes and continue                                      |
-| `delete-song`           | `<button>`                 | Next to the song header: deletes the selected song after confirmation |
-| `song-delete`           | `<button>`                 | Per song row: deletes that song after confirmation                    |
-| `song-check`            | `<input type="checkbox">`  | Per song row in select mode: selects the song                         |
-| `selection-bar`         | `<div>`                    | Sidebar bar holding the select-mode controls                          |
-| `select-songs`          | `<button>`                 | Enters select mode                                                    |
-| `library-sort`          | `<select>`                 | Sidebar: sort order (title, artist, recently updated)                 |
-| `library-filter-all`    | `<button role="radio">`    | Language filter: all songs                                            |
-| `library-filter-he`     | `<button role="radio">`    | Language filter: Hebrew songs                                         |
-| `library-filter-en`     | `<button role="radio">`    | Language filter: English songs                                        |
-| `library-filter-mixed`  | `<button role="radio">`    | Language filter: mixed-language songs                                 |
-| `filter-empty`          | `<p>`                      | Shown when the language filter hides every listed song or hit         |
-| `song-row-key`          | `<span dir="ltr">`         | Per song row: the song's key, only when non-empty                     |
-| `song-language`         | `<span>`                   | Per song row: language badge (`HE`, `EN`, `HE+EN`)                    |
-| `select-all`            | `<button>`                 | Select mode: selects every listed song                                |
-| `selection-count`       | `<p role="status">`        | Select mode: `N selected`                                             |
-| `delete-selected`       | `<button>`                 | Select mode: deletes the selected songs after confirmation            |
-| `select-done`           | `<button>`                 | Leaves select mode and clears the selection                           |
-| `confirm-delete`        | `<div role="alertdialog">` | Delete confirmation dialog                                            |
-| `confirm-delete-cancel` | `<button>`                 | Keeps the songs                                                       |
-| `confirm-delete-yes`    | `<button>`                 | Deletes the songs                                                     |
-| `delete-status`         | `<p role="status">`        | Live region: `Deleted N songs` after a delete, else empty             |
-| `editor-tab-visual`     | `<button role="tab">`      | Shows the visual editor                                               |
-| `editor-tab-source`     | `<button role="tab">`      | Shows the ChordPro source editor                                      |
-| `editor-visual`         | `<div role="tabpanel">`    | The visual editor panel                                               |
-| `editor-source`         | `<div role="tabpanel">`    | The source editor panel (text area and preview)                       |
-| `editor-undo`           | `<button>`                 | Undoes the last edit                                                  |
-| `editor-redo`           | `<button>`                 | Redoes the last undone edit                                           |
-| `editor-transpose-down` | `<button>`                 | Transposes the stored chords down one semitone                        |
-| `editor-transpose-up`   | `<button>`                 | Transposes the stored chords up one semitone                          |
-| `meta-form`             | `<form>`                   | Song details form                                                     |
-| `meta-title`            | `<input>`                  | Song title                                                            |
-| `meta-artist`           | `<input>`                  | Song artist                                                           |
-| `meta-key`              | `<input>`                  | Song key                                                              |
-| `meta-capo`             | `<select>`                 | Song capo                                                             |
-| `meta-tempo`            | `<input>`                  | Song tempo                                                            |
-| `visual-hint`           | `<p>`                      | Hint shown while no lyric, empty, chords or comment line exists       |
-| `visual-line`           | row container              | One per song line except `meta` lines, plus the extra last row        |
-| `line-input`            | `<input dir="auto">`       | Lyric text of the line being edited                                   |
-| `line-edit-text`        | `<button>`                 | Starts editing the line's lyrics                                      |
-| `line-add-below`        | `<button>`                 | Inserts an empty line below                                           |
-| `line-remove`           | `<button>`                 | Removes the line                                                      |
-| `row-add-chord`         | `<button>`                 | Opens the chord picker at position 0 of an empty row                  |
-| `chords-input`          | `<input dir="ltr">`        | Chords of a chord-only line, space separated                          |
-| `comment-input`         | `<input dir="auto">`       | Text of a comment line                                                |
-| `visual-verbatim`       | `<pre>`                    | A line the visual editor shows read-only                              |
-| `section-kind`          | `<select>`                 | Section type                                                          |
-| `section-label`         | `<input dir="auto">`       | Section label                                                         |
-| `section-up`            | `<button>`                 | Moves the section before the previous section                         |
-| `section-down`          | `<button>`                 | Moves the section after the next section                              |
-| `section-remove`        | `<button>`                 | Removes the section and its lines                                     |
-| `add-section-kind`      | `<select>`                 | Type of the section to add                                            |
-| `add-section`           | `<button>`                 | Adds a section                                                        |
-| `chord-picker`          | `<div role="dialog">`      | Chord picker popover                                                  |
-| `chord-input`           | `<input role="combobox">`  | Chord name                                                            |
-| `chord-option`          | `<li role="option">`       | One suggested chord                                                   |
-| `chord-apply`           | `<button>`                 | Applies the typed chord                                               |
-| `chord-remove`          | `<button>`                 | Removes the chord                                                     |
-| `chord-move-left`       | `<button>`                 | Moves the chord one position to the visual left                       |
-| `chord-move-right`      | `<button>`                 | Moves the chord one position to the visual right                      |
-| `chord-warning`         | `<p role="status">`        | `Unrecognized chord` notice                                           |
-| `chord-close`           | `<button>`                 | Closes the picker                                                     |
+| Test id                         | Element                    | Meaning                                                               |
+| ------------------------------- | -------------------------- | --------------------------------------------------------------------- |
+| `song-list`                     | `<nav>`                    | The song list                                                         |
+| `song-item`                     | song `<button>`            | One per song; `aria-current="true"` on the selected one               |
+| `song-header`                   | header container           | Song pane header                                                      |
+| `song-title`                    | `<h2>`                     | Song title                                                            |
+| `song-artist`                   | artist element             | Song artist, present only when the song has one                       |
+| `sounding-key`                  | `<span>`                   | Sounding key (`<bdi dir="ltr">`) or the `No key` text                 |
+| `shape-key`                     | `<bdi>`                    | Shape key in the controls, present only when defined                  |
+| `capo-value`                    | header capo display        | Current capo (view state), shown only when > 0                        |
+| `transpose-down`                | `<button>`                 | Transpose down by one semitone                                        |
+| `transpose-up`                  | `<button>`                 | Transpose up by one semitone                                          |
+| `transpose-value`               | value element              | Current signed transpose (`0`, `+2`, `-3`)                            |
+| `capo-select`                   | `<select>`                 | Capo choice                                                           |
+| `reset-view`                    | `<button>`                 | Resets transpose to 0 and capo to the song's capo                     |
+| `diagnostics`                   | diagnostics panel          | The diagnostics panel, absent when there are no diagnostics           |
+| `diagnostic-item`               | list item                  | One per diagnostic                                                    |
+| `song-pane`                     | `<main>`                   | The song pane                                                         |
+| `locale-toggle`                 | `<div role="group">`       | The interface-language toggle in the sidebar heading row              |
+| `locale-he`                     | `<button>`                 | Switch to Hebrew; `aria-pressed="true"` when Hebrew is current        |
+| `locale-en`                     | `<button>`                 | Switch to English; `aria-pressed="true"` when English is current      |
+| `search-input`                  | `<input type="search">`    | The sidebar search box (disabled in bundled mode)                     |
+| `search-empty`                  | `<p>`                      | Shown when a search has zero hits                                     |
+| `search-unavailable`            | `<p>`                      | Notice shown in bundled mode: search is unavailable                   |
+| `song-snippet`                  | `<span>`                   | Lyric line of a search hit, rendered as text, only when non-null      |
+| `song-index`                    | `<ul>`                     | The `SongIndex` list of the listed (sorted, filtered) DB songs        |
+| `search-results`                | `<ul>`                     | The `SongIndex` list holding the ranked search hits                   |
+| `search-pending`                | `<p role="status">`        | Live region: `Searching…` while a query is pending, else empty        |
+| `new-song`                      | `<button>`                 | Sidebar: opens an empty editor (database mode only)                   |
+| `open-files`                    | `<button>`                 | Sidebar: picks song files and imports them (database mode only)       |
+| `import-report`                 | `<section>`                | Sidebar summary of the last file import                               |
+| `import-summary`                | `<p role="status">`        | `Imported N of M files` (saved files only)                            |
+| `import-queued`                 | `<p role="status">`        | `N files need alignment review`, only when files are queued           |
+| `import-converted`              | `<div>`                    | File names of converted `.txt` files that were saved at once          |
+| `import-skipped`                | `<div>`                    | File names of queued files skipped without saving                     |
+| `import-failed`                 | `<p role="alert">`         | One per failed file: file name and error message                      |
+| `app-notice`                    | `<p role="alert">`         | Sidebar error: file dialog, edit load, list refresh or delete failure |
+| `edit-song`                     | `<button>`                 | Next to the song header: opens the selected song in the editor        |
+| `editor`                        | `<section>`                | The editor pane (replaces the song view while editing)                |
+| `reviewing-file`                | `<p>`                      | Name of the queued file under review, only for queued files           |
+| `editor-save`                   | `<button>`                 | Saves the text; disabled while saving                                 |
+| `editor-cancel`                 | `<button>`                 | Cancels the editor (skips a queued file)                              |
+| `editor-paste`                  | `<button>`                 | Reads the clipboard and converts it through the importer              |
+| `editor-convert`                | `<button>`                 | Converts the current text through the importer                        |
+| `editor-flip`                   | `<button>`                 | Flip alignment, only after an import with RTL chords                  |
+| `editor-status`                 | `<p role="status">`        | Live region: `Already ChordPro` message, else empty                   |
+| `editor-paste-error`            | `<p role="alert">`         | Shown when the clipboard cannot be read                               |
+| `editor-save-error`             | `<p role="alert">`         | Shown when saving failed, with the error message                      |
+| `import-warnings`               | `<section>`                | The list of import warnings                                           |
+| `import-warning`                | list item                  | One per import warning, with its line number                          |
+| `editor-input`                  | `<textarea dir="auto">`    | The ChordPro text area                                                |
+| `editor-preview`                | `<div role="region">`      | Live preview rendered by `SongView` after a 300 ms debounce           |
+| `confirm-discard`               | `<div role="alertdialog">` | Unsaved-changes confirmation dialog                                   |
+| `confirm-keep`                  | `<button>`                 | Keep editing                                                          |
+| `confirm-discard-yes`           | `<button>`                 | Discard the changes and continue                                      |
+| `delete-song`                   | `<button>`                 | Next to the song header: deletes the selected song after confirmation |
+| `song-delete`                   | `<button>`                 | Per song row: deletes that song after confirmation                    |
+| `song-check`                    | `<input type="checkbox">`  | Per song row in select mode: selects the song                         |
+| `selection-bar`                 | `<div>`                    | Sidebar bar holding the select-mode controls                          |
+| `select-songs`                  | `<button>`                 | Enters select mode                                                    |
+| `library-sort`                  | `<select>`                 | Sidebar: sort order (title, artist, recently updated)                 |
+| `library-filter-all`            | `<button role="radio">`    | Language filter: all songs                                            |
+| `library-filter-he`             | `<button role="radio">`    | Language filter: Hebrew songs                                         |
+| `library-filter-en`             | `<button role="radio">`    | Language filter: English songs                                        |
+| `library-filter-mixed`          | `<button role="radio">`    | Language filter: mixed-language songs                                 |
+| `filter-empty`                  | `<p>`                      | Shown when the language filter hides every listed song or hit         |
+| `song-row-key`                  | `<span dir="ltr">`         | Per song row: the song's key, only when non-empty                     |
+| `song-language`                 | `<span>`                   | Per song row: language badge (`HE`, `EN`, `HE+EN`)                    |
+| `select-all`                    | `<button>`                 | Select mode: selects every listed song                                |
+| `selection-count`               | `<p role="status">`        | Select mode: `N selected`                                             |
+| `delete-selected`               | `<button>`                 | Select mode: deletes the selected songs after confirmation            |
+| `select-done`                   | `<button>`                 | Leaves select mode and clears the selection                           |
+| `confirm-delete`                | `<div role="alertdialog">` | Delete confirmation dialog                                            |
+| `confirm-delete-cancel`         | `<button>`                 | Keeps the songs                                                       |
+| `confirm-delete-yes`            | `<button>`                 | Deletes the songs                                                     |
+| `delete-status`                 | `<p role="status">`        | Live region: `Deleted N songs` after a delete, else empty             |
+| `editor-tab-visual`             | `<button role="tab">`      | Shows the visual editor                                               |
+| `editor-tab-source`             | `<button role="tab">`      | Shows the ChordPro source editor                                      |
+| `editor-visual`                 | `<div role="tabpanel">`    | The visual editor panel                                               |
+| `editor-source`                 | `<div role="tabpanel">`    | The source editor panel (text area and preview)                       |
+| `editor-undo`                   | `<button>`                 | Undoes the last edit                                                  |
+| `editor-redo`                   | `<button>`                 | Redoes the last undone edit                                           |
+| `editor-transpose-down`         | `<button>`                 | Transposes the stored chords down one semitone                        |
+| `editor-transpose-up`           | `<button>`                 | Transposes the stored chords up one semitone                          |
+| `meta-form`                     | `<form>`                   | Song details form                                                     |
+| `meta-title`                    | `<input>`                  | Song title                                                            |
+| `meta-artist`                   | `<input>`                  | Song artist                                                           |
+| `meta-key`                      | `<input>`                  | Song key                                                              |
+| `meta-capo`                     | `<select>`                 | Song capo                                                             |
+| `meta-tempo`                    | `<input>`                  | Song tempo                                                            |
+| `visual-hint`                   | `<p>`                      | Hint shown while no lyric, empty, chords or comment line exists       |
+| `visual-line`                   | row container              | One per song line except `meta` lines, plus the extra last row        |
+| `line-input`                    | `<input dir="auto">`       | Lyric text of the line being edited                                   |
+| `line-edit-text`                | `<button>`                 | Starts editing the line's lyrics                                      |
+| `line-add-below`                | `<button>`                 | Inserts an empty line below                                           |
+| `line-remove`                   | `<button>`                 | Removes the line                                                      |
+| `row-add-chord`                 | `<button>`                 | Opens the chord picker at position 0 of an empty row                  |
+| `chords-input`                  | `<input dir="ltr">`        | Chords of a chord-only line, space separated                          |
+| `comment-input`                 | `<input dir="auto">`       | Text of a comment line                                                |
+| `visual-verbatim`               | `<pre>`                    | A line the visual editor shows read-only                              |
+| `section-kind`                  | `<select>`                 | Section type                                                          |
+| `section-label`                 | `<input dir="auto">`       | Section label                                                         |
+| `section-up`                    | `<button>`                 | Moves the section before the previous section                         |
+| `section-down`                  | `<button>`                 | Moves the section after the next section                              |
+| `section-remove`                | `<button>`                 | Removes the section and its lines                                     |
+| `add-section-kind`              | `<select>`                 | Type of the section to add                                            |
+| `add-section`                   | `<button>`                 | Adds a section                                                        |
+| `chord-picker`                  | `<div role="dialog">`      | Chord picker popover                                                  |
+| `chord-input`                   | `<input role="combobox">`  | Chord name                                                            |
+| `chord-option`                  | `<li role="option">`       | One suggested chord                                                   |
+| `chord-apply`                   | `<button>`                 | Applies the typed chord                                               |
+| `chord-remove`                  | `<button>`                 | Removes the chord                                                     |
+| `chord-move-left`               | `<button>`                 | Moves the chord one position to the visual left                       |
+| `chord-move-right`              | `<button>`                 | Moves the chord one position to the visual right                      |
+| `chord-warning`                 | `<p role="status">`        | `Unrecognized chord` notice                                           |
+| `chord-close`                   | `<button>`                 | Closes the picker                                                     |
+| `add-to-setlist`                | `<div role="dialog">`      | Add to setlist dialog                                                 |
+| `add-to-setlist-cancel`         | `<button>`                 | Closes the dialog                                                     |
+| `add-to-setlist-confirm`        | `<button type="submit">`   | Adds to the chosen or new setlist; disabled until the choice is valid |
+| `add-to-setlist-name`           | `<input>`                  | Name of the new setlist; typing selects the New setlist option        |
+| `add-to-setlist-new-option`     | `<input type="radio">`     | The New setlist choice                                                |
+| `add-to-setlist-option`         | `<input type="radio">`     | One per existing setlist                                              |
+| `add-selected-to-setlist`       | `<button>`                 | Select mode: adds the selected songs to a setlist; disabled with none |
+| `app-status`                    | `<p role="status">`        | Status after adding to a setlist or saving a Word file (its name)     |
+| `setlist-pdf-hint`              | `<p>`                      | The `pdfHint` text above the open setlist's export buttons            |
+| `song-add-to-setlist`           | `<button>`                 | Open song header: adds the song to a setlist (database mode)          |
+| `song-print`                    | `<button>`                 | Open song header: prints the song at its current transpose and capo   |
+| `song-export-pdf`               | `<button>`                 | Open song header: PDF through the print dialog (current view)         |
+| `song-export-word`              | `<button>`                 | Open song header: Word document (current transpose and capo)          |
+| `song-pdf-hint`                 | `<span>`                   | The `pdfHint` text next to the open song's Export PDF button          |
+| `confirm-delete-setlist`        | `<div role="alertdialog">` | Setlist delete confirmation dialog                                    |
+| `confirm-delete-setlist-cancel` | `<button>`                 | Keeps the setlist                                                     |
+| `confirm-delete-setlist-yes`    | `<button>`                 | Deletes the setlist                                                   |
+| `setlist-announce`              | `<p aria-live="polite">`   | Announces the last move of an entry                                   |
+| `setlist-create`                | `<button type="submit">`   | Creates a setlist from the name input                                 |
+| `setlist-delete`                | `<button>`                 | Opens the setlist delete confirmation                                 |
+| `setlist-duplicate`             | `<button>`                 | Duplicates the setlist                                                |
+| `setlist-editor`                | `<section>`                | The setlist editor in the main pane                                   |
+| `setlist-entries`               | `<ol>`                     | The ordered entries of the setlist                                    |
+| `setlist-entries-empty`         | `<p>`                      | Empty state of a setlist without entries                              |
+| `setlist-entry`                 | `<li>`                     | One per entry; `data-drop` marks the drop target while dragging       |
+| `setlist-entry-capo`            | `<select>`                 | Capo of the entry; the empty value is the song default                |
+| `setlist-entry-down`            | `<button>`                 | Moves the entry one place down                                        |
+| `setlist-entry-handle`          | `<button>`                 | Pointer-drag handle of the entry                                      |
+| `setlist-entry-key`             | `<bdi dir="ltr">`          | Sounding key of the entry, only when the song has a key               |
+| `setlist-entry-position`        | `<span>`                   | 1-based position of the entry                                         |
+| `setlist-entry-remove`          | `<button>`                 | Removes the entry from the setlist                                    |
+| `setlist-entry-title`           | `<button>`                 | Opens the entry's song                                                |
+| `setlist-entry-transpose-down`  | `<button>`                 | Transposes the entry down by one semitone                             |
+| `setlist-entry-transpose-up`    | `<button>`                 | Transposes the entry up by one semitone                               |
+| `setlist-entry-transpose-value` | `<bdi>`                    | Signed transpose of the entry                                         |
+| `setlist-entry-up`              | `<button>`                 | Moves the entry one place up                                          |
+| `setlist-export-pdf`            | `<button>`                 | Exports the setlist as PDF                                            |
+| `setlist-export-word`           | `<button>`                 | Exports the setlist as a Word document                                |
+| `setlist-name-input`            | `<input>`                  | Name of the setlist to create                                         |
+| `setlist-print`                 | `<button>`                 | Prints the setlist                                                    |
+| `setlist-rename`                | `<button>`                 | Starts renaming the setlist                                           |
+| `setlist-rename-input`          | `<input>`                  | Inline rename field (Enter commits, Escape cancels)                   |
+| `setlist-row`                   | `<li>`                     | One per setlist in the sidebar                                        |
+| `setlist-select`                | `<button>`                 | Selects the setlist; `aria-current="true"` on the selected one        |
+| `setlists-empty`                | `<p>`                      | Empty state of the setlists panel                                     |
+| `setlists-panel`                | `<div>`                    | The sidebar setlists panel                                            |
+| `sidebar-tabs`                  | `<div role="tablist">`     | The Songs / Setlists switch                                           |
+| `tab-setlists`                  | `<button role="tab">`      | The Setlists tab                                                      |
+| `tab-songs`                     | `<button role="tab">`      | The Songs tab                                                         |
 
 ## Strings
 
-| Key                   | Value                                                                              |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| `appName`             | `Shir`                                                                             |
-| `appNameHebrew`       | `שיר`                                                                              |
-| `groupSamples`        | `Samples`                                                                          |
-| `groupTestSongs`      | `Test songs`                                                                       |
-| `songList`            | `Songs`                                                                            |
-| `transpose`           | `Transpose`                                                                        |
-| `transposeDown`       | `Transpose down`                                                                   |
-| `transposeUp`         | `Transpose up`                                                                     |
-| `capo`                | `Capo`                                                                             |
-| `reset`               | `Reset`                                                                            |
-| `key`                 | `Key`                                                                              |
-| `shapes`              | `Shapes`                                                                           |
-| `diagnostics`         | `Diagnostics`                                                                      |
-| `noSongSelected`      | `Select a song`                                                                    |
-| `searchLabel`         | `Search songs`                                                                     |
-| `searchPlaceholder`   | `Search title, artist or lyrics`                                                   |
-| `searchResults`       | `Search results`                                                                   |
-| `noResults`           | `No songs match`                                                                   |
-| `searchFailed`        | `Search failed`                                                                    |
-| `searchUnavailable`   | `Search unavailable: the song library could not be opened. Showing bundled songs.` |
-| `loadingLibrary`      | `Loading songs…`                                                                   |
-| `searching`           | `Searching…`                                                                       |
-| `libraryEmpty`        | `No songs in the library`                                                          |
-| `songLoadFailed`      | `Could not open this song`                                                         |
-| `noKey`               | `No key`                                                                           |
-| `separator`           | `·`                                                                                |
-| `transposeDownGlyph`  | `−`                                                                                |
-| `transposeUpGlyph`    | `+`                                                                                |
-| `newSong`             | `New song`                                                                         |
-| `editSong`            | `Edit`                                                                             |
-| `openFiles`           | `Open files…`                                                                      |
-| `editorLabel`         | `ChordPro text`                                                                    |
-| `previewLabel`        | `Preview`                                                                          |
-| `save`                | `Save`                                                                             |
-| `cancel`              | `Cancel`                                                                           |
-| `paste`               | `Paste`                                                                            |
-| `convert`             | `Convert`                                                                          |
-| `flipAlignment`       | `Flip alignment`                                                                   |
-| `alreadyChordPro`     | `Already ChordPro, nothing to convert`                                             |
-| `pasteFailed`         | `Could not read the clipboard. Paste with Ctrl+V, then use Convert.`               |
-| `importWarnings`      | `Import warnings`                                                                  |
-| `saveFailed`          | `Could not save the song`                                                          |
-| `discardTitle`        | `Discard unsaved changes?`                                                         |
-| `discardBody`         | `Your changes to this song have not been saved.`                                   |
-| `keepEditing`         | `Keep editing`                                                                     |
-| `discard`             | `Discard`                                                                          |
-| `reviewingFile`       | `Reviewing file`                                                                   |
-| `importConverted`     | `Converted from chords over lyrics`                                                |
-| `importSkipped`       | `Skipped files`                                                                    |
-| `importPickFailed`    | `Could not open files`                                                             |
-| `libraryReloadFailed` | `Could not refresh the song list`                                                  |
-| `deleteAction`        | `Delete`                                                                           |
-| `selectSongs`         | `Select`                                                                           |
-| `selectAll`           | `Select all`                                                                       |
-| `selectDone`          | `Done`                                                                             |
-| `deleteSelected`      | `Delete selected`                                                                  |
-| `deleteConfirmBody`   | `Deleted songs are permanently removed from the library. This cannot be undone.`   |
-| `deleteFailed`        | `Could not delete the song`                                                        |
-| `removeGlyph`         | `×`                                                                                |
-| `tabVisual`           | `Visual`                                                                           |
-| `tabSource`           | `Source`                                                                           |
-| `editorTabs`          | `Editor view`                                                                      |
-| `undo`                | `Undo`                                                                             |
-| `redo`                | `Redo`                                                                             |
-| `transposeSongDown`   | `Transpose song down`                                                              |
-| `transposeSongUp`     | `Transpose song up`                                                                |
-| `metaForm`            | `Song details`                                                                     |
-| `metaTitle`           | `Title`                                                                            |
-| `metaArtist`          | `Artist`                                                                           |
-| `metaTempo`           | `Tempo`                                                                            |
-| `visualLabel`         | `Song lines`                                                                       |
-| `visualHint`          | `Type lyrics, then click a letter to add a chord`                                  |
-| `editLyrics`          | `Edit lyrics`                                                                      |
-| `lyricsInput`         | `Lyrics`                                                                           |
-| `addLineBelow`        | `Add line below`                                                                   |
-| `removeLine`          | `Remove line`                                                                      |
-| `editGlyph`           | `✎`                                                                                |
-| `addGlyph`            | `+`                                                                                |
-| `chordsLineInput`     | `Chords`                                                                           |
-| `commentInput`        | `Comment`                                                                          |
-| `sourceOnly`          | `Edit in Source`                                                                   |
-| `addSection`          | `Add section`                                                                      |
-| `sectionKind`         | `Section type`                                                                     |
-| `sectionLabel`        | `Section label`                                                                    |
-| `sectionVerse`        | `Verse`                                                                            |
-| `sectionChorus`       | `Chorus`                                                                           |
-| `sectionBridge`       | `Bridge`                                                                           |
-| `sectionUp`           | `Move section up`                                                                  |
-| `sectionDown`         | `Move section down`                                                                |
-| `sectionRemove`       | `Remove section`                                                                   |
-| `upGlyph`             | `↑`                                                                                |
-| `downGlyph`           | `↓`                                                                                |
-| `chordPicker`         | `Chord`                                                                            |
-| `chordInput`          | `Chord name`                                                                       |
-| `chordSuggestions`    | `Suggestions`                                                                      |
-| `chordApply`          | `Apply`                                                                            |
-| `chordRemove`         | `Remove chord`                                                                     |
-| `chordMoveLeft`       | `Move chord left`                                                                  |
-| `chordMoveRight`      | `Move chord right`                                                                 |
-| `leftGlyph`           | `←`                                                                                |
-| `rightGlyph`          | `→`                                                                                |
-| `chordUnknown`        | `Unrecognized chord`                                                               |
-| `chordClose`          | `Close`                                                                            |
-| `noLabel`             | `No label`                                                                         |
-| `sectionOther`        | `Other`                                                                            |
-| `sortLabel`           | `Sort by`                                                                          |
-| `sortTitle`           | `Title`                                                                            |
-| `sortArtist`          | `Artist`                                                                           |
-| `sortUpdated`         | `Recently updated`                                                                 |
-| `libraryView`         | `Library view`                                                                     |
-| `filterLanguage`      | `Language`                                                                         |
-| `filterAll`           | `All`                                                                              |
-| `filterHebrew`        | `Hebrew`                                                                           |
-| `filterEnglish`       | `English`                                                                          |
-| `filterMixed`         | `Mixed`                                                                            |
-| `badgeHebrew`         | `HE`                                                                               |
-| `badgeEnglish`        | `EN`                                                                               |
-| `badgeMixed`          | `HE+EN`                                                                            |
-| `noFilterMatches`     | `No songs in this language`                                                        |
-| `uiLanguage`          | `Interface language`                                                               |
-| `localeHebrew`        | `עברית`                                                                            |
-| `localeEnglish`       | `English`                                                                          |
-| `localeHebrewShort`   | `עב`                                                                               |
-| `localeEnglishShort`  | `EN`                                                                               |
-| `chordAddEmpty`       | `Add chord`                                                                        |
-| `fileFilterSongs`     | `Song files`                                                                       |
+| Key                    | Value                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `appName`              | `Shir`                                                                             |
+| `appNameHebrew`        | `שיר`                                                                              |
+| `groupSamples`         | `Samples`                                                                          |
+| `groupTestSongs`       | `Test songs`                                                                       |
+| `songList`             | `Songs`                                                                            |
+| `transpose`            | `Transpose`                                                                        |
+| `transposeDown`        | `Transpose down`                                                                   |
+| `transposeUp`          | `Transpose up`                                                                     |
+| `capo`                 | `Capo`                                                                             |
+| `reset`                | `Reset`                                                                            |
+| `key`                  | `Key`                                                                              |
+| `shapes`               | `Shapes`                                                                           |
+| `diagnostics`          | `Diagnostics`                                                                      |
+| `noSongSelected`       | `Select a song`                                                                    |
+| `searchLabel`          | `Search songs`                                                                     |
+| `searchPlaceholder`    | `Search title, artist or lyrics`                                                   |
+| `searchResults`        | `Search results`                                                                   |
+| `noResults`            | `No songs match`                                                                   |
+| `searchFailed`         | `Search failed`                                                                    |
+| `searchUnavailable`    | `Search unavailable: the song library could not be opened. Showing bundled songs.` |
+| `loadingLibrary`       | `Loading songs…`                                                                   |
+| `searching`            | `Searching…`                                                                       |
+| `libraryEmpty`         | `No songs in the library`                                                          |
+| `songLoadFailed`       | `Could not open this song`                                                         |
+| `noKey`                | `No key`                                                                           |
+| `separator`            | `·`                                                                                |
+| `transposeDownGlyph`   | `−`                                                                                |
+| `transposeUpGlyph`     | `+`                                                                                |
+| `newSong`              | `New song`                                                                         |
+| `editSong`             | `Edit`                                                                             |
+| `openFiles`            | `Open files…`                                                                      |
+| `editorLabel`          | `ChordPro text`                                                                    |
+| `previewLabel`         | `Preview`                                                                          |
+| `save`                 | `Save`                                                                             |
+| `cancel`               | `Cancel`                                                                           |
+| `paste`                | `Paste`                                                                            |
+| `convert`              | `Convert`                                                                          |
+| `flipAlignment`        | `Flip alignment`                                                                   |
+| `alreadyChordPro`      | `Already ChordPro, nothing to convert`                                             |
+| `pasteFailed`          | `Could not read the clipboard. Paste with Ctrl+V, then use Convert.`               |
+| `importWarnings`       | `Import warnings`                                                                  |
+| `saveFailed`           | `Could not save the song`                                                          |
+| `discardTitle`         | `Discard unsaved changes?`                                                         |
+| `discardBody`          | `Your changes to this song have not been saved.`                                   |
+| `keepEditing`          | `Keep editing`                                                                     |
+| `discard`              | `Discard`                                                                          |
+| `reviewingFile`        | `Reviewing file`                                                                   |
+| `importConverted`      | `Converted from chords over lyrics`                                                |
+| `importSkipped`        | `Skipped files`                                                                    |
+| `importPickFailed`     | `Could not open files`                                                             |
+| `libraryReloadFailed`  | `Could not refresh the song list`                                                  |
+| `deleteAction`         | `Delete`                                                                           |
+| `selectSongs`          | `Select`                                                                           |
+| `selectAll`            | `Select all`                                                                       |
+| `selectDone`           | `Done`                                                                             |
+| `deleteSelected`       | `Delete selected`                                                                  |
+| `deleteConfirmBody`    | `Deleted songs are permanently removed from the library. This cannot be undone.`   |
+| `deleteFailed`         | `Could not delete the song`                                                        |
+| `removeGlyph`          | `×`                                                                                |
+| `tabVisual`            | `Visual`                                                                           |
+| `tabSource`            | `Source`                                                                           |
+| `editorTabs`           | `Editor view`                                                                      |
+| `undo`                 | `Undo`                                                                             |
+| `redo`                 | `Redo`                                                                             |
+| `transposeSongDown`    | `Transpose song down`                                                              |
+| `transposeSongUp`      | `Transpose song up`                                                                |
+| `metaForm`             | `Song details`                                                                     |
+| `metaTitle`            | `Title`                                                                            |
+| `metaArtist`           | `Artist`                                                                           |
+| `metaTempo`            | `Tempo`                                                                            |
+| `visualLabel`          | `Song lines`                                                                       |
+| `visualHint`           | `Type lyrics, then click a letter to add a chord`                                  |
+| `editLyrics`           | `Edit lyrics`                                                                      |
+| `lyricsInput`          | `Lyrics`                                                                           |
+| `addLineBelow`         | `Add line below`                                                                   |
+| `removeLine`           | `Remove line`                                                                      |
+| `editGlyph`            | `✎`                                                                                |
+| `addGlyph`             | `+`                                                                                |
+| `chordsLineInput`      | `Chords`                                                                           |
+| `commentInput`         | `Comment`                                                                          |
+| `sourceOnly`           | `Edit in Source`                                                                   |
+| `addSection`           | `Add section`                                                                      |
+| `sectionKind`          | `Section type`                                                                     |
+| `sectionLabel`         | `Section label`                                                                    |
+| `sectionVerse`         | `Verse`                                                                            |
+| `sectionChorus`        | `Chorus`                                                                           |
+| `sectionBridge`        | `Bridge`                                                                           |
+| `sectionUp`            | `Move section up`                                                                  |
+| `sectionDown`          | `Move section down`                                                                |
+| `sectionRemove`        | `Remove section`                                                                   |
+| `upGlyph`              | `↑`                                                                                |
+| `downGlyph`            | `↓`                                                                                |
+| `chordPicker`          | `Chord`                                                                            |
+| `chordInput`           | `Chord name`                                                                       |
+| `chordSuggestions`     | `Suggestions`                                                                      |
+| `chordApply`           | `Apply`                                                                            |
+| `chordRemove`          | `Remove chord`                                                                     |
+| `chordMoveLeft`        | `Move chord left`                                                                  |
+| `chordMoveRight`       | `Move chord right`                                                                 |
+| `leftGlyph`            | `←`                                                                                |
+| `rightGlyph`           | `→`                                                                                |
+| `chordUnknown`         | `Unrecognized chord`                                                               |
+| `chordClose`           | `Close`                                                                            |
+| `noLabel`              | `No label`                                                                         |
+| `sectionOther`         | `Other`                                                                            |
+| `sortLabel`            | `Sort by`                                                                          |
+| `sortTitle`            | `Title`                                                                            |
+| `sortArtist`           | `Artist`                                                                           |
+| `sortUpdated`          | `Recently updated`                                                                 |
+| `libraryView`          | `Library view`                                                                     |
+| `filterLanguage`       | `Language`                                                                         |
+| `filterAll`            | `All`                                                                              |
+| `filterHebrew`         | `Hebrew`                                                                           |
+| `filterEnglish`        | `English`                                                                          |
+| `filterMixed`          | `Mixed`                                                                            |
+| `badgeHebrew`          | `HE`                                                                               |
+| `badgeEnglish`         | `EN`                                                                               |
+| `badgeMixed`           | `HE+EN`                                                                            |
+| `noFilterMatches`      | `No songs in this language`                                                        |
+| `uiLanguage`           | `Interface language`                                                               |
+| `localeHebrew`         | `עברית`                                                                            |
+| `localeEnglish`        | `English`                                                                          |
+| `localeHebrewShort`    | `עב`                                                                               |
+| `localeEnglishShort`   | `EN`                                                                               |
+| `chordAddEmpty`        | `Add chord`                                                                        |
+| `fileFilterSongs`      | `Song files`                                                                       |
+| `tabSongs`             | `Songs`                                                                            |
+| `tabSetlists`          | `Setlists`                                                                         |
+| `sidebarViews`         | `Sidebar view`                                                                     |
+| `setlistNameLabel`     | `Setlist name`                                                                     |
+| `createSetlist`        | `Create`                                                                           |
+| `renameSetlist`        | `Rename`                                                                           |
+| `duplicateSetlist`     | `Duplicate`                                                                        |
+| `setlistsEmpty`        | `No setlists yet`                                                                  |
+| `setlistEmpty`         | `This setlist has no songs`                                                        |
+| `setlistEntries`       | `Songs in the setlist`                                                             |
+| `deleteSetlistBody`    | `The setlist is removed. The songs in it are not deleted.`                         |
+| `addToSetlist`         | `Add to setlist`                                                                   |
+| `newSetlistOption`     | `New setlist`                                                                      |
+| `setlistChoice`        | `Setlist`                                                                          |
+| `add`                  | `Add`                                                                              |
+| `moveUp`               | `Move up`                                                                          |
+| `moveDown`             | `Move down`                                                                        |
+| `removeFromSetlist`    | `Remove from setlist`                                                              |
+| `dragHandle`           | `Drag to reorder`                                                                  |
+| `dragGlyph`            | `⋮⋮`                                                                               |
+| `print`                | `Print`                                                                            |
+| `exportPdf`            | `Export PDF`                                                                       |
+| `exportWord`           | `Export Word`                                                                      |
+| `pdfHint`              | `Choose “Save as PDF” in the print dialog`                                         |
+| `fileFilterWord`       | `Word document`                                                                    |
+| `setlistsLoadFailed`   | `Could not load setlists`                                                          |
+| `setlistSaveFailed`    | `Could not save the setlist`                                                       |
+| `exportFailed`         | `Could not export the setlist`                                                     |
+| `exportLabelSetlist`   | `Setlist`                                                                          |
+| `exportLabelKey`       | `Key`                                                                              |
+| `exportLabelCapo`      | `Capo`                                                                             |
+| `exportLabelTranspose` | `Transpose`                                                                        |
+| `exportLabelSongs`     | `Songs`                                                                            |
+| `exportLabelDate`      | `Date`                                                                             |
+| `duplicateSuffix`      | `(copy)`                                                                           |
 
 `TEMPLATES` (`apps/desktop/src/strings.ts`) holds the i18next templates for
 strings with variables (`{{var}}` interpolation, `_one` / `_other` plural
@@ -872,6 +1099,16 @@ read every string with `const t = useT()` and `t("<key>", vars)`:
 - `deleteManyFailed` (plural on `count` = total, plus `failed`):
   `Could not delete 2 of 5 songs`.
 - `lineLabel` (`n`): `Line 4`.
+- `setlistItemCount`, `addToSetlistTitle` and `addedToSetlist` (plural on
+  `count`): `1 song` / `N songs`, `Add 1 song to a setlist` /
+  `Add N songs to a setlist`, `Added 1 song to the setlist` /
+  `Added N songs to the setlist`.
+- `movedAnnounce` (`title`, wrapped in U+2068 / U+2069; `n` = the new 1-based
+  position): `Moved <title> to position 3`.
+- `deleteSetlistTitle` (`name`, wrapped in the bidi isolates): `Delete <name>?`.
+- `exportSaved` (`name` = the saved file's base name, wrapped in the bidi
+  isolates): `Saved <name>`.
+- `capoSongDefault` (`n` = the song's own capo): `Song default (5)`.
 
 The native open-files dialog filter name is `fileFilterSongs`, read from the
 current language each time the dialog opens.
@@ -883,4 +1120,4 @@ current language each time the dialog opens.
   settings (only the library sort and filter, `shir.library`, and the interface
   language, `shir.locale`, are stored).
 - Chord diagrams.
-- Print layout.
+- Print layout beyond the setlist and song export (§ Print and export).

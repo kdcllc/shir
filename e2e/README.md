@@ -53,12 +53,13 @@ hard-coded copies.
 
 ## Specs
 
-| Spec               | Covers                                                          |
-| ------------------ | --------------------------------------------------------------- |
-| `locale.e2e.ts`    | first-launch detection, toggle, persistence, mirroring          |
-| `direction.e2e.ts` | song direction and the `+` transpose glyph inside the Hebrew UI |
-| `library.e2e.ts`   | language filter, artist sort, persistence across a restart      |
-| `editor.e2e.ts`    | g7 F19 (real double-click) and F54 (picker vs Add section)      |
+| Spec               | Covers                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `locale.e2e.ts`    | first-launch detection, toggle, persistence, mirroring                                                                                           |
+| `direction.e2e.ts` | song direction and the `+` transpose glyph inside the Hebrew UI                                                                                  |
+| `library.e2e.ts`   | language filter, artist sort, persistence across a restart                                                                                       |
+| `editor.e2e.ts`    | g7 F19 (real double-click) and F54 (picker vs Add section)                                                                                       |
+| `setlists.e2e.ts`  | setlist core flow: create, add two songs, reorder, transpose/capo, persistence after a restart, duplicate, song-delete cascade, delete duplicate |
 
 ## F39 (Paste from the real clipboard): not added
 

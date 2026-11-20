@@ -13,6 +13,16 @@ vi.mock("./storage", () => ({
   searchSongs: vi.fn(),
   saveSong: vi.fn(),
   deleteSong: vi.fn(),
+  listSetlists: vi.fn(() => Promise.resolve([])),
+  getSetlist: vi.fn(),
+  createSetlist: vi.fn(),
+  renameSetlist: vi.fn(),
+  deleteSetlist: vi.fn(() => Promise.resolve()),
+  duplicateSetlist: vi.fn(),
+  addSetlistItems: vi.fn(),
+  removeSetlistItem: vi.fn(),
+  reorderSetlistItems: vi.fn(),
+  updateSetlistItem: vi.fn(),
 }));
 
 const TEXTS = new Map<string, string>([

@@ -331,13 +331,24 @@ describe("(d) the golden edit cases cover every EditOp and the RTL fixtures", ()
 // ---- (e) no Rust or IPC surface changed --------------------------------------------------
 
 const COMMANDS = [
+  "addSetlistItems",
+  "createSetlist",
+  "deleteSetlist",
   "deleteSong",
+  "duplicateSetlist",
+  "getSetlist",
   "getSong",
+  "listSetlists",
   "listSongs",
   "logWebviewError",
   "readTextFile",
+  "removeSetlistItem",
+  "renameSetlist",
+  "reorderSetlistItems",
+  "saveExportDocx",
   "saveSong",
   "searchSongs",
+  "updateSetlistItem",
 ];
 
 function commandNames(src: string): string[] {
@@ -362,13 +373,13 @@ function commandProblems(src: string): string[] {
   return problems;
 }
 
-describe("(e) bindings.ts still lists exactly the seven commands", () => {
-  it("has the seven commands and seven invokes", () => {
+describe("(e) bindings.ts still lists exactly the eighteen commands", () => {
+  it("has the eighteen commands and eighteen invokes", () => {
     expect(commandNames(read(BINDINGS))).toEqual(COMMANDS);
     expect(commandProblems(read(BINDINGS))).toEqual([]);
   });
 
-  it("negative: an eighth command is reported", () => {
+  it("negative: a nineteenth command is reported", () => {
     const src = read(BINDINGS);
     const mutated = src.replace(
       "\tdeleteSong: ",
@@ -377,7 +388,7 @@ describe("(e) bindings.ts still lists exactly the seven commands", () => {
     expect(mutated).not.toBe(src);
     expect(commandProblems(mutated)).toEqual([
       "unexpected command deleteSongs",
-      "bindings.ts invokes 8 commands",
+      "bindings.ts invokes 19 commands",
     ]);
   });
 
@@ -387,7 +398,7 @@ describe("(e) bindings.ts still lists exactly the seven commands", () => {
     expect(mutated).not.toBe(src);
     expect(commandProblems(mutated)).toEqual([
       "missing command deleteSong",
-      "bindings.ts invokes 6 commands",
+      "bindings.ts invokes 17 commands",
     ]);
   });
 });

@@ -1,0 +1,74 @@
+/*
+ * Print layout for exports. On screen the root is laid out off-screen (never display: none or
+ * visibility: hidden) so chord-render's overlap pass measures real boxes before printing.
+ * Accepted: @page is global, so the viewer's own Ctrl+P print also uses A4 with 15 mm margins.
+ */
+@page {
+  size: a4;
+  margin: 15mm;
+}
+
+[data-print-root] {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: -10000px;
+  inline-size: 180mm;
+  color: #000;
+  background: #fff;
+}
+
+.title {
+  margin-block: 0 0.5em;
+  font-size: 2rem;
+}
+
+.date,
+.facts {
+  margin-block: 0 0.5em;
+}
+
+.facts > * {
+  margin-inline-end: 1em;
+}
+
+.heading {
+  margin-block: 1.5em 0.5em;
+  font-size: 1.25rem;
+}
+
+.list > li {
+  margin-block-end: 0.35em;
+}
+
+.name {
+  margin-block: 0 0.25em;
+  font-size: 1.5rem;
+}
+
+.header {
+  margin-block-end: 1em;
+}
+
+@media print {
+  :root:not([data-printing="export"]) [data-print-root] {
+    display: none;
+  }
+
+  :root[data-printing="export"] :global(#root) {
+    display: none !important;
+  }
+
+  :root[data-printing="export"] [data-print-root] {
+    position: static;
+    inline-size: auto;
+  }
+
+  [data-print-song] + [data-print-song],
+  [data-print-cover] + [data-print-song] {
+    break-before: page;
+  }
+
+  [data-print-header] {
+    break-after: avoid;
+  }
+}

@@ -16,6 +16,17 @@ fn main() {
             "delete_song",
             "search_songs",
             "read_text_file",
+            "save_export_docx",
+            "list_setlists",
+            "get_setlist",
+            "create_setlist",
+            "rename_setlist",
+            "delete_setlist",
+            "duplicate_setlist",
+            "add_setlist_items",
+            "remove_setlist_item",
+            "reorder_setlist_items",
+            "update_setlist_item",
             "log_webview_error",
         ]));
 

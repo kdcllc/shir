@@ -1,0 +1,51 @@
+{
+  "title": "זנב לטיני",
+  "capo": 0,
+  "transpose": 0,
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Am",
+          "text": "שיר של "
+        },
+        {
+          "chord": "F",
+          "text": "אהבה ו"
+        },
+        {
+          "chord": "C",
+          "text": "hope"
+        },
+        {
+          "chord": "G",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Em",
+          "text": "הלב שר ב"
+        },
+        {
+          "chord": "D",
+          "text": "שקט עם you"
+        },
+        {
+          "chord": "C",
+          "text": ""
+        }
+      ]
+    }
+  ]
+}

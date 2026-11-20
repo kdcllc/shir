@@ -25,10 +25,12 @@ catalog:
   "@wdio/local-runner": 10.1.0
   "@wdio/mocha-framework": 10.1.0
   "@wdio/spec-reporter": 10.1.0
+  docx: 9.15.2
   eslint: 10.14.0
   eslint-plugin-react-hooks: 7.1.1
   eslint-plugin-react-refresh: 0.5.7
   expect-webdriverio: 8.0.0
+  fflate: 0.8.3
   globals: 17.14.0
   i18next: 27.1.1
   jsdom: 31.0.0

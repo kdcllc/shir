@@ -12,6 +12,17 @@
     "allow-delete-song",
     "allow-search-songs",
     "allow-read-text-file",
+    "allow-save-export-docx",
+    "allow-list-setlists",
+    "allow-get-setlist",
+    "allow-create-setlist",
+    "allow-rename-setlist",
+    "allow-delete-setlist",
+    "allow-duplicate-setlist",
+    "allow-add-setlist-items",
+    "allow-remove-setlist-item",
+    "allow-reorder-setlist-items",
+    "allow-update-setlist-item",
     "allow-log-webview-error"
   ]
 }

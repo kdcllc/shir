@@ -1,0 +1,46 @@
+{
+  "title": "רוק בבוקר",
+  "capo": 0,
+  "transpose": 2,
+  "direction": "rtl",
+  "lines": [
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "Bm",
+          "text": "אנחנו שרים "
+        },
+        {
+          "chord": "A",
+          "text": "rock and r"
+        },
+        {
+          "chord": "G",
+          "text": "oll עד הבוקר"
+        }
+      ]
+    },
+    {
+      "kind": "empty"
+    },
+    {
+      "kind": "lyric",
+      "direction": "rtl",
+      "segments": [
+        {
+          "chord": "D",
+          "text": "והעיר "
+        },
+        {
+          "chord": "F#",
+          "text": "רוקדת איתנו"
+        }
+      ]
+    }
+  ]
+}
