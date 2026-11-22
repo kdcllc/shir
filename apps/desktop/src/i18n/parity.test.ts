@@ -15,6 +15,7 @@ describe("EN / HE key parity", () => {
     expect(pluralBases.sort()).toEqual([
       "addToSetlistTitle",
       "addedToSetlist",
+      "aiReviewSongs",
       "deleteManyFailed",
       "deletedCount",
       "diagnosticsCount",

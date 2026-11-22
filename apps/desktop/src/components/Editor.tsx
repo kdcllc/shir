@@ -19,6 +19,8 @@ const PREVIEW_DEBOUNCE_MS = 300;
 export interface ImportSeed {
   source: string;
   result: ImportResult;
+  /** Column order the result was made with; absent means `"mirror"`. */
+  rtlColumns?: RtlColumns;
 }
 
 export interface EditorProps {
@@ -31,6 +33,10 @@ export interface EditorProps {
   titlePath?: string | undefined;
   /** Visible name of the file under review. */
   fileName?: string | undefined;
+  /** Shown in the review banner as a list. */
+  notes?: readonly string[] | undefined;
+  /** When set, a "Convert with AI instead" button is shown next to Flip. */
+  onConvertWithAi?: ((text: string) => void) | undefined;
   onSave(text: string): Promise<void>;
   onCancel(): void;
   onDirtyChange?(dirty: boolean): void;
@@ -42,7 +48,6 @@ function messageOf(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
 
-const mirrorMode = (): RtlColumns => "mirror";
 const noMessage = (): string | undefined => undefined;
 const visualTab = (): EditorTab => "visual";
 const noButton = (): HTMLButtonElement | null => null;
@@ -153,6 +158,8 @@ export function Editor({
   seed,
   titlePath,
   fileName,
+  notes,
+  onConvertWithAi,
   onSave,
   onCancel,
   onDirtyChange,
@@ -167,7 +174,9 @@ export function Editor({
   const text = history.value;
   const [tab, setTab] = useState(visualTab);
   const [lastImport, setLastImport] = useState(seed);
-  const [columns, setColumns] = useState(mirrorMode);
+  const [columns, setColumns] = useState(
+    (): RtlColumns => seed?.rtlColumns ?? "mirror",
+  );
   const [warnings, setWarnings] = useState(seed?.result.warnings ?? []);
   const [alreadyChordPro, setAlreadyChordPro] = useState(false);
   const [pasteFailed, setPasteFailed] = useState(false);
@@ -400,6 +409,15 @@ export function Editor({
               {t("flipAlignment")}
             </button>
           )}
+          {onConvertWithAi !== undefined && (
+            <button
+              type="button"
+              data-testid="editor-convert-ai"
+              onClick={() => onConvertWithAi(text)}
+            >
+              {t("convertWithAi")}
+            </button>
+          )}
         </div>
       </div>
       <p
@@ -419,6 +437,18 @@ export function Editor({
         <p role="alert" data-testid="editor-save-error" data-ui-chrome>
           {t("saveFailed")}: {saveError}
         </p>
+      )}
+      {notes !== undefined && notes.length > 0 && (
+        <section className={styles.warnings} data-ui-chrome>
+          <h3 className={styles["warnings-heading"]}>{t("importNotes")}</h3>
+          <ul className={styles["warning-items"]} data-testid="editor-notes">
+            {notes.map((note, i) => (
+              <li key={i} dir="auto">
+                {note}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {warnings.length > 0 && (
         <section

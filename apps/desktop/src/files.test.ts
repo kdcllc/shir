@@ -11,6 +11,9 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 }));
 
 import {
+  DocumentReadError,
+  extractDocument,
+  pickDocumentFile,
   FileReadError,
   FileWriteError,
   pickSongFiles,
@@ -134,7 +137,16 @@ describe("pickSongFiles", () => {
       filters: [
         {
           name: "Song files",
-          extensions: ["cho", "chopro", "chordpro", "txt"],
+          extensions: [
+            "cho",
+            "chopro",
+            "chordpro",
+            "txt",
+            "docx",
+            "odt",
+            "rtf",
+            "pdf",
+          ],
         },
       ],
     });
@@ -187,5 +199,56 @@ describe("pickSongFiles", () => {
     const err = await pickSongFiles().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(FileReadError);
     expect((err as FileReadError).kind).toBe("Ipc");
+  });
+});
+
+describe("pickDocumentFile", () => {
+  it("opens a single-file dialog filtered to documents", async () => {
+    open.mockResolvedValue("/a/b.docx");
+    await expect(pickDocumentFile("Documents")).resolves.toBe("/a/b.docx");
+    expect(open).toHaveBeenCalledWith({
+      multiple: false,
+      directory: false,
+      filters: [
+        { name: "Documents", extensions: ["docx", "odt", "rtf", "pdf"] },
+      ],
+    });
+  });
+
+  it("cancel resolves undefined", async () => {
+    open.mockResolvedValue(null);
+    await expect(pickDocumentFile("Documents")).resolves.toBeUndefined();
+  });
+});
+
+describe("extractDocument", () => {
+  it("invokes extract_document with { path } and returns the document", async () => {
+    const doc = { format: "docx", blocks: [], warnings: [] };
+    invoke.mockResolvedValue(doc);
+    await expect(extractDocument("/a/b.docx")).resolves.toEqual(doc);
+    expect(invoke.mock.calls[0]![0]).toBe("extract_document");
+    expect(invoke.mock.calls[0]![1]).toEqual({ path: "/a/b.docx" });
+  });
+
+  it.each([
+    "TooLarge",
+    "TextTooLarge",
+    "Unsupported",
+    "Corrupt",
+    "Io",
+  ] as const)("maps a %s error result to DocumentReadError", async (kind) => {
+    invoke.mockImplementation(() => Promise.reject({ kind, message: "m" }));
+    const err = await extractDocument("/x.pdf").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DocumentReadError);
+    expect((err as DocumentReadError).kind).toBe(kind);
+    expect((err as DocumentReadError).message).toBe("m");
+  });
+
+  it("maps an IPC failure to kind Ipc", async () => {
+    invoke.mockImplementation(() => Promise.reject(new Error("no ipc")));
+    const err = await extractDocument("/x.pdf").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DocumentReadError);
+    expect((err as DocumentReadError).kind).toBe("Ipc");
+    expect((err as DocumentReadError).message).toBe("no ipc");
   });
 });
