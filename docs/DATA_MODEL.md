@@ -204,7 +204,7 @@ one of `NotFound`, `Invalid`, `Storage`, `Migration` or `Unavailable`.
 
 ## Commands and startup
 
-There are 18 Tauri commands. `src/commands/mod.rs` defines five async
+There are 19 Tauri commands. `src/commands/mod.rs` defines five async
 commands: `save_song`, `get_song`, `list_songs`, `delete_song` and
 `search_songs`. They share one `DbState` (`src/commands/state.rs`), a
 `Mutex<Result<Connection, DbError>>`. A sixth command, `log_webview_error`, is
@@ -219,6 +219,31 @@ synchronous and does not use `DbState`: it reads a user-picked file as UTF-8
 text with plain `std::fs`. Only regular files up to 1 MiB (1,048,576 bytes)
 are accepted, one leading BOM is removed and line endings are untouched. A
 failure is a `FileError` `{kind, message}` whose `kind` is `TooLarge`, `NotUtf8` or `Io` (the `FileErrorKind` value `Invalid` is returned only by `save_export_docx`).
+
+`extract_document(path)` (`src/commands/documents/mod.rs`) is
+`#[tauri::command(async)]` and does not use `DbState`. It runs the extraction
+on `spawn_blocking`, with plain `std::fs` (no fs plugin), and returns
+`DocumentText { format, blocks, warnings }`. `format` is `docx`, `odt`, `rtf` or
+`pdf`, chosen by the file extension (ASCII case-insensitive). A block is
+`{kind: "paragraph", text}` or `{kind: "table", rows}` (`string[][]`); inside a
+paragraph or cell a line break is `\n` and a tab is `\t`. Blank paragraphs and
+all-empty tables are dropped. A warning is `{kind, message}` where `kind` is
+`PdfReordered`, `PdfNoText` or `Skipped`. A failure is a `DocError`
+`{kind, message}` whose `kind` is `TooLarge` (the file is over 20 MiB),
+`TextTooLarge` (the extracted block text is over 2 MiB, counted in UTF-8
+bytes; also a DOCX or ODT XML part over 20 MiB, or a PDF with over 2,000,000 glyphs), `Unsupported` (any other extension), `Corrupt` or `Io` (not a regular
+file, or a read failure). The formats:
+
+- DOCX and ODT: paragraphs and tables, with tabs kept.
+- RTF: a hand-written tokenizer that decodes `\uN` and hex bytes. The code page
+  of a byte comes from the current font's `\fcharset` first: 177 and 181 give
+  cp1255 (Hebrew), 178 to 180 give cp1256 (Arabic). Only otherwise does
+  `\ansicpg` apply, defaulting to 1252.
+- PDF: text PDFs only, run on a worker thread with a 30 second timeout; a
+  timeout or a worker failure is `Corrupt`. Lines are rebuilt from glyph
+  baselines, and Hebrew runs are converted from visual to logical order with a
+  `PdfReordered` warning. A PDF with no extractable text (likely a scan) gives
+  zero blocks and a `PdfNoText` warning, not an error.
 
 Ten setlist commands live in `src/commands/setlists.rs`: `list_setlists`,
 `get_setlist`, `create_setlist`, `rename_setlist`, `delete_setlist`,
@@ -236,20 +261,21 @@ symlink, and the written path is returned.
 The database file is `<app_data_dir>/shir.db` (app identifier
 `com.kdcllc.shir`). If it cannot be opened, startup logs one line,
 `shir: database unavailable: <cause>`, and the five storage commands and the ten
-setlist commands return `Unavailable`; `log_webview_error`, `read_text_file`
-and `save_export_docx` are unaffected because they do not use `DbState`. `open_db_state` writes that line through
+setlist commands return `Unavailable`; `log_webview_error`, `read_text_file`,
+`save_export_docx` and `extract_document` are unaffected because they do not use `DbState`. `open_db_state` writes that line through
 `report_unavailable(&DbState, &mut dyn Write)` (`src/lib.rs`) with stderr; the
 line comes from `DbState::unavailable_line`, which still works after a poisoned
 lock.
 `DbState::open` opens, migrates, then seeds (see Seeding). In
 the commands that use `DbState`, a poisoned lock returns `Storage`.
 
-`build.rs` lists all 18 commands, `collect_commands!` registers them with
+`build.rs` lists all 19 commands, `collect_commands!` registers them with
 `log_webview_error` last, and `capabilities/default.json` grants
 `core:default`, `dialog:allow-open` (the `tauri-plugin-dialog` file picker,
 registered in `src/lib.rs`), `allow-save-song`, `allow-get-song`,
 `allow-list-songs`, `allow-delete-song`, `allow-search-songs`,
-`allow-read-text-file`, `allow-save-export-docx`, `allow-list-setlists`,
+`allow-read-text-file`, `allow-save-export-docx`, `allow-extract-document`,
+`allow-list-setlists`,
 `allow-get-setlist`, `allow-create-setlist`, `allow-rename-setlist`,
 `allow-delete-setlist`, `allow-duplicate-setlist`, `allow-add-setlist-items`,
 `allow-remove-setlist-item`, `allow-reorder-setlist-items`,
@@ -293,6 +319,15 @@ deletion: once the delete confirmation dialog is confirmed, `deleteMany`
 (`TooLarge`, `NotUtf8`, `Io`, `Invalid`) or `"Ipc"` (the call itself failed). `readTextFile` itself never receives `Invalid`.
 It also exports `saveExportDocx`, which wraps `save_export_docx`; a failure
 throws a `FileWriteError` whose `kind` is `Invalid`, `Io` or `"Ipc"`.
+
+It also exports `extractDocument(path)`, which wraps `extract_document` and
+resolves a `DocumentText`; a failure throws a `DocumentReadError` whose `kind`
+is a `DocErrorKind` (`TooLarge`, `TextTooLarge`, `Unsupported`, `Corrupt`, `Io`)
+or `"Ipc"` (the call itself failed). `pickDocumentFile(filterName)` opens the
+single-file picker filtered to `DOCUMENT_FILE_EXTENSIONS` (`docx`, `odt`, `rtf`,
+`pdf`) and resolves the path, or `undefined` on cancel. `pickSongFiles()`
+filters the song extensions (`cho`, `chopro`, `chordpro`, `txt`) together with
+`DOCUMENT_FILE_EXTENSIONS`.
 
 ## Invariants
 
