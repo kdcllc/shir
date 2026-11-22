@@ -8,3 +8,7 @@ _memory/loop/ESCALATIONS.md merge=union
 *.ico binary
 *.icns binary
 *.woff2 binary
+*.docx binary
+*.odt binary
+*.pdf binary
+*.rtf -text

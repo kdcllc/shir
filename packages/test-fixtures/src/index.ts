@@ -258,3 +258,103 @@ export function readExportGolden(
   const file = typeof caseOrFile === "string" ? caseOrFile : caseOrFile.file;
   return JSON.parse(readFileSync(exportGoldenPath(file), "utf8")) as unknown;
 }
+
+/** Document-import fixtures (`doc/`): one authored `.fodt` per name, converted to every format. */
+export const DOC_FIXTURE_NAMES = [
+  "he_chords_above",
+  "en_table",
+  "songbook_mixed",
+] as const;
+
+export type DocFixtureName = (typeof DOC_FIXTURE_NAMES)[number];
+
+export const DOC_FORMATS = ["docx", "odt", "rtf", "pdf"] as const;
+
+export type DocFormat = (typeof DOC_FORMATS)[number];
+
+/** AI-reply fixtures (`ai/`): a pasted reply plus the ChordPro songs a splitter returns. */
+export const AI_REPLY_FIXTURE_NAMES = [
+  "two_songs_fenced",
+  "prose_wrapped",
+  "single_no_delimiter",
+  "empty_chunks",
+] as const;
+
+export type AiReplyFixtureName = (typeof AI_REPLY_FIXTURE_NAMES)[number];
+
+function assertDocName(name: string): void {
+  if (!(DOC_FIXTURE_NAMES as readonly string[]).includes(name)) {
+    throw new TypeError(`Unknown document fixture name: ${String(name)}`);
+  }
+}
+
+function assertAiName(name: string): void {
+  if (!(AI_REPLY_FIXTURE_NAMES as readonly string[]).includes(name)) {
+    throw new TypeError(`Unknown AI reply fixture name: ${String(name)}`);
+  }
+}
+
+// Built from a variable (see the note above EDIT_CASES_FILE).
+function docFile(file: string): string {
+  return fileURLToPath(new URL(`../doc/${file}`, import.meta.url));
+}
+
+function aiFile(file: string): string {
+  return fileURLToPath(new URL(`../ai/${file}`, import.meta.url));
+}
+
+/** Absolute path of `<package>/doc/<name>.<format>`. */
+export function docFixturePath(
+  name: DocFixtureName,
+  format: DocFormat,
+): string {
+  assertDocName(name);
+  if (!(DOC_FORMATS as readonly string[]).includes(format)) {
+    throw new TypeError(`Unknown document format: ${String(format)}`);
+  }
+  return docFile(`${name}.${format}`);
+}
+
+/** Expected extraction (`DocBlock` JSON array) of a document fixture. */
+export function readDocExpected(name: DocFixtureName): unknown[] {
+  assertDocName(name);
+  return JSON.parse(
+    readFileSync(docFile(`${name}.expected.json`), "utf8"),
+  ) as unknown[];
+}
+
+/** Expected PDF text lines (logical order, whitespace collapsed) of a document fixture. */
+export function readDocPdfLines(name: DocFixtureName): string[] {
+  assertDocName(name);
+  return JSON.parse(
+    readFileSync(docFile(`${name}.pdf.lines.json`), "utf8"),
+  ) as string[];
+}
+
+/** One chord of the Hebrew chords-over-lyrics page, anchored where it renders. */
+export interface DocAnchor {
+  line: string;
+  chord: string;
+  index: number;
+}
+
+/** Rendered chord anchors of `he_chords_above` (the oracle for chord placement). */
+export function readDocAnchors(): DocAnchor[] {
+  return JSON.parse(
+    readFileSync(docFile("he_chords_above.anchors.json"), "utf8"),
+  ) as DocAnchor[];
+}
+
+/** A reply as an AI might paste it (`ai/<name>.txt`). */
+export function readAiReply(name: AiReplyFixtureName): string {
+  assertAiName(name);
+  return readFileSync(aiFile(`${name}.txt`), "utf8");
+}
+
+/** The exact ChordPro strings a correct splitter returns for a reply. */
+export function readAiReplyExpected(name: AiReplyFixtureName): string[] {
+  assertAiName(name);
+  return JSON.parse(
+    readFileSync(aiFile(`${name}.expected.json`), "utf8"),
+  ) as string[];
+}

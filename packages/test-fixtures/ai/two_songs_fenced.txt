@@ -1,0 +1,16 @@
+# Original text written for the Shir repository (CC0-1.0)
+Here are the songs from your document:
+
+```chordpro
+{title: שיר הנחל}
+{key: Am}
+הנחל [Am]זורם [G]לאט
+ושיר [C]קטן [F]בלב
+{new_song}
+{title: Harbor Light}
+{key: Am}
+Walking [Am]down to the [F]harbor
+Lanterns [C]swing in the [G]dark
+```
+
+Let me know if you want changes.
