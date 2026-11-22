@@ -165,6 +165,47 @@ export const STRINGS = {
   exportLabelSongs: "Songs",
   exportLabelDate: "Date",
   duplicateSuffix: "(copy)",
+  importWithAi: "Import with AI",
+  aiStepSource: "Source",
+  aiStepPrompt: "Prompt",
+  aiStepReply: "Reply",
+  aiSourceDocument: "Extract the text from a document",
+  // prettier-ignore
+  aiSourceAttach: "I'll attach the file to the AI chat (images, scans, .doc and others)",
+  aiPickDocument: "Choose a document…",
+  aiPromptLabel: "Prompt to copy",
+  aiPromptHint: "Choose a document first, then the prompt appears here.",
+  aiCopy: "Copy prompt",
+  aiCopied: "Copied",
+  // prettier-ignore
+  aiCopyFailed: "Could not copy automatically. The prompt is selected: press Ctrl+C.",
+  aiReplyLabel: "Paste the AI reply here",
+  aiParse: "Read songs",
+  // prettier-ignore
+  aiParseError: "No songs were found in the reply. Check that the whole reply was pasted.",
+  // prettier-ignore
+  aiTruncated: "The reply holds more songs than can be imported at once. Only the first songs are listed.",
+  aiSongsFound: "Songs found",
+  aiDefaultSource: "AI",
+  convertWithAi: "Convert with AI instead",
+  importNotes: "Notes on this file",
+  // prettier-ignore
+  docNoteOneSong: "The offline conversion keeps the whole document as one song. If it holds several songs, use Convert with AI to split them.",
+  fileFilterDocuments: "Documents",
+  // prettier-ignore
+  docTooLarge: "The file is over 20 MB. Attach it in Import with AI instead",
+  // prettier-ignore
+  docTextTooLarge: "The file holds more than 2 MB of text. Attach it in Import with AI instead",
+  docUnsupported: "Unsupported file type",
+  docCorrupt: "The file is damaged or not in that format",
+  docIo: "Could not read the file",
+  // prettier-ignore
+  docNoText: "No text found, likely a scan. Use Import with AI and attach the file",
+  // prettier-ignore
+  docWarnPdfReordered: "Hebrew text in this PDF was reordered. Check the lines.",
+  docWarnPdfNoText: "This PDF has no text, likely a scan.",
+  // prettier-ignore
+  docWarnSkipped: "Some content was skipped, for example an image or an object.",
 } as const;
 
 /** i18next templates replacing the helpers below (`{{var}}` interpolation, `_one` / `_other` plurals). */
@@ -195,4 +236,8 @@ export const TEMPLATES = {
   deleteSetlistTitle: "Delete \u2068{{name}}\u2069?",
   exportSaved: "Saved \u2068{{name}}\u2069",
   capoSongDefault: "Song default ({{n}})",
+  aiCharCount: "{{count}} characters",
+  aiSongLabel: "Song {{n}}",
+  aiReviewSongs_one: "Review {{count}} song",
+  aiReviewSongs_other: "Review {{count}} songs",
 } as const;

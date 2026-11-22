@@ -13,6 +13,7 @@
     "allow-search-songs",
     "allow-read-text-file",
     "allow-save-export-docx",
+    "allow-extract-document",
     "allow-list-setlists",
     "allow-get-setlist",
     "allow-create-setlist",

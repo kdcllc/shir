@@ -42,10 +42,11 @@ import).
   from Tauri.
 - The app heading `<h1>`, the `<nav>`, the search box, the search status
   element, the search-unavailable notice, the loading text, the view controls,
-  the diagnostics panel, the New song / Open files actions, the import report,
-  the app notice, the Edit button, the editor toolbar, status, labels and
-  alerts, the reviewing-file line, the import warnings and the discard dialog
-  carry the `data-ui-chrome` attribute, so the existing print CSS
+  the diagnostics panel, the New song / Open files / Import with AI actions, the
+  import report, the app notice, the Edit button, the editor toolbar, status,
+  labels and alerts, the reviewing-file line, the import warnings, the notes
+  section of a document under review, the discard dialog and the Import with AI
+  dialog carry the `data-ui-chrome` attribute, so the existing print CSS
   (`docs/BIDI.md` § Print CSS) hides them. So do the selection bar, the row
   checkbox and the row delete button, the delete status, the header delete
   button, the delete dialog, the editor tabs, the song-details form, the chord
@@ -385,6 +386,9 @@ Each component lives at `apps/desktop/src/components/<Name>.tsx`.
   value outside −11..+11.
 - `DiagnosticsPanel`: it renders `null` for an empty array.
 - `Editor` and `ConfirmDiscard`: see § Editor and import.
+- `AiImportDialog`: the Import with AI dialog (§ Import with AI). It is
+  controlled by `App`, which supplies `pickDocument` and `onImport` and so owns
+  every IPC call; the dialog keeps only its own form state.
 - `MetaForm`, `VisualEditor`, `ChordPicker` and `SectionControls`: the parts of
   the editor's Visual tab; see § Editor and import.
 - `useDraft(value, commit)` (`apps/desktop/src/components/useDraft.ts`): the
@@ -448,8 +452,12 @@ ViewControls { transpose: number; capo: number;
   onReset(): void }
 DiagnosticsPanel { diagnostics: readonly Diagnostic[] }
 Editor { initialText: string; baseline?: string; seed?: ImportSeed;
-  titlePath?: string; fileName?: string; onSave(text: string): Promise<void>;
+  titlePath?: string; fileName?: string; notes?: readonly string[];
+  onConvertWithAi?(text: string): void; onSave(text: string): Promise<void>;
   onCancel(): void; onDirtyChange?(dirty: boolean): void }
+AiImportDialog { initial?: AiDocument;
+  pickDocument(): Promise<(AiDocument & { warnings: string[] }) | undefined>;
+  onImport(songs: AiReplySong[]): void; onCancel(): void }
 ConfirmDiscard { onKeep(): void; onDiscard(): void }
 MetaFormValues { readonly [Name in EditMetaName]: string }
 MetaForm { values: MetaFormValues;
@@ -527,7 +535,8 @@ ConfirmDeleteSetlist { name: string; onCancel(): void; onConfirm(): void }
 ## Editor and import
 
 Database mode only. The sidebar has `New song` (`new-song`), which opens an
-empty editor, and `Open files…` (`open-files`), which imports files. The
+empty editor, `Open files…` (`open-files`), which imports files, and
+`Import with AI` (`ai-import`, § Import with AI). The
 `Edit` button (`edit-song`) next to the song header opens the selected song.
 The `Editor` component (`components/Editor.tsx`) replaces the song view while
 editing.
@@ -553,6 +562,8 @@ Editor:
   (`editor-transpose-down`, `editor-transpose-up`), `Paste`, `Convert` (Source
   tab only)
   and, only after an import with RTL chords, `Flip alignment` (both tabs).
+  While a converted document is under review it also has `Convert with AI
+instead` (`editor-convert-ai`, § Import with AI).
 - `Undo` and `Redo` are disabled when there is nothing to undo or redo.
   Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z and Ctrl+Y redo. The shortcuts do not
   apply while Alt is held or when the key event's target is an `<input>`
@@ -565,7 +576,7 @@ Editor:
   with chord-core `importText`; when the clipboard cannot be read it shows the
   `pasteFailed` alert. `Convert` converts the current text; when the text is
   already ChordPro it changes nothing and `editor-status` shows
-  `alreadyChordPro`. Both use the editor's current `rtlColumns` mode, which starts as `mirror`. Typing in the
+  `alreadyChordPro`. Both use the editor's current `rtlColumns` mode, which starts as the review seed's mode (a document's `rtlColumns`) and otherwise as `mirror`. Typing in the
   Source text area, a visual edit that changes the text (song details and
   transpose included), `Undo`, `Redo` and a `Convert` of text that is already
   ChordPro clear the last import.
@@ -693,16 +704,38 @@ Visual tab:
 Open files (`apps/desktop/src/importFiles.ts`, `importSongFiles`):
 
 - `pickSongFiles()` from `files.ts` opens the native multi-file dialog filtered
-  to `.cho`, `.chopro`, `.chordpro` and `.txt`. `readTextFile(path)` reads each
-  file through the `read_text_file` command (UTF-8, one leading BOM removed,
+  to `.cho`, `.chopro`, `.chordpro`, `.txt`, `.docx`, `.odt`, `.rtf` and `.pdf`.
+  `readTextFile(path)` reads each text file through the `read_text_file`
+  command (UTF-8, one leading BOM removed,
   at most 1 MiB; a failure throws `FileReadError` whose `kind` is `TooLarge`,
   `NotUtf8`, `Io` or `"Ipc"`).
-- `.cho`, `.chopro` and `.chordpro` files are saved as they are. Other files
+- `.cho`, `.chopro` and `.chordpro` files are saved as they are. Other text files
   go through `importText`. A file without RTL chords is saved at once; a file
   with RTL chords (`hasRtlChords`) is queued and opened in the editor (on the
   Visual tab), one at a
   time, for alignment review. In the review editor `Cancel` skips the file
   (listed under `import-skipped`) and `Save` saves it and moves on.
+- A file whose extension (compared in lower case) is `.docx`, `.odt`, `.rtf` or
+  `.pdf` is a document. `extractDocument(path)` (the `extract_document`
+  command) returns its blocks and warnings, `documentToText` turns the blocks
+  into text and the column order (`rtlColumns`), and `importText` converts that
+  text with the same `rtlColumns`. A document is never saved at once: it is
+  always queued for review, whether or not it has RTL chords, and the review
+  editor shows `Notes on this file` (`editor-notes`) listing the extraction
+  warnings of the document, in the current language, then the `docNoteOneSong`
+  text. The offline conversion keeps the whole document as one song. When the
+  import has RTL chords, `Flip alignment` starts from the document's
+  `rtlColumns`, and
+  `Convert with AI instead` opens Import with AI for the document (§ Import
+  with AI).
+- A document that cannot be read is an `import-failed` entry with a `reason`:
+  the `kind` of the `DocumentReadError` (`TooLarge`, `TextTooLarge`,
+  `Unsupported`, `Corrupt`, `Io` or `"Ipc"`), or `NoText` for a document that
+  holds no blocks. The report shows a localized message for every reason
+  except `"Ipc"`: `docTooLarge`, `docTextTooLarge`, `docUnsupported`,
+  `docCorrupt`, `docIo` and `docNoText`. An `"Ipc"` failure shows the raw
+  error message. When `documentToText` or `importText` throws, the file fails
+  with no `reason` and the report shows the raw error message.
 - `withTitleFallback(chordpro, path)` prepends `{title: <file name without
 extension>}` unless the text already has a `{title` or `{t:` directive.
 - One file's failure never stops the others; each failure is an
@@ -713,6 +746,83 @@ extension>}` unless the text already has a `{title` or `{t:` directive.
   the `importQueued` template (`1 file needs alignment review`, otherwise
   `N files need alignment review`) when files are queued. Converted `.txt`
   files that were saved at once are listed under `importConverted`.
+
+## Import with AI
+
+Database mode only. `Import with AI` (`ai-import`, `data-ui-chrome`) sits after
+`Open files…` in the sidebar and is disabled while a file import runs. It
+opens `AiImportDialog` (`ai-import-dialog`, a modal `role="dialog"`; Esc and
+`Cancel` (`ai-cancel`) close it). Shir makes no network call: the dialog builds
+a prompt with chord-core `buildAiPrompt`, the user copies it into any chat AI
+and pastes the reply back, and `parseAiReply` splits the reply into songs.
+The dialog has three steps:
+
+- `Source`: two radio buttons. `I'll attach the file to the AI chat (images,
+scans, .doc and others)` (`ai-source-attach`) is the default when the dialog
+  opens empty. `Extract the text from a document` (`ai-source-document`)
+  selects text mode, and `Choose a document…` (`ai-pick-document`, which also
+  selects text mode) picks one file with `pickDocumentFile`, filtered to
+  `.docx`, `.odt`, `.rtf` and `.pdf`. `App` extracts it on this computer
+  (`extractDocument`, then the text of `documentToText`). The picked file shows
+  as its name, `·` and its character count (`ai-picked`); its extraction
+  warnings are listed under `ai-pick-warnings`; a failure shows in `ai-pick-error` the
+  message the import report shows for it (Open files, § Editor and import), and
+  a document with no blocks shows `docNoText`.
+- `Prompt`: a read-only text area (`ai-prompt`, `dir="ltr"`) with the prompt.
+  In text mode the prompt holds the extracted text and appears once a
+  document is picked; until then `ai-prompt-hint` shows `Choose a document
+first, then the prompt appears here.`. In attach mode the prompt asks for the
+  attached file, and names the picked document when there is one. `Copy prompt`
+  (`ai-copy`) copies it and `ai-copied` shows `Copied`; when the clipboard
+  cannot be written, the prompt is selected and `ai-copy-failed` shows `Could
+not copy automatically. The prompt is selected: press Ctrl+C.`. The status
+  shown belongs to the current prompt only.
+- `Reply`: a text area (`ai-reply`, `dir="auto"`, label `Paste the AI reply
+here`). `Read songs` (`ai-parse`) is disabled while the reply is blank. It
+  lists the songs found (`ai-songs`, one `ai-song` per song): the title, or
+  `Song N` when there is none, followed by `·` and the diagnostics count when
+  the song has diagnostics. When the reply holds no songs `ai-parse-error` shows
+  `aiParseError`; when it holds more than can be imported at once
+  `ai-truncated` shows `aiTruncated`. Editing the reply clears the result.
+  `Review N songs` (`ai-review`) hands the songs to `App`.
+
+`App` queues every song for review in the editor, and nothing is saved until
+the user clicks `Save` on a song, which moves on to the next one. A queued
+song's name is `<source> · <title>`: the source is the document name the dialog
+was opened with, else `AI`, and the title is the song's title, else `Song N`.
+The songs are ChordPro as the AI wrote it, with no RTL-chords flag. Starting
+the review from the sidebar abandons the open editor and the rest of its queue
+after the usual discard confirmation (§ Editor and import).
+
+Convert with AI: while a converted document is under review, `Convert with AI
+instead` (`editor-convert-ai`) opens the dialog in text mode with that
+document's name and extracted text already filled in. The songs of the reply
+take the place of the document at the head of the queue, ahead of the files
+still queued behind it. The discard confirmation appears only when the editor
+text was edited since the document was opened; otherwise the songs replace the
+document at once.
+
+Limits of document extraction:
+
+- A document over 20 MiB, or one that holds more than 2 MiB of extracted text,
+  is refused (`docTooLarge`, `docTextTooLarge`). Attach it in Import with AI
+  instead.
+- A PDF without a text layer, such as a scan, gives no text: `docNoText` in
+  the report, `docWarnPdfNoText` as a warning. Attach it in Import with AI.
+- `.doc` files and images are not in the Open files filter. They reach Shir
+  only through the attach source of Import with AI. In the Import with AI
+  picker, a file with another extension is refused as `Unsupported`
+  (`docUnsupported`).
+- PDF extraction stops after 30 seconds and fails as `Corrupt`
+  (`docCorrupt`).
+- Hebrew text in a PDF is reordered from visual to logical order, and the
+  `docWarnPdfReordered` warning asks the user to check the lines. A niqqud mark
+  can land on the wrong letter when the PDF font maps ligature glyphs
+  ambiguously. Chord placement from a PDF is best-effort: the spaces in a line
+  are rebuilt from the gaps between glyphs, counted in the page's typical
+  character width, so a chord can sit off the letter it was printed over.
+  Review the song in the editor, use `Flip alignment`, or attach
+  the file to the AI chat instead.
 
 ## Webview errors
 
@@ -912,172 +1022,226 @@ Coordinates have two meanings:
 | `sidebar-tabs`                  | `<div role="tablist">`     | The Songs / Setlists switch                                           |
 | `tab-setlists`                  | `<button role="tab">`      | The Setlists tab                                                      |
 | `tab-songs`                     | `<button role="tab">`      | The Songs tab                                                         |
+| `ai-import`                     | `<button>`                 | Opens the Import with AI dialog                                       |
+| `ai-import-dialog`              | `<div role="dialog">`      | The Import with AI dialog                                             |
+| `ai-source-document`            | `<input type="radio">`     | Source: extract the text from a document                              |
+| `ai-source-attach`              | `<input type="radio">`     | Source: attach the file to the AI chat yourself                       |
+| `ai-pick-document`              | `<button>`                 | Picks a document and extracts its text                                |
+| `ai-picked`                     | `<p>`                      | File name and character count of the picked document                  |
+| `ai-pick-error`                 | `<p role="alert">`         | Why the document could not be read                                    |
+| `ai-pick-warnings`              | `<ul>`                     | Extraction warnings of the picked document                            |
+| `ai-prompt`                     | `<textarea readonly>`      | The prompt to copy                                                    |
+| `ai-prompt-hint`                | `<p>`                      | Shown instead of the prompt until a document is picked                |
+| `ai-copy`                       | `<button>`                 | Copies the prompt to the clipboard                                    |
+| `ai-copied`                     | `<span role="status">`     | The prompt was copied                                                 |
+| `ai-copy-failed`                | `<span role="status">`     | Copying failed; the prompt is selected for Ctrl+C                     |
+| `ai-reply`                      | `<textarea>`               | Where the AI reply is pasted                                          |
+| `ai-parse`                      | `<button>`                 | Splits the reply into songs                                           |
+| `ai-parse-error`                | `<p role="alert">`         | The reply holds no songs                                              |
+| `ai-truncated`                  | `<p role="status">`        | The reply held more songs than can be listed                          |
+| `ai-songs`                      | `<ul>`                     | The songs found in the reply                                          |
+| `ai-song`                       | `<li>`                     | One per song found                                                    |
+| `ai-review`                     | `<button>`                 | Reviews the songs found, one by one, in the editor                    |
+| `ai-cancel`                     | `<button>`                 | Closes the dialog                                                     |
+| `editor-convert-ai`             | `<button>`                 | Opens Import with AI with the document under review                   |
+| `editor-notes`                  | `<ul>`                     | Notes on the document under review                                    |
 
 ## Strings
 
-| Key                    | Value                                                                              |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| `appName`              | `Shir`                                                                             |
-| `appNameHebrew`        | `שיר`                                                                              |
-| `groupSamples`         | `Samples`                                                                          |
-| `groupTestSongs`       | `Test songs`                                                                       |
-| `songList`             | `Songs`                                                                            |
-| `transpose`            | `Transpose`                                                                        |
-| `transposeDown`        | `Transpose down`                                                                   |
-| `transposeUp`          | `Transpose up`                                                                     |
-| `capo`                 | `Capo`                                                                             |
-| `reset`                | `Reset`                                                                            |
-| `key`                  | `Key`                                                                              |
-| `shapes`               | `Shapes`                                                                           |
-| `diagnostics`          | `Diagnostics`                                                                      |
-| `noSongSelected`       | `Select a song`                                                                    |
-| `searchLabel`          | `Search songs`                                                                     |
-| `searchPlaceholder`    | `Search title, artist or lyrics`                                                   |
-| `searchResults`        | `Search results`                                                                   |
-| `noResults`            | `No songs match`                                                                   |
-| `searchFailed`         | `Search failed`                                                                    |
-| `searchUnavailable`    | `Search unavailable: the song library could not be opened. Showing bundled songs.` |
-| `loadingLibrary`       | `Loading songs…`                                                                   |
-| `searching`            | `Searching…`                                                                       |
-| `libraryEmpty`         | `No songs in the library`                                                          |
-| `songLoadFailed`       | `Could not open this song`                                                         |
-| `noKey`                | `No key`                                                                           |
-| `separator`            | `·`                                                                                |
-| `transposeDownGlyph`   | `−`                                                                                |
-| `transposeUpGlyph`     | `+`                                                                                |
-| `newSong`              | `New song`                                                                         |
-| `editSong`             | `Edit`                                                                             |
-| `openFiles`            | `Open files…`                                                                      |
-| `editorLabel`          | `ChordPro text`                                                                    |
-| `previewLabel`         | `Preview`                                                                          |
-| `save`                 | `Save`                                                                             |
-| `cancel`               | `Cancel`                                                                           |
-| `paste`                | `Paste`                                                                            |
-| `convert`              | `Convert`                                                                          |
-| `flipAlignment`        | `Flip alignment`                                                                   |
-| `alreadyChordPro`      | `Already ChordPro, nothing to convert`                                             |
-| `pasteFailed`          | `Could not read the clipboard. Paste with Ctrl+V, then use Convert.`               |
-| `importWarnings`       | `Import warnings`                                                                  |
-| `saveFailed`           | `Could not save the song`                                                          |
-| `discardTitle`         | `Discard unsaved changes?`                                                         |
-| `discardBody`          | `Your changes to this song have not been saved.`                                   |
-| `keepEditing`          | `Keep editing`                                                                     |
-| `discard`              | `Discard`                                                                          |
-| `reviewingFile`        | `Reviewing file`                                                                   |
-| `importConverted`      | `Converted from chords over lyrics`                                                |
-| `importSkipped`        | `Skipped files`                                                                    |
-| `importPickFailed`     | `Could not open files`                                                             |
-| `libraryReloadFailed`  | `Could not refresh the song list`                                                  |
-| `deleteAction`         | `Delete`                                                                           |
-| `selectSongs`          | `Select`                                                                           |
-| `selectAll`            | `Select all`                                                                       |
-| `selectDone`           | `Done`                                                                             |
-| `deleteSelected`       | `Delete selected`                                                                  |
-| `deleteConfirmBody`    | `Deleted songs are permanently removed from the library. This cannot be undone.`   |
-| `deleteFailed`         | `Could not delete the song`                                                        |
-| `removeGlyph`          | `×`                                                                                |
-| `tabVisual`            | `Visual`                                                                           |
-| `tabSource`            | `Source`                                                                           |
-| `editorTabs`           | `Editor view`                                                                      |
-| `undo`                 | `Undo`                                                                             |
-| `redo`                 | `Redo`                                                                             |
-| `transposeSongDown`    | `Transpose song down`                                                              |
-| `transposeSongUp`      | `Transpose song up`                                                                |
-| `metaForm`             | `Song details`                                                                     |
-| `metaTitle`            | `Title`                                                                            |
-| `metaArtist`           | `Artist`                                                                           |
-| `metaTempo`            | `Tempo`                                                                            |
-| `visualLabel`          | `Song lines`                                                                       |
-| `visualHint`           | `Type lyrics, then click a letter to add a chord`                                  |
-| `editLyrics`           | `Edit lyrics`                                                                      |
-| `lyricsInput`          | `Lyrics`                                                                           |
-| `addLineBelow`         | `Add line below`                                                                   |
-| `removeLine`           | `Remove line`                                                                      |
-| `editGlyph`            | `✎`                                                                                |
-| `addGlyph`             | `+`                                                                                |
-| `chordsLineInput`      | `Chords`                                                                           |
-| `commentInput`         | `Comment`                                                                          |
-| `sourceOnly`           | `Edit in Source`                                                                   |
-| `addSection`           | `Add section`                                                                      |
-| `sectionKind`          | `Section type`                                                                     |
-| `sectionLabel`         | `Section label`                                                                    |
-| `sectionVerse`         | `Verse`                                                                            |
-| `sectionChorus`        | `Chorus`                                                                           |
-| `sectionBridge`        | `Bridge`                                                                           |
-| `sectionUp`            | `Move section up`                                                                  |
-| `sectionDown`          | `Move section down`                                                                |
-| `sectionRemove`        | `Remove section`                                                                   |
-| `upGlyph`              | `↑`                                                                                |
-| `downGlyph`            | `↓`                                                                                |
-| `chordPicker`          | `Chord`                                                                            |
-| `chordInput`           | `Chord name`                                                                       |
-| `chordSuggestions`     | `Suggestions`                                                                      |
-| `chordApply`           | `Apply`                                                                            |
-| `chordRemove`          | `Remove chord`                                                                     |
-| `chordMoveLeft`        | `Move chord left`                                                                  |
-| `chordMoveRight`       | `Move chord right`                                                                 |
-| `leftGlyph`            | `←`                                                                                |
-| `rightGlyph`           | `→`                                                                                |
-| `chordUnknown`         | `Unrecognized chord`                                                               |
-| `chordClose`           | `Close`                                                                            |
-| `noLabel`              | `No label`                                                                         |
-| `sectionOther`         | `Other`                                                                            |
-| `sortLabel`            | `Sort by`                                                                          |
-| `sortTitle`            | `Title`                                                                            |
-| `sortArtist`           | `Artist`                                                                           |
-| `sortUpdated`          | `Recently updated`                                                                 |
-| `libraryView`          | `Library view`                                                                     |
-| `filterLanguage`       | `Language`                                                                         |
-| `filterAll`            | `All`                                                                              |
-| `filterHebrew`         | `Hebrew`                                                                           |
-| `filterEnglish`        | `English`                                                                          |
-| `filterMixed`          | `Mixed`                                                                            |
-| `badgeHebrew`          | `HE`                                                                               |
-| `badgeEnglish`         | `EN`                                                                               |
-| `badgeMixed`           | `HE+EN`                                                                            |
-| `noFilterMatches`      | `No songs in this language`                                                        |
-| `uiLanguage`           | `Interface language`                                                               |
-| `localeHebrew`         | `עברית`                                                                            |
-| `localeEnglish`        | `English`                                                                          |
-| `localeHebrewShort`    | `עב`                                                                               |
-| `localeEnglishShort`   | `EN`                                                                               |
-| `chordAddEmpty`        | `Add chord`                                                                        |
-| `fileFilterSongs`      | `Song files`                                                                       |
-| `tabSongs`             | `Songs`                                                                            |
-| `tabSetlists`          | `Setlists`                                                                         |
-| `sidebarViews`         | `Sidebar view`                                                                     |
-| `setlistNameLabel`     | `Setlist name`                                                                     |
-| `createSetlist`        | `Create`                                                                           |
-| `renameSetlist`        | `Rename`                                                                           |
-| `duplicateSetlist`     | `Duplicate`                                                                        |
-| `setlistsEmpty`        | `No setlists yet`                                                                  |
-| `setlistEmpty`         | `This setlist has no songs`                                                        |
-| `setlistEntries`       | `Songs in the setlist`                                                             |
-| `deleteSetlistBody`    | `The setlist is removed. The songs in it are not deleted.`                         |
-| `addToSetlist`         | `Add to setlist`                                                                   |
-| `newSetlistOption`     | `New setlist`                                                                      |
-| `setlistChoice`        | `Setlist`                                                                          |
-| `add`                  | `Add`                                                                              |
-| `moveUp`               | `Move up`                                                                          |
-| `moveDown`             | `Move down`                                                                        |
-| `removeFromSetlist`    | `Remove from setlist`                                                              |
-| `dragHandle`           | `Drag to reorder`                                                                  |
-| `dragGlyph`            | `⋮⋮`                                                                               |
-| `print`                | `Print`                                                                            |
-| `exportPdf`            | `Export PDF`                                                                       |
-| `exportWord`           | `Export Word`                                                                      |
-| `pdfHint`              | `Choose “Save as PDF” in the print dialog`                                         |
-| `fileFilterWord`       | `Word document`                                                                    |
-| `setlistsLoadFailed`   | `Could not load setlists`                                                          |
-| `setlistSaveFailed`    | `Could not save the setlist`                                                       |
-| `exportFailed`         | `Could not export the setlist`                                                     |
-| `exportLabelSetlist`   | `Setlist`                                                                          |
-| `exportLabelKey`       | `Key`                                                                              |
-| `exportLabelCapo`      | `Capo`                                                                             |
-| `exportLabelTranspose` | `Transpose`                                                                        |
-| `exportLabelSongs`     | `Songs`                                                                            |
-| `exportLabelDate`      | `Date`                                                                             |
-| `duplicateSuffix`      | `(copy)`                                                                           |
+| Key                    | Value                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `appName`              | `Shir`                                                                                                                       |
+| `appNameHebrew`        | `שיר`                                                                                                                        |
+| `groupSamples`         | `Samples`                                                                                                                    |
+| `groupTestSongs`       | `Test songs`                                                                                                                 |
+| `songList`             | `Songs`                                                                                                                      |
+| `transpose`            | `Transpose`                                                                                                                  |
+| `transposeDown`        | `Transpose down`                                                                                                             |
+| `transposeUp`          | `Transpose up`                                                                                                               |
+| `capo`                 | `Capo`                                                                                                                       |
+| `reset`                | `Reset`                                                                                                                      |
+| `key`                  | `Key`                                                                                                                        |
+| `shapes`               | `Shapes`                                                                                                                     |
+| `diagnostics`          | `Diagnostics`                                                                                                                |
+| `noSongSelected`       | `Select a song`                                                                                                              |
+| `searchLabel`          | `Search songs`                                                                                                               |
+| `searchPlaceholder`    | `Search title, artist or lyrics`                                                                                             |
+| `searchResults`        | `Search results`                                                                                                             |
+| `noResults`            | `No songs match`                                                                                                             |
+| `searchFailed`         | `Search failed`                                                                                                              |
+| `searchUnavailable`    | `Search unavailable: the song library could not be opened. Showing bundled songs.`                                           |
+| `loadingLibrary`       | `Loading songs…`                                                                                                             |
+| `searching`            | `Searching…`                                                                                                                 |
+| `libraryEmpty`         | `No songs in the library`                                                                                                    |
+| `songLoadFailed`       | `Could not open this song`                                                                                                   |
+| `noKey`                | `No key`                                                                                                                     |
+| `separator`            | `·`                                                                                                                          |
+| `transposeDownGlyph`   | `−`                                                                                                                          |
+| `transposeUpGlyph`     | `+`                                                                                                                          |
+| `newSong`              | `New song`                                                                                                                   |
+| `editSong`             | `Edit`                                                                                                                       |
+| `openFiles`            | `Open files…`                                                                                                                |
+| `editorLabel`          | `ChordPro text`                                                                                                              |
+| `previewLabel`         | `Preview`                                                                                                                    |
+| `save`                 | `Save`                                                                                                                       |
+| `cancel`               | `Cancel`                                                                                                                     |
+| `paste`                | `Paste`                                                                                                                      |
+| `convert`              | `Convert`                                                                                                                    |
+| `flipAlignment`        | `Flip alignment`                                                                                                             |
+| `alreadyChordPro`      | `Already ChordPro, nothing to convert`                                                                                       |
+| `pasteFailed`          | `Could not read the clipboard. Paste with Ctrl+V, then use Convert.`                                                         |
+| `importWarnings`       | `Import warnings`                                                                                                            |
+| `saveFailed`           | `Could not save the song`                                                                                                    |
+| `discardTitle`         | `Discard unsaved changes?`                                                                                                   |
+| `discardBody`          | `Your changes to this song have not been saved.`                                                                             |
+| `keepEditing`          | `Keep editing`                                                                                                               |
+| `discard`              | `Discard`                                                                                                                    |
+| `reviewingFile`        | `Reviewing file`                                                                                                             |
+| `importConverted`      | `Converted from chords over lyrics`                                                                                          |
+| `importSkipped`        | `Skipped files`                                                                                                              |
+| `importPickFailed`     | `Could not open files`                                                                                                       |
+| `libraryReloadFailed`  | `Could not refresh the song list`                                                                                            |
+| `deleteAction`         | `Delete`                                                                                                                     |
+| `selectSongs`          | `Select`                                                                                                                     |
+| `selectAll`            | `Select all`                                                                                                                 |
+| `selectDone`           | `Done`                                                                                                                       |
+| `deleteSelected`       | `Delete selected`                                                                                                            |
+| `deleteConfirmBody`    | `Deleted songs are permanently removed from the library. This cannot be undone.`                                             |
+| `deleteFailed`         | `Could not delete the song`                                                                                                  |
+| `removeGlyph`          | `×`                                                                                                                          |
+| `tabVisual`            | `Visual`                                                                                                                     |
+| `tabSource`            | `Source`                                                                                                                     |
+| `editorTabs`           | `Editor view`                                                                                                                |
+| `undo`                 | `Undo`                                                                                                                       |
+| `redo`                 | `Redo`                                                                                                                       |
+| `transposeSongDown`    | `Transpose song down`                                                                                                        |
+| `transposeSongUp`      | `Transpose song up`                                                                                                          |
+| `metaForm`             | `Song details`                                                                                                               |
+| `metaTitle`            | `Title`                                                                                                                      |
+| `metaArtist`           | `Artist`                                                                                                                     |
+| `metaTempo`            | `Tempo`                                                                                                                      |
+| `visualLabel`          | `Song lines`                                                                                                                 |
+| `visualHint`           | `Type lyrics, then click a letter to add a chord`                                                                            |
+| `editLyrics`           | `Edit lyrics`                                                                                                                |
+| `lyricsInput`          | `Lyrics`                                                                                                                     |
+| `addLineBelow`         | `Add line below`                                                                                                             |
+| `removeLine`           | `Remove line`                                                                                                                |
+| `editGlyph`            | `✎`                                                                                                                          |
+| `addGlyph`             | `+`                                                                                                                          |
+| `chordsLineInput`      | `Chords`                                                                                                                     |
+| `commentInput`         | `Comment`                                                                                                                    |
+| `sourceOnly`           | `Edit in Source`                                                                                                             |
+| `addSection`           | `Add section`                                                                                                                |
+| `sectionKind`          | `Section type`                                                                                                               |
+| `sectionLabel`         | `Section label`                                                                                                              |
+| `sectionVerse`         | `Verse`                                                                                                                      |
+| `sectionChorus`        | `Chorus`                                                                                                                     |
+| `sectionBridge`        | `Bridge`                                                                                                                     |
+| `sectionUp`            | `Move section up`                                                                                                            |
+| `sectionDown`          | `Move section down`                                                                                                          |
+| `sectionRemove`        | `Remove section`                                                                                                             |
+| `upGlyph`              | `↑`                                                                                                                          |
+| `downGlyph`            | `↓`                                                                                                                          |
+| `chordPicker`          | `Chord`                                                                                                                      |
+| `chordInput`           | `Chord name`                                                                                                                 |
+| `chordSuggestions`     | `Suggestions`                                                                                                                |
+| `chordApply`           | `Apply`                                                                                                                      |
+| `chordRemove`          | `Remove chord`                                                                                                               |
+| `chordMoveLeft`        | `Move chord left`                                                                                                            |
+| `chordMoveRight`       | `Move chord right`                                                                                                           |
+| `leftGlyph`            | `←`                                                                                                                          |
+| `rightGlyph`           | `→`                                                                                                                          |
+| `chordUnknown`         | `Unrecognized chord`                                                                                                         |
+| `chordClose`           | `Close`                                                                                                                      |
+| `noLabel`              | `No label`                                                                                                                   |
+| `sectionOther`         | `Other`                                                                                                                      |
+| `sortLabel`            | `Sort by`                                                                                                                    |
+| `sortTitle`            | `Title`                                                                                                                      |
+| `sortArtist`           | `Artist`                                                                                                                     |
+| `sortUpdated`          | `Recently updated`                                                                                                           |
+| `libraryView`          | `Library view`                                                                                                               |
+| `filterLanguage`       | `Language`                                                                                                                   |
+| `filterAll`            | `All`                                                                                                                        |
+| `filterHebrew`         | `Hebrew`                                                                                                                     |
+| `filterEnglish`        | `English`                                                                                                                    |
+| `filterMixed`          | `Mixed`                                                                                                                      |
+| `badgeHebrew`          | `HE`                                                                                                                         |
+| `badgeEnglish`         | `EN`                                                                                                                         |
+| `badgeMixed`           | `HE+EN`                                                                                                                      |
+| `noFilterMatches`      | `No songs in this language`                                                                                                  |
+| `uiLanguage`           | `Interface language`                                                                                                         |
+| `localeHebrew`         | `עברית`                                                                                                                      |
+| `localeEnglish`        | `English`                                                                                                                    |
+| `localeHebrewShort`    | `עב`                                                                                                                         |
+| `localeEnglishShort`   | `EN`                                                                                                                         |
+| `chordAddEmpty`        | `Add chord`                                                                                                                  |
+| `fileFilterSongs`      | `Song files`                                                                                                                 |
+| `tabSongs`             | `Songs`                                                                                                                      |
+| `tabSetlists`          | `Setlists`                                                                                                                   |
+| `sidebarViews`         | `Sidebar view`                                                                                                               |
+| `setlistNameLabel`     | `Setlist name`                                                                                                               |
+| `createSetlist`        | `Create`                                                                                                                     |
+| `renameSetlist`        | `Rename`                                                                                                                     |
+| `duplicateSetlist`     | `Duplicate`                                                                                                                  |
+| `setlistsEmpty`        | `No setlists yet`                                                                                                            |
+| `setlistEmpty`         | `This setlist has no songs`                                                                                                  |
+| `setlistEntries`       | `Songs in the setlist`                                                                                                       |
+| `deleteSetlistBody`    | `The setlist is removed. The songs in it are not deleted.`                                                                   |
+| `addToSetlist`         | `Add to setlist`                                                                                                             |
+| `newSetlistOption`     | `New setlist`                                                                                                                |
+| `setlistChoice`        | `Setlist`                                                                                                                    |
+| `add`                  | `Add`                                                                                                                        |
+| `moveUp`               | `Move up`                                                                                                                    |
+| `moveDown`             | `Move down`                                                                                                                  |
+| `removeFromSetlist`    | `Remove from setlist`                                                                                                        |
+| `dragHandle`           | `Drag to reorder`                                                                                                            |
+| `dragGlyph`            | `⋮⋮`                                                                                                                         |
+| `print`                | `Print`                                                                                                                      |
+| `exportPdf`            | `Export PDF`                                                                                                                 |
+| `exportWord`           | `Export Word`                                                                                                                |
+| `pdfHint`              | `Choose “Save as PDF” in the print dialog`                                                                                   |
+| `fileFilterWord`       | `Word document`                                                                                                              |
+| `setlistsLoadFailed`   | `Could not load setlists`                                                                                                    |
+| `setlistSaveFailed`    | `Could not save the setlist`                                                                                                 |
+| `exportFailed`         | `Could not export the setlist`                                                                                               |
+| `exportLabelSetlist`   | `Setlist`                                                                                                                    |
+| `exportLabelKey`       | `Key`                                                                                                                        |
+| `exportLabelCapo`      | `Capo`                                                                                                                       |
+| `exportLabelTranspose` | `Transpose`                                                                                                                  |
+| `exportLabelSongs`     | `Songs`                                                                                                                      |
+| `exportLabelDate`      | `Date`                                                                                                                       |
+| `duplicateSuffix`      | `(copy)`                                                                                                                     |
+| `importWithAi`         | `Import with AI`                                                                                                             |
+| `aiStepSource`         | `Source`                                                                                                                     |
+| `aiStepPrompt`         | `Prompt`                                                                                                                     |
+| `aiStepReply`          | `Reply`                                                                                                                      |
+| `aiSourceDocument`     | `Extract the text from a document`                                                                                           |
+| `aiSourceAttach`       | `I'll attach the file to the AI chat (images, scans, .doc and others)`                                                       |
+| `aiPickDocument`       | `Choose a document…`                                                                                                         |
+| `aiPromptLabel`        | `Prompt to copy`                                                                                                             |
+| `aiPromptHint`         | `Choose a document first, then the prompt appears here.`                                                                     |
+| `aiCopy`               | `Copy prompt`                                                                                                                |
+| `aiCopied`             | `Copied`                                                                                                                     |
+| `aiCopyFailed`         | `Could not copy automatically. The prompt is selected: press Ctrl+C.`                                                        |
+| `aiReplyLabel`         | `Paste the AI reply here`                                                                                                    |
+| `aiParse`              | `Read songs`                                                                                                                 |
+| `aiParseError`         | `No songs were found in the reply. Check that the whole reply was pasted.`                                                   |
+| `aiTruncated`          | `The reply holds more songs than can be imported at once. Only the first songs are listed.`                                  |
+| `aiSongsFound`         | `Songs found`                                                                                                                |
+| `aiDefaultSource`      | `AI`                                                                                                                         |
+| `convertWithAi`        | `Convert with AI instead`                                                                                                    |
+| `importNotes`          | `Notes on this file`                                                                                                         |
+| `docNoteOneSong`       | `The offline conversion keeps the whole document as one song. If it holds several songs, use Convert with AI to split them.` |
+| `fileFilterDocuments`  | `Documents`                                                                                                                  |
+| `docTooLarge`          | `The file is over 20 MB. Attach it in Import with AI instead`                                                                |
+| `docTextTooLarge`      | `The file holds more than 2 MB of text. Attach it in Import with AI instead`                                                 |
+| `docUnsupported`       | `Unsupported file type`                                                                                                      |
+| `docCorrupt`           | `The file is damaged or not in that format`                                                                                  |
+| `docIo`                | `Could not read the file`                                                                                                    |
+| `docNoText`            | `No text found, likely a scan. Use Import with AI and attach the file`                                                       |
+| `docWarnPdfReordered`  | `Hebrew text in this PDF was reordered. Check the lines.`                                                                    |
+| `docWarnPdfNoText`     | `This PDF has no text, likely a scan.`                                                                                       |
+| `docWarnSkipped`       | `Some content was skipped, for example an image or an object.`                                                               |
 
 `TEMPLATES` (`apps/desktop/src/strings.ts`) holds the i18next templates for
 strings with variables (`{{var}}` interpolation, `_one` / `_other` plural

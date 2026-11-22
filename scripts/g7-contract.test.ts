@@ -336,6 +336,7 @@ const COMMANDS = [
   "deleteSetlist",
   "deleteSong",
   "duplicateSetlist",
+  "extractDocument",
   "getSetlist",
   "getSong",
   "listSetlists",
@@ -373,13 +374,13 @@ function commandProblems(src: string): string[] {
   return problems;
 }
 
-describe("(e) bindings.ts still lists exactly the eighteen commands", () => {
-  it("has the eighteen commands and eighteen invokes", () => {
+describe("(e) bindings.ts still lists exactly the nineteen commands", () => {
+  it("has the nineteen commands and nineteen invokes", () => {
     expect(commandNames(read(BINDINGS))).toEqual(COMMANDS);
     expect(commandProblems(read(BINDINGS))).toEqual([]);
   });
 
-  it("negative: a nineteenth command is reported", () => {
+  it("negative: a twentieth command is reported", () => {
     const src = read(BINDINGS);
     const mutated = src.replace(
       "\tdeleteSong: ",
@@ -388,7 +389,7 @@ describe("(e) bindings.ts still lists exactly the eighteen commands", () => {
     expect(mutated).not.toBe(src);
     expect(commandProblems(mutated)).toEqual([
       "unexpected command deleteSongs",
-      "bindings.ts invokes 19 commands",
+      "bindings.ts invokes 20 commands",
     ]);
   });
 
@@ -398,7 +399,7 @@ describe("(e) bindings.ts still lists exactly the eighteen commands", () => {
     expect(mutated).not.toBe(src);
     expect(commandProblems(mutated)).toEqual([
       "missing command deleteSong",
-      "bindings.ts invokes 17 commands",
+      "bindings.ts invokes 18 commands",
     ]);
   });
 });

@@ -21,6 +21,7 @@ const COMMANDS = [
   "readTextFile",
   "logWebviewError",
   "saveExportDocx",
+  "extractDocument",
   "listSetlists",
   "getSetlist",
   "createSetlist",
@@ -48,6 +49,7 @@ const SNAKE = [
   "read_text_file",
   "log_webview_error",
   "save_export_docx",
+  "extract_document",
   "list_setlists",
   "get_setlist",
   "create_setlist",
@@ -194,11 +196,11 @@ function bindingsCommands(src: string): string[] {
 describe("(b) bindings.ts commands", () => {
   const src = read("apps/desktop/src/bindings.ts");
 
-  it("exports exactly the eighteen commands (storage, setlist, file and log)", () => {
+  it("exports exactly the nineteen commands (storage, setlist, file and log)", () => {
     expect(sorted(bindingsCommands(src))).toEqual(sorted(COMMANDS));
   });
 
-  it("negative: a nineteenth command is detected", () => {
+  it("negative: a twentieth command is detected", () => {
     const mutated = src.replace(
       "export const commands = {\n",
       "export const commands = {\n\tpurgeAll: () => 1,\n",
@@ -267,7 +269,7 @@ describe("(d) build.rs and capability", () => {
   const build = read("apps/desktop/src-tauri/build.rs");
   const cap = read("apps/desktop/src-tauri/capabilities/default.json");
 
-  it("build.rs lists exactly the eighteen commands", () => {
+  it("build.rs lists exactly the nineteen commands", () => {
     expect(sorted(buildRsCommands(build))).toEqual(sorted(SNAKE));
   });
 
@@ -277,7 +279,7 @@ describe("(d) build.rs and capability", () => {
     );
   });
 
-  it("negative: a nineteenth build.rs command is detected", () => {
+  it("negative: a twentieth build.rs command is detected", () => {
     const mutated = build.replace(
       '"search_songs",',
       '"search_songs",\n"purge_all",',

@@ -54,6 +54,45 @@ const NEW_KEYS = [
   "capoSongDefault",
 ] as const;
 
+/** Keys added by later goals (g11); not part of g10, so excluded before the exact comparison. */
+const LATER_KEYS = new Set([
+  "importWithAi",
+  "aiStepSource",
+  "aiStepPrompt",
+  "aiStepReply",
+  "aiSourceDocument",
+  "aiSourceAttach",
+  "aiPickDocument",
+  "aiPromptLabel",
+  "aiPromptHint",
+  "aiCopy",
+  "aiCopied",
+  "aiCopyFailed",
+  "aiReplyLabel",
+  "aiParse",
+  "aiParseError",
+  "aiTruncated",
+  "aiSongsFound",
+  "aiDefaultSource",
+  "convertWithAi",
+  "importNotes",
+  "docNoteOneSong",
+  "fileFilterDocuments",
+  "docTooLarge",
+  "docTextTooLarge",
+  "docUnsupported",
+  "docCorrupt",
+  "docIo",
+  "docNoText",
+  "docWarnPdfReordered",
+  "docWarnPdfNoText",
+  "docWarnSkipped",
+  "aiCharCount",
+  "aiSongLabel",
+  "aiReviewSongs_one",
+  "aiReviewSongs_other",
+]);
+
 /** The EN keys at a95b2ba (before g10), read from git. */
 const BASELINE = new Set([
   "appName",
@@ -262,7 +301,7 @@ describe("g10 Hebrew strings", () => {
     expect(BASELINE.size).toBe(142);
     expect(
       Object.keys(EN)
-        .filter((k) => !BASELINE.has(k))
+        .filter((k) => !BASELINE.has(k) && !LATER_KEYS.has(k))
         .sort(),
     ).toEqual([...NEW_KEYS].sort());
     for (const key of BASELINE) expect(en, key).toHaveProperty(key);

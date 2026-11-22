@@ -1,8 +1,31 @@
-import type { ImportOptions, ImportResult } from "chord-core";
+import type {
+  DocumentInput,
+  DocumentTextResult,
+  ImportOptions,
+  ImportResult,
+  RtlColumns,
+} from "chord-core";
+import type {
+  DocErrorKind,
+  DocFormat,
+  DocWarning,
+  DocumentText,
+} from "./bindings";
 import type { Song } from "./storage";
 
 /** Extensions (lower case) whose text is ChordPro already: strict passthrough, never converted. */
 const CHORDPRO_EXTENSIONS: readonly string[] = [".cho", ".chopro", ".chordpro"];
+
+/**
+ * Document extensions (lower case). Kept as literals, not imported from `./files`, because the
+ * App tests replace that module wholesale; a test pins them to `DOCUMENT_FILE_EXTENSIONS`.
+ */
+export const DOCUMENT_EXTENSIONS: readonly string[] = [
+  ".docx",
+  ".odt",
+  ".rtf",
+  ".pdf",
+];
 
 const TITLE_DIRECTIVE = /^\s*\{\s*(?:title\b|t\s*:)/im;
 
@@ -39,6 +62,8 @@ export interface FileImportDeps {
   readTextFile(path: string): Promise<string>;
   saveSong(chordpro: string, id?: string): Promise<Song>;
   importText(text: string, options?: ImportOptions): ImportResult;
+  extractDocument(path: string): Promise<DocumentText>;
+  documentToText(doc: DocumentInput): DocumentTextResult;
 }
 
 export interface SavedFile {
@@ -54,11 +79,22 @@ export interface QueuedFile {
   source: string;
   /** Import result whose `chordpro` already carries the title fallback. */
   result: ImportResult;
+  /** Column order of a document's table rows; absent means `"mirror"`. */
+  rtlColumns?: RtlColumns;
+  /** Present for a converted document: its extracted text, format and warnings. */
+  document?: {
+    name: string;
+    format: DocFormat;
+    text: string;
+    warnings: DocWarning[];
+  };
 }
 
 export interface FailedFile {
   path: string;
   message: string;
+  /** Machine-readable cause of a document failure; absent for text files. */
+  reason?: DocErrorKind | "Ipc" | "NoText";
 }
 
 export interface FileImportReport {
@@ -69,6 +105,53 @@ export interface FileImportReport {
 
 function messageOf(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
+}
+
+/** The `kind` of a `DocumentReadError` (duck-typed, see above), else `"Ipc"`. */
+function documentFailureReason(reason: unknown): DocErrorKind | "Ipc" {
+  const kind = (reason as { kind?: unknown } | null)?.kind;
+  return typeof kind === "string" ? (kind as DocErrorKind | "Ipc") : "Ipc";
+}
+
+async function importDocument(
+  deps: FileImportDeps,
+  path: string,
+  name: string,
+  report: FileImportReport,
+): Promise<void> {
+  let doc: DocumentText;
+  try {
+    doc = await deps.extractDocument(path);
+  } catch (reason) {
+    report.failed.push({
+      path,
+      message: messageOf(reason),
+      reason: documentFailureReason(reason),
+    });
+    return;
+  }
+  try {
+    if (doc.blocks.length === 0) {
+      const noText = doc.warnings.find((w) => w.kind === "PdfNoText");
+      report.failed.push({
+        path,
+        message: noText?.message ?? "no text found",
+        reason: "NoText",
+      });
+      return;
+    }
+    const { text, rtlColumns } = deps.documentToText(doc);
+    const result = deps.importText(text, { rtlColumns });
+    report.queued.push({
+      path,
+      source: text,
+      result: { ...result, chordpro: withTitleFallback(result.chordpro, path) },
+      rtlColumns,
+      document: { name, format: doc.format, text, warnings: doc.warnings },
+    });
+  } catch (reason) {
+    report.failed.push({ path, message: messageOf(reason) });
+  }
 }
 
 /**
@@ -83,6 +166,11 @@ export async function importSongFiles(
   const report: FileImportReport = { saved: [], queued: [], failed: [] };
   const paths = await deps.pickSongFiles();
   for (const path of paths) {
+    const name = fileNameOf(path);
+    if (DOCUMENT_EXTENSIONS.includes(extensionOf(name))) {
+      await importDocument(deps, path, name, report);
+      continue;
+    }
     try {
       const text = await deps.readTextFile(path);
       const result: ImportResult = CHORDPRO_EXTENSIONS.includes(

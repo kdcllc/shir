@@ -1107,3 +1107,68 @@ describe("Editor Hebrew flow", () => {
     );
   });
 });
+
+describe("document review additions", () => {
+  const seedResult = {
+    chordpro: HE_LOGICAL,
+    format: "chords-over-lyrics" as const,
+    warnings: [],
+    hasRtlChords: true,
+  };
+
+  it("starts Flip from the seed's rtlColumns: logical flips to mirror", () => {
+    setup({
+      initialText: HE_LOGICAL,
+      baseline: "",
+      seed: { source: HE_SHEET, result: seedResult, rtlColumns: "logical" },
+    });
+    click("editor-flip");
+    expect(textNow()).toBe(HE_MIRROR);
+    click("editor-flip");
+    expect(textNow()).toBe(HE_LOGICAL);
+  });
+
+  it("a seed without rtlColumns flips from mirror to logical", () => {
+    setup({
+      initialText: HE_MIRROR,
+      baseline: "",
+      seed: {
+        source: HE_SHEET,
+        result: { ...seedResult, chordpro: HE_MIRROR },
+      },
+    });
+    click("editor-flip");
+    expect(textNow()).toBe(HE_LOGICAL);
+  });
+
+  it("shows Convert with AI only when the prop is set", () => {
+    const onConvertWithAi = vi.fn();
+    setup({ onConvertWithAi });
+    showSource();
+    const current = (byId("editor-input") as HTMLTextAreaElement).value;
+    click("editor-convert-ai");
+    expect(onConvertWithAi).toHaveBeenCalledTimes(1);
+    expect(onConvertWithAi).toHaveBeenCalledWith(current);
+    expect(byId("editor-convert-ai").textContent).toBe(STRINGS.convertWithAi);
+  });
+
+  it("has no Convert with AI button and no notes by default", () => {
+    setup();
+    expect(screen.queryByTestId("editor-convert-ai")).toBeNull();
+    expect(screen.queryByTestId("editor-notes")).toBeNull();
+  });
+
+  it("lists the notes in the review banner", () => {
+    setup({ notes: ["first note", "second note"] });
+    const items = within(byId("editor-notes")).getAllByRole("listitem");
+    expect(items.map((i) => i.textContent)).toEqual([
+      "first note",
+      "second note",
+    ]);
+  });
+
+  it("an empty notes list shows no banner", () => {
+    setup({ notes: [] });
+    expect(screen.queryByTestId("editor-notes")).toBeNull();
+  });
+});

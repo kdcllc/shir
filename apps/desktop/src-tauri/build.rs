@@ -17,6 +17,7 @@ fn main() {
             "search_songs",
             "read_text_file",
             "save_export_docx",
+            "extract_document",
             "list_setlists",
             "get_setlist",
             "create_setlist",

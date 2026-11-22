@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildExportDocument,
+  documentToText,
   importText,
   parseSong,
   viewSong,
 } from "chord-core";
-import type { Diagnostic, ExportDocument, SongModel } from "chord-core";
+import type {
+  AiReplySong,
+  Diagnostic,
+  ExportDocument,
+  SongModel,
+} from "chord-core";
 import { SongView } from "chord-render";
 import styles from "./App.module.css";
 import { AddToSetlistDialog } from "./components/AddToSetlistDialog";
+import { AiImportDialog } from "./components/AiImportDialog";
+import type { AiDocument } from "./components/AiImportDialog";
 import { ConfirmDelete } from "./components/ConfirmDelete";
 import { ConfirmDiscard } from "./components/ConfirmDiscard";
 import { DiagnosticsPanel } from "./components/DiagnosticsPanel";
@@ -29,7 +37,13 @@ import { SongList } from "./components/SongList";
 import { ViewControls } from "./components/ViewControls";
 import { deleteMany } from "./deleteSongs";
 import type { SongIdSet } from "./deleteSongs";
-import { pickSongFiles, readTextFile } from "./files";
+import {
+  extractDocument,
+  pickDocumentFile,
+  pickSongFiles,
+  readTextFile,
+} from "./files";
+import type { DocWarning } from "./bindings";
 import { fileNameOf, importSongFiles } from "./importFiles";
 import type { FileImportReport, QueuedFile } from "./importFiles";
 import { printExport, saveDocx } from "./export";
@@ -95,6 +109,16 @@ interface Session {
   seed?: ImportSeed | undefined;
   /** Source path of a queued file under review. */
   path?: string | undefined;
+  /** The converted document under review: its text and extraction warnings. */
+  document?: { name: string; text: string; warnings: DocWarning[] } | undefined;
+}
+
+/** The Import with AI dialog; `convert` when it replaces the document under review. */
+interface AiRequest {
+  initial?: AiDocument | undefined;
+  convert: boolean;
+  /** A Convert run only: the editor text differs from the converted document. */
+  edited?: boolean;
 }
 
 /** A translatable message kept as data so it follows a live language switch. */
@@ -158,6 +182,7 @@ const noPaths = (): string[] => [];
 const noReport = (): FileImportReport | undefined => undefined;
 const noMessage = (): Msg | undefined => undefined;
 const noAction = (): (() => void) | undefined => undefined;
+const noAiRequest = (): AiRequest | undefined => undefined;
 const noDelete = (): DeleteRequest | undefined => undefined;
 const noSelection = (): SongIdSet => new Set();
 const noRefocus = (): Refocus | undefined => undefined;
@@ -233,6 +258,7 @@ export function App() {
   const [setlistBusy, setSetlistBusy] = useState(false);
   const [adding, setAdding] = useState(noAdding);
   const [status, setStatus] = useState(noMessage);
+  const [aiRequest, setAiRequest] = useState(noAiRequest);
   const [prefs, setPrefsState] = useState(() =>
     readLibraryPrefs(window.localStorage),
   );
@@ -319,9 +345,96 @@ export function App() {
       key: ++sessionKey.current,
       text: head.result.chordpro,
       baseline: "",
-      seed: { source: head.source, result: head.result },
+      seed: {
+        source: head.source,
+        result: head.result,
+        ...(head.rtlColumns === undefined
+          ? {}
+          : { rtlColumns: head.rtlColumns }),
+      },
       path: head.path,
+      document: head.document,
     });
+  };
+
+  /** Message of a document failure in the current language; other failures keep their raw text. */
+  const failureText = (reason: unknown, kind?: string): string => {
+    const k = kind ?? (reason as { kind?: unknown } | null)?.kind;
+    switch (k) {
+      case "TooLarge":
+        return t("docTooLarge");
+      case "TextTooLarge":
+        return t("docTextTooLarge");
+      case "Unsupported":
+        return t("docUnsupported");
+      case "Corrupt":
+        return t("docCorrupt");
+      case "Io":
+        return t("docIo");
+      case "NoText":
+        return t("docNoText");
+      default:
+        return messageOf(reason);
+    }
+  };
+
+  const warningText = (w: DocWarning): string => {
+    switch (w.kind) {
+      case "PdfReordered":
+        return t("docWarnPdfReordered");
+      case "PdfNoText":
+        return t("docWarnPdfNoText");
+      case "Skipped":
+        return t("docWarnSkipped");
+    }
+  };
+
+  /** The dialog's document picker: native picker, extraction, then the plain text of the blocks. */
+  const pickAiDocument = async () => {
+    const path = await pickDocumentFile(t("fileFilterDocuments"));
+    if (path === undefined) return undefined;
+    let doc;
+    try {
+      doc = await extractDocument(path);
+    } catch (reason) {
+      throw new Error(failureText(reason), { cause: reason });
+    }
+    if (doc.blocks.length === 0) throw new Error(t("docNoText"));
+    return {
+      sourceName: fileNameOf(path),
+      text: documentToText(doc).text,
+      warnings: doc.warnings.map(warningText),
+    };
+  };
+
+  /** Reviews the songs of an AI reply one by one; a Convert-with-AI run replaces the document. */
+  const reviewAiSongs = (songs: AiReplySong[], request: AiRequest) => {
+    setAiRequest(undefined);
+    const run = () => {
+      const source = request.initial?.sourceName ?? t("aiDefaultSource");
+      const queued: QueuedFile[] = songs.map((song, i) => ({
+        path: `${source} ${t("separator")} ${
+          song.title !== undefined && song.title.trim() !== ""
+            ? song.title
+            : t("aiSongLabel", { n: i + 1 })
+        }`,
+        source: song.chordpro,
+        result: {
+          chordpro: song.chordpro,
+          format: "chordpro",
+          warnings: [],
+          hasRtlChords: false,
+        },
+      }));
+      if (request.convert && session?.document !== undefined) {
+        openQueued([...queued, ...queue]);
+        return;
+      }
+      abandon();
+      openQueued(queued);
+    };
+    if (request.convert && request.edited === false) run();
+    else guard(run);
   };
 
   const openNew = () =>
@@ -411,7 +524,14 @@ export function App() {
     guard(() => {
       setImporting(true);
       setNotice(undefined);
-      importSongFiles({ pickSongFiles, readTextFile, saveSong, importText })
+      importSongFiles({
+        pickSongFiles,
+        readTextFile,
+        saveSong,
+        importText,
+        extractDocument,
+        documentToText,
+      })
         .then(async (result) => {
           const total =
             result.saved.length + result.queued.length + result.failed.length;
@@ -1053,6 +1173,14 @@ export function App() {
               >
                 {t("openFiles")}
               </button>
+              <button
+                type="button"
+                data-testid="ai-import"
+                disabled={importing}
+                onClick={() => setAiRequest({ convert: false })}
+              >
+                {t("importWithAi")}
+              </button>
             </div>
             {report !== undefined && (
               <section
@@ -1102,7 +1230,10 @@ export function App() {
                 )}
                 {report.failed.map((f) => (
                   <p key={f.path} role="alert" data-testid="import-failed">
-                    <bdi dir="auto">{fileNameOf(f.path)}</bdi>: {f.message}
+                    <bdi dir="auto">{fileNameOf(f.path)}</bdi>:{" "}
+                    {f.reason === undefined
+                      ? f.message
+                      : failureText(f.message, f.reason)}
                   </p>
                 ))}
               </section>
@@ -1198,6 +1329,27 @@ export function App() {
             titlePath={session.path}
             fileName={
               session.path === undefined ? undefined : fileNameOf(session.path)
+            }
+            notes={
+              session.document === undefined
+                ? undefined
+                : [
+                    ...session.document.warnings.map(warningText),
+                    t("docNoteOneSong"),
+                  ]
+            }
+            onConvertWithAi={
+              session.document === undefined
+                ? undefined
+                : (text) =>
+                    setAiRequest({
+                      initial: {
+                        sourceName: session.document!.name,
+                        text: session.document!.text,
+                      },
+                      convert: true,
+                      edited: text !== session.text,
+                    })
             }
             onSave={saveEditor}
             onCancel={cancelEditor}
@@ -1372,6 +1524,14 @@ export function App() {
           onCancel={() => setAdding(undefined)}
           onAdd={(id) => void confirmAdd(id)}
           onCreateAndAdd={(name) => void confirmCreateAndAdd(name)}
+        />
+      )}
+      {aiRequest !== undefined && (
+        <AiImportDialog
+          initial={aiRequest.initial}
+          pickDocument={pickAiDocument}
+          onImport={(songs) => reviewAiSongs(songs, aiRequest)}
+          onCancel={() => setAiRequest(undefined)}
         />
       )}
       {deleting !== undefined && (

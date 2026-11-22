@@ -1,0 +1,20 @@
+[
+  {
+    "kind": "paragraph",
+    "text": "Original text written for the Shir repository (CC0-1.0)"
+  },
+  {
+    "kind": "paragraph",
+    "text": "Morning Road"
+  },
+  {
+    "kind": "table",
+    "rows": [
+      ["Verse 1", "", "", ""],
+      ["Am", "", "F", "C"],
+      ["Walking out", "into the", "morning", "light"],
+      ["G", "", "Am", ""],
+      ["Nothing", "left to", "carry now", ""]
+    ]
+  }
+]

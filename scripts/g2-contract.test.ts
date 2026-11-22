@@ -82,6 +82,9 @@ describe("G2 contract: API names documented", () => {
     "transpose.ts",
     "song.ts",
     "import.ts",
+    "documentText.ts",
+    "aiPrompt.ts",
+    "aiReply.ts",
   ].map((f) => `packages/chord-core/src/${f}`);
 
   it("finds the expected exported functions", () => {

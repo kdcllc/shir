@@ -1,0 +1,18 @@
+# Original text written for the Shir repository (CC0-1.0)
+Sure, here is the first song and then the second one.
+
+```chordpro
+{title: Morning Road}
+Walking [C]out into the [G]light
+Nothing [Am]left to [F]carry now
+```
+
+And the second song:
+
+```
+{title: שיר הדרך}
+הדרך [Dm]ארוכה [Am]והלב קל
+נלך [C]יחד [G]עד הים
+```
+
+I kept the chords where they were in the source.

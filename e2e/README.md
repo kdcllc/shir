@@ -60,6 +60,7 @@ hard-coded copies.
 | `library.e2e.ts`   | language filter, artist sort, persistence across a restart                                                                                       |
 | `editor.e2e.ts`    | g7 F19 (real double-click) and F54 (picker vs Add section)                                                                                       |
 | `setlists.e2e.ts`  | setlist core flow: create, add two songs, reorder, transpose/capo, persistence after a restart, duplicate, song-delete cascade, delete duplicate |
+| `ai-import.e2e.ts` | Import with AI paste-back: attach prompt, copy result, a two-song reply reviewed and saved, Hebrew chord rendered as an LTR symbol               |
 
 ## F39 (Paste from the real clipboard): not added
 

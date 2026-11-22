@@ -1,9 +1,15 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { commands } from "./bindings";
 import { i18n } from "./i18n";
-import type { FileError, FileErrorKind } from "./bindings";
+import type {
+  DocError,
+  DocErrorKind,
+  DocumentText,
+  FileError,
+  FileErrorKind,
+} from "./bindings";
 
-export type { FileError, FileErrorKind };
+export type { DocError, DocErrorKind, DocumentText, FileError, FileErrorKind };
 
 export type FileReadErrorKind = FileErrorKind | "Ipc";
 
@@ -20,6 +26,26 @@ export class FileReadError extends Error {
   constructor(kind: FileReadErrorKind, message: string) {
     super(message);
     this.name = "FileReadError";
+    this.kind = kind;
+  }
+}
+
+export type DocumentReadErrorKind = DocErrorKind | "Ipc";
+
+const DOC_ERROR_KINDS: readonly string[] = [
+  "TooLarge",
+  "TextTooLarge",
+  "Unsupported",
+  "Corrupt",
+  "Io",
+] satisfies DocErrorKind[];
+
+export class DocumentReadError extends Error {
+  readonly kind: DocumentReadErrorKind;
+
+  constructor(kind: DocumentReadErrorKind, message: string) {
+    super(message);
+    this.name = "DocumentReadError";
     this.kind = kind;
   }
 }
@@ -42,6 +68,38 @@ export const SONG_FILE_EXTENSIONS = [
   "chordpro",
   "txt",
 ] as const;
+
+export const DOCUMENT_FILE_EXTENSIONS = ["docx", "odt", "rtf", "pdf"] as const;
+
+function isDocError(value: unknown): value is DocError {
+  if (typeof value !== "object" || value === null) return false;
+  const { kind, message } = value as { kind?: unknown; message?: unknown };
+  return (
+    typeof kind === "string" &&
+    DOC_ERROR_KINDS.includes(kind) &&
+    typeof message === "string"
+  );
+}
+
+function toDocumentReadError(reason: unknown): DocumentReadError {
+  if (isDocError(reason))
+    return new DocumentReadError(reason.kind, reason.message);
+  if (reason instanceof Error)
+    return new DocumentReadError("Ipc", reason.message);
+  return new DocumentReadError("Ipc", String(reason));
+}
+
+/** Extracts a document's text blocks (docx, odt, rtf, pdf) through the backend. */
+export async function extractDocument(path: string): Promise<DocumentText> {
+  let result;
+  try {
+    result = await commands.extractDocument(path);
+  } catch (reason) {
+    throw toDocumentReadError(reason);
+  }
+  if (result.status === "error") throw toDocumentReadError(result.error);
+  return result.data;
+}
 
 function isFileError(value: unknown): value is FileError {
   if (typeof value !== "object" || value === null) return false;
@@ -116,11 +174,36 @@ export async function pickSongFiles(
     picked = await open({
       multiple: true,
       directory: false,
-      filters: [{ name: filterName, extensions: [...SONG_FILE_EXTENSIONS] }],
+      filters: [
+        {
+          name: filterName,
+          extensions: [...SONG_FILE_EXTENSIONS, ...DOCUMENT_FILE_EXTENSIONS],
+        },
+      ],
     });
   } catch (reason) {
     throw toFileReadError(reason);
   }
   if (picked === null) return [];
   return typeof picked === "string" ? [picked] : picked;
+}
+
+/** Opens the native single-file picker for a document; resolves the path, or `undefined` on cancel. */
+export async function pickDocumentFile(
+  filterName: string,
+): Promise<string | undefined> {
+  let picked: string | string[] | null;
+  try {
+    picked = await open({
+      multiple: false,
+      directory: false,
+      filters: [
+        { name: filterName, extensions: [...DOCUMENT_FILE_EXTENSIONS] },
+      ],
+    });
+  } catch (reason) {
+    throw toFileReadError(reason);
+  }
+  if (picked === null) return undefined;
+  return typeof picked === "string" ? picked : picked[0];
 }

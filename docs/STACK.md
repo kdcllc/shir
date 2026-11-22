@@ -66,6 +66,10 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | Unicode normalization                    | `unicode-normalization`         | 0.1.26                                   | crate     | installed (G4)  |
 | Error derive                             | `thiserror`                     | 2.0.21                                   | crate     | installed (G4)  |
 | Temp files (dev-dependency)              | `tempfile`                      | 3.27.0                                   | crate     | installed (G4)  |
+| ZIP reader                               | `zip`                           | 9.4.2                                    | crate     | installed (G11) |
+| XML reader                               | `quick-xml`                     | 0.42.0                                   | crate     | installed (G11) |
+| Legacy encodings (RTF cp1255)            | `encoding_rs`                   | 0.8.44                                   | crate     | installed (G11) |
+| PDF text extraction                      | `pdf-extract`                   | 0.12.1                                   | crate     | installed (G11) |
 | Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | installed (G1)  |
 | WebdriverIO                              | `webdriverio`                   | 10.1.0                                   | npm       | installed (G8)  |
 | WDIO CLI                                 | `@wdio/cli`                     | 10.1.0                                   | npm       | installed (G8)  |

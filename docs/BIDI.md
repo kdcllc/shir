@@ -134,8 +134,15 @@ Documented gaps of the simplified map (`import.ts`):
   by N1/N2 rather than joining the digit run.
 - Arabic-Indic digits are classed R like all Hebrew and Arabic script graphemes, not AN.
 
-The editor shows a Flip control when the last import has `hasRtlChords` (`Editor.tsx`), and opened files
-whose import has `hasRtlChords` are queued for review (`apps/desktop/src/importFiles.ts`).
+The editor shows a Flip control when the last import has `hasRtlChords` (`Editor.tsx`). Opened text files
+whose import has `hasRtlChords` are queued for review; opened documents (`.docx`, `.odt`, `.rtf`, `.pdf`)
+that yield text are always queued, whatever `hasRtlChords` says (`apps/desktop/src/importFiles.ts`). A document is first
+converted by `documentToText` (`packages/chord-core/src/documentText.ts`), which returns the text and
+`rtlColumns: "mirror"` for every format, and that pair is passed to `importText`. For docx, odt and rtf,
+`documentToText` first rewrites each chord line directly above a line whose first strong character is
+right-to-left (Hebrew) to its displayed form, left-padded to the lyric's grapheme count, so `mirror` anchors each chord
+on the syllable it sat over. PDF lines are not rewritten. See `docs/CHORDPRO.md` `### Documents and AI
+replies`.
 
 ## Overlap pass (B4)
 

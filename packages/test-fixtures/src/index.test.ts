@@ -1,14 +1,18 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  AI_REPLY_FIXTURE_NAMES,
   ALL_FIXTURE_NAMES,
+  DOC_FIXTURE_NAMES,
+  DOC_FORMATS,
   EDIT_CASES_PATH,
   EXPORT_GOLDEN_CASES,
   FIXTURE_NAMES,
   ROUNDTRIP_FIXTURE_NAMES,
   canonicalPath,
+  docFixturePath,
   fixturePath,
   goldenPath,
   hasLogicalGolden,
@@ -16,12 +20,20 @@ import {
   isFixtureName,
   readImportGolden,
   readImportInput,
+  readAiReply,
+  readAiReplyExpected,
   readCanonical,
   readDiagnostics,
+  readDocAnchors,
+  readDocExpected,
+  readDocPdfLines,
   readEditCases,
   readExportGolden,
   readFixture,
   readGolden,
+  type AiReplyFixtureName,
+  type DocFixtureName,
+  type DocFormat,
   type FixtureName,
   type ImportFixtureName,
 } from "./index";
@@ -549,5 +561,196 @@ describe("export goldens", () => {
   });
   it("rejects unknown golden files", () => {
     expect(() => readExportGolden("nope.export.json")).toThrow(TypeError);
+  });
+});
+
+const DOC_DIR = fileURLToPath(new URL("../doc/", import.meta.url));
+const AI_DIR = fileURLToPath(new URL("../ai/", import.meta.url));
+const CC0_LINE = "Original text written for the Shir repository (CC0-1.0)";
+const MAGIC: Record<DocFormat, Buffer> = {
+  docx: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+  odt: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+  rtf: Buffer.from("{\\rtf1", "latin1"),
+  pdf: Buffer.from("%PDF-", "latin1"),
+};
+
+function expectUtf8NoCr(path: string): void {
+  const bytes = readFileSync(path);
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  expect(text).not.toContain("\r");
+}
+
+describe("document fixtures", () => {
+  it("freezes the names and formats in order", () => {
+    expect([...DOC_FIXTURE_NAMES]).toEqual([
+      "he_chords_above",
+      "en_table",
+      "songbook_mixed",
+    ]);
+    expect([...DOC_FORMATS]).toEqual(["docx", "odt", "rtf", "pdf"]);
+  });
+  it("doc/ holds exactly the expected files", () => {
+    const expected = [
+      "generate.sh",
+      "GENERATED.md",
+      "NOTES.md",
+      "he_chords_above.anchors.json",
+      ...DOC_FIXTURE_NAMES.flatMap((n) => [
+        `${n}.fodt`,
+        `${n}.docx`,
+        `${n}.odt`,
+        `${n}.rtf`,
+        `${n}.pdf`,
+        `${n}.expected.json`,
+        `${n}.pdf.lines.json`,
+      ]),
+    ].sort();
+    expect(readdirSync(DOC_DIR).sort()).toEqual(expected);
+  });
+  it.each([...DOC_FIXTURE_NAMES])(
+    "%s: text sources are UTF-8 with no CR and start with the CC0 paragraph",
+    (n) => {
+      for (const ext of ["fodt", "expected.json", "pdf.lines.json"]) {
+        expectUtf8NoCr(`${DOC_DIR}${n}.${ext}`);
+      }
+      expect(readFileSync(`${DOC_DIR}${n}.fodt`, "utf8")).toContain(
+        `>${CC0_LINE}</text:p>`,
+      );
+      const first = readDocExpected(n)[0] as { kind: string; text: string };
+      expect(first).toEqual({ kind: "paragraph", text: CC0_LINE });
+      expect(readDocPdfLines(n)[0]).toBe(CC0_LINE);
+    },
+  );
+  it.each([...DOC_FIXTURE_NAMES])("%s: binaries carry their magic", (n) => {
+    for (const f of DOC_FORMATS) {
+      const p = docFixturePath(n, f);
+      expect(isAbsolute(p)).toBe(true);
+      const magic = MAGIC[f];
+      expect(readFileSync(p).subarray(0, magic.length).equals(magic)).toBe(
+        true,
+      );
+    }
+  });
+  it.each([...DOC_FIXTURE_NAMES])(
+    "%s: expected blocks use the DocBlock shape and Hebrew final forms",
+    (n) => {
+      for (const b of readDocExpected(n) as {
+        kind: string;
+        text?: string;
+        rows?: string[][];
+      }[]) {
+        if (b.kind === "paragraph") {
+          expect(Object.keys(b).sort()).toEqual(["kind", "text"]);
+          expect((b.text ?? "").trim()).not.toBe("");
+          expect(finalFormErrors(b.text ?? "")).toEqual([]);
+        } else {
+          expect(b.kind).toBe("table");
+          expect(Object.keys(b).sort()).toEqual(["kind", "rows"]);
+          for (const row of b.rows ?? []) {
+            expect(row.length).toBeGreaterThanOrEqual(2);
+          }
+        }
+      }
+      for (const l of readDocPdfLines(n)) {
+        expect(l).toBe(l.replace(/\s+/g, " ").trim());
+        expect(finalFormErrors(l)).toEqual([]);
+      }
+    },
+  );
+  it("he_chords_above has niqqud, a soft break and a tab", () => {
+    const texts = (
+      readDocExpected("he_chords_above") as { text: string }[]
+    ).map((b) => b.text);
+    expect(texts.some((t) => /[\u05B0-\u05BC]/.test(t))).toBe(true);
+    expect(texts.some((t) => t.includes("\n"))).toBe(true);
+    expect(texts.some((t) => /[^\t]\t[^\t]/.test(t))).toBe(true);
+  });
+  it("anchors lie on lyric lines of he_chords_above", () => {
+    const lines = (
+      readDocExpected("he_chords_above") as { text: string }[]
+    ).map((b) => b.text);
+    expectUtf8NoCr(`${DOC_DIR}he_chords_above.anchors.json`);
+    expect(new Set(lines).size).toBe(lines.length);
+    const anchors = readDocAnchors();
+    expect(anchors.length).toBeGreaterThanOrEqual(4);
+    for (const a of anchors) {
+      expect(lines).toContain(a.line);
+      expect(Number.isInteger(a.index)).toBe(true);
+      expect(a.index).toBeGreaterThanOrEqual(0);
+      expect(a.index).toBeLessThan(graphemeCount(a.line));
+      expect(a.chord).toMatch(/^[A-G]/);
+    }
+    const perLine = new Map<string, number>();
+    for (const a of anchors)
+      perLine.set(a.line, (perLine.get(a.line) ?? 0) + 1);
+    expect(Math.max(...perLine.values())).toBeGreaterThanOrEqual(2);
+    expect(anchors.some((a) => /[\u05B0-\u05BC]/.test(a.line))).toBe(true);
+  });
+  it("unknown names and formats throw TypeError", () => {
+    const bad = "nope" as DocFixtureName;
+    expect(() => docFixturePath(bad, "docx")).toThrow(TypeError);
+    expect(() => docFixturePath("en_table", "txt" as DocFormat)).toThrow(
+      TypeError,
+    );
+    expect(() => readDocExpected(bad)).toThrow(TypeError);
+    expect(() => readDocPdfLines(bad)).toThrow(TypeError);
+    expect(() => readDocExpected("__proto__" as DocFixtureName)).toThrow(
+      TypeError,
+    );
+  });
+});
+
+describe("AI reply fixtures", () => {
+  it("freezes the names in order", () => {
+    expect([...AI_REPLY_FIXTURE_NAMES]).toEqual([
+      "two_songs_fenced",
+      "prose_wrapped",
+      "single_no_delimiter",
+      "empty_chunks",
+    ]);
+  });
+  it("ai/ holds exactly the expected files", () => {
+    const expected = AI_REPLY_FIXTURE_NAMES.flatMap((n) => [
+      `${n}.txt`,
+      `${n}.expected.json`,
+    ]).sort();
+    expect(readdirSync(AI_DIR).sort()).toEqual(expected);
+  });
+  it.each([...AI_REPLY_FIXTURE_NAMES])(
+    "%s: header line, UTF-8, no CR, expected songs end in one newline",
+    (n) => {
+      expectUtf8NoCr(`${AI_DIR}${n}.txt`);
+      expectUtf8NoCr(`${AI_DIR}${n}.expected.json`);
+      expect(readAiReply(n).split("\n")[0]).toBe(`# ${CC0_LINE}`);
+      const songs = readAiReplyExpected(n);
+      expect(songs.length).toBeGreaterThanOrEqual(1);
+      for (const s of songs) {
+        expect(s.endsWith("\n")).toBe(true);
+        expect(s.endsWith("\n\n")).toBe(false);
+        expect(s.trim()).not.toBe("");
+        for (const line of s.split("\n")) {
+          expect(finalFormErrors(line.replace(/\[[^\]]*\]/g, ""))).toEqual([]);
+        }
+      }
+    },
+  );
+  it("the shapes match the brief", () => {
+    expect(readAiReplyExpected("two_songs_fenced")).toHaveLength(2);
+    expect(readAiReply("two_songs_fenced")).toContain("```chordpro");
+    expect(readAiReply("two_songs_fenced")).toContain("\n{new_song}\n");
+    expect(readAiReplyExpected("prose_wrapped")).toHaveLength(2);
+    expect(readAiReply("prose_wrapped")).toMatch(/\n```\n\{title:/);
+    expect(readAiReplyExpected("single_no_delimiter")).toHaveLength(1);
+    expect(readAiReply("single_no_delimiter")).not.toContain("```");
+    const empty = readAiReply("empty_chunks");
+    expect(empty).not.toContain("```");
+    expect(empty).toContain("{ns}\n{ns}\n");
+    expect(empty.trimEnd().endsWith("{ns}")).toBe(true);
+    expect(readAiReplyExpected("empty_chunks")).toHaveLength(2);
+  });
+  it("unknown names throw TypeError", () => {
+    const bad = "nope" as AiReplyFixtureName;
+    expect(() => readAiReply(bad)).toThrow(TypeError);
+    expect(() => readAiReplyExpected(bad)).toThrow(TypeError);
   });
 });

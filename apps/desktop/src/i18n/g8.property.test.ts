@@ -42,6 +42,8 @@ describe("g8 plural coverage", () => {
     expect(countBases).toEqual([
       "addToSetlistTitle",
       "addedToSetlist",
+      "aiCharCount",
+      "aiReviewSongs",
       "deleteManyFailed",
       "deleteManyTitle",
       "deletedCount",
@@ -54,6 +56,7 @@ describe("g8 plural coverage", () => {
     expect(pluralBases).toEqual([
       "addToSetlistTitle",
       "addedToSetlist",
+      "aiReviewSongs",
       "deleteManyFailed",
       "deletedCount",
       "diagnosticsCount",

@@ -1,9 +1,18 @@
-import { importText } from "chord-core";
+import { documentToText, importText } from "chord-core";
 import type { ImportResult } from "chord-core";
 import { describe, expect, it, vi } from "vitest";
-import { importSongFiles, withTitleFallback } from "./importFiles";
+import {
+  DOCUMENT_EXTENSIONS,
+  importSongFiles,
+  withTitleFallback,
+} from "./importFiles";
 import type { FileImportDeps } from "./importFiles";
-import { FileReadError } from "./files";
+import {
+  DOCUMENT_FILE_EXTENSIONS,
+  DocumentReadError,
+  FileReadError,
+} from "./files";
+import type { DocumentText } from "./bindings";
 import { StorageError } from "./storage";
 import type { Song } from "./storage";
 
@@ -31,6 +40,14 @@ function deps(
       Promise.resolve(song(`id${++n}`, chordpro)),
     ),
     importText: vi.fn(importText),
+    extractDocument: vi.fn((path: string): Promise<DocumentText> =>
+      Promise.resolve({
+        format: "docx",
+        blocks: [{ kind: "paragraph", text: path }],
+        warnings: [],
+      }),
+    ),
+    documentToText: vi.fn(documentToText),
   };
   const d: typeof base = { ...base, ...overrides } as typeof base;
   return d satisfies FileImportDeps;
@@ -177,5 +194,106 @@ describe("importSongFiles", () => {
     );
     await importSongFiles(d);
     expect(d.saveSong).toHaveBeenCalledExactlyOnceWith("{title: f}\n[C]fake");
+  });
+});
+
+describe("importSongFiles documents", () => {
+  const doc = (text: string): DocumentText => ({
+    format: "docx",
+    blocks: [{ kind: "paragraph", text }],
+    warnings: [{ kind: "Skipped", message: "image" }],
+  });
+
+  it("queues a document (never saves) with document, rtlColumns and title fallback", async () => {
+    const d = deps({ "/a/Shir Song.docx": "" });
+    d.extractDocument.mockResolvedValue(doc("Am      G\nשלום עולם יפה"));
+    const report = await importSongFiles(d);
+    expect(d.saveSong).not.toHaveBeenCalled();
+    expect(d.readTextFile).not.toHaveBeenCalled();
+    expect(report.saved).toEqual([]);
+    expect(report.failed).toEqual([]);
+    const q = report.queued[0]!;
+    expect(q.rtlColumns).toBe("mirror");
+    expect(q.document).toEqual({
+      name: "Shir Song.docx",
+      format: "docx",
+      text: q.source,
+      warnings: [{ kind: "Skipped", message: "image" }],
+    });
+    expect(q.result.chordpro.startsWith("{title: Shir Song}\n")).toBe(true);
+    expect(d.importText).toHaveBeenCalledWith(q.source, {
+      rtlColumns: "mirror",
+    });
+  });
+
+  it("routes an upper-case .DOCX extension to extraction", async () => {
+    const d = deps({ "/a/X.DOCX": "" });
+    d.extractDocument.mockResolvedValue(doc("hello"));
+    const report = await importSongFiles(d);
+    expect(d.extractDocument).toHaveBeenCalledWith("/a/X.DOCX");
+    expect(report.queued).toHaveLength(1);
+  });
+
+  it("reports an extraction error with its reason", async () => {
+    const d = deps({ "/a/bad.pdf": "" });
+    d.extractDocument.mockRejectedValue(
+      new DocumentReadError("Corrupt", "broken"),
+    );
+    const report = await importSongFiles(d);
+    expect(report.failed).toEqual([
+      { path: "/a/bad.pdf", message: "broken", reason: "Corrupt" },
+    ]);
+    expect(report.queued).toEqual([]);
+  });
+
+  it("zero blocks fail as NoText with the PdfNoText message", async () => {
+    const d = deps({ "/a/scan.pdf": "" });
+    d.extractDocument.mockResolvedValue({
+      format: "pdf",
+      blocks: [],
+      warnings: [{ kind: "PdfNoText", message: "scanned" }],
+    });
+    const report = await importSongFiles(d);
+    expect(report.failed).toEqual([
+      { path: "/a/scan.pdf", message: "scanned", reason: "NoText" },
+    ]);
+  });
+
+  it("zero blocks without a warning use the default message", async () => {
+    const d = deps({ "/a/e.odt": "" });
+    d.extractDocument.mockResolvedValue({
+      format: "odt",
+      blocks: [],
+      warnings: [],
+    });
+    const report = await importSongFiles(d);
+    expect(report.failed[0]).toMatchObject({
+      message: "no text found",
+      reason: "NoText",
+    });
+  });
+
+  it("a mixed pick keeps each route", async () => {
+    const d = deps({
+      "/a/one.cho": "{title: One}\n[C]hi",
+      "/a/two.docx": "",
+      "/a/three.txt": EN_SHEET,
+    });
+    d.extractDocument.mockResolvedValue(doc("hello"));
+    const report = await importSongFiles(d);
+    expect(report.saved.map((s) => s.path)).toEqual([
+      "/a/one.cho",
+      "/a/three.txt",
+    ]);
+    expect(report.queued.map((q) => q.path)).toEqual(["/a/two.docx"]);
+    expect(d.extractDocument).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DOCUMENT_EXTENSIONS", () => {
+  it("matches DOCUMENT_FILE_EXTENSIONS", () => {
+    expect(DOCUMENT_EXTENSIONS).toEqual(
+      DOCUMENT_FILE_EXTENSIONS.map((e) => `.${e}`),
+    );
   });
 });

@@ -278,6 +278,9 @@ describe("STACK.md consistency with pnpm and cargo", () => {
     const crateRows = installed.filter((r) => r.ecosystem === "crate");
     expect(crateRows.map((r) => r.pkg).sort()).toEqual(
       [
+        "encoding_rs",
+        "pdf-extract",
+        "quick-xml",
         "rusqlite",
         "rusqlite_migration",
         "serde",
@@ -293,6 +296,7 @@ describe("STACK.md consistency with pnpm and cargo", () => {
         "time",
         "unicode-normalization",
         "uuid",
+        "zip",
       ].sort(),
     );
     for (const row of crateRows) {

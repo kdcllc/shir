@@ -55,6 +55,8 @@ vi.mock("./storage", () => ({
   updateSetlistItem: vi.fn(),
 }));
 vi.mock("./files", () => ({
+  extractDocument: vi.fn(),
+  pickDocumentFile: vi.fn(),
   pickSongFiles: vi.fn(),
   readTextFile: vi.fn(),
   saveExportDocx: vi.fn(),
