@@ -19,6 +19,8 @@ export const commands = {
 	 *  path) and write the Word document `bytes` there. `Ok(None)` when the user cancels.
 	 */
 	saveExportDocx: (defaultName: string, filterName: string, bytes: number[], options?: InvokeOptions) => typedError<string | null, FileError>(__TAURI_INVOKE("save_export_docx", { defaultName, filterName, bytes }, options)),
+	/**  Extract text blocks from a document picked by the user. */
+	extractDocument: (path: string, options?: InvokeOptions) => typedError<DocumentText, DocError>(__TAURI_INVOKE("extract_document", { path }, options)),
 	listSetlists: (options?: InvokeOptions) => typedError<SetlistSummary[], DbError>(__TAURI_INVOKE("list_setlists", undefined, options)),
 	getSetlist: (id: string, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("get_setlist", { id }, options)),
 	createSetlist: (name: string, options?: InvokeOptions) => typedError<Setlist_Serialize, DbError>(__TAURI_INVOKE("create_setlist", { name }, options)),
@@ -38,6 +40,46 @@ export const commands = {
 export type DbError = {
 	kind: ErrorKind,
 	message: string,
+};
+
+/**
+ *  A block of extracted text. Inside a paragraph or cell a line break is `\n` and a tab is
+ *  `\t`; there is no `\r`.
+ */
+export type DocBlock = { kind: "paragraph"; text: string } | { kind: "table"; rows: string[][] };
+
+/**  A document-extraction error: serializes as `{"kind":"<Kind>","message":"<text>"}`. */
+export type DocError = {
+	kind: DocErrorKind,
+	message: string,
+};
+
+/**  Category of a document failure. */
+export type DocErrorKind = "TooLarge" | "TextTooLarge" | "Unsupported" | "Corrupt" | "Io";
+
+/**  Supported document format. */
+export type DocFormat = "docx" | "odt" | "rtf" | "pdf";
+
+/**  A non-fatal extraction warning. */
+export type DocWarning = {
+	kind: DocWarningKind,
+	message: string,
+};
+
+/**  Category of a non-fatal extraction warning. */
+export type DocWarningKind = 
+/**  Hebrew runs were converted from visual to logical order. */
+"PdfReordered" | 
+/**  The PDF produced no text (likely a scan). */
+"PdfNoText" | 
+/**  Content the extractor ignored (for example an embedded image or object). */
+"Skipped";
+
+/**  The extracted document. */
+export type DocumentText = {
+	format: DocFormat,
+	blocks: DocBlock[],
+	warnings: DocWarning[],
 };
 
 /**  Category of a storage failure. */

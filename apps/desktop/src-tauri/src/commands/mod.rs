@@ -4,11 +4,13 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+pub mod documents;
 pub mod files;
 pub mod setlists;
 pub mod state;
 
 use crate::db::{repo, search, DbError, ErrorKind, SaveSongInput, SearchHit, Song, SongSummary};
+use documents::{DocError, DocErrorKind};
 use files::{FileError, FileErrorKind};
 use state::DbState;
 use std::io::Write;
@@ -118,6 +120,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             search_songs,
             files::read_text_file,
             files::save_export_docx,
+            documents::extract_document,
             setlists::list_setlists,
             setlists::get_setlist,
             setlists::create_setlist,
@@ -135,6 +138,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<DbError>()
         .typ::<FileErrorKind>()
         .typ::<FileError>()
+        .typ::<DocErrorKind>()
+        .typ::<DocError>()
 }
 
 /// Write the TypeScript bindings to `path`.
@@ -351,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn exported_ts_has_exactly_the_eighteen_commands() {
+    fn exported_ts_has_exactly_the_nineteen_commands() {
         let ts = exported_ts();
         let mut fields = command_fields(&ts);
         fields.sort();
@@ -363,6 +368,7 @@ mod tests {
                 "deleteSetlist",
                 "deleteSong",
                 "duplicateSetlist",
+                "extractDocument",
                 "getSetlist",
                 "getSong",
                 "listSetlists",
@@ -393,6 +399,10 @@ mod tests {
             "Setlist",
             "SetlistSummary",
             "SetlistItem",
+            "DocumentText",
+            "DocBlock",
+            "DocError",
+            "DocErrorKind",
         ] {
             assert!(ts.contains(&format!("type {t} ")), "missing type {t}");
         }
