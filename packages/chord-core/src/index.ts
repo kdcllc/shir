@@ -8,3 +8,6 @@ export * from "./transpose";
 export * from "./import";
 export * from "./edit";
 export * from "./export";
+export * from "./documentText";
+export * from "./aiPrompt";
+export * from "./aiReply";
