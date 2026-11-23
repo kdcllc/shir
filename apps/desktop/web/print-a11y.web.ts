@@ -14,6 +14,62 @@ const chromeDisplays = (page: import("@playwright/test").Page) =>
     })),
   );
 
+interface AxNode {
+  nodeId: string;
+  backendDOMNodeId?: number;
+  ignored?: boolean;
+  role?: { value?: string };
+  name?: { value?: string };
+  childIds?: string[];
+}
+
+/** The full AX tree plus the backend node id of the first match for `selector`. */
+async function axTreeAndBackendId(
+  cdp: import("@playwright/test").CDPSession,
+  selector: string,
+): Promise<{ nodes: AxNode[]; backendNodeId: number }> {
+  const { root } = await cdp.send("DOM.getDocument", { depth: 0 });
+  const { nodeId } = await cdp.send("DOM.querySelector", {
+    nodeId: root.nodeId,
+    selector,
+  });
+  expect(nodeId, `no DOM node for ${selector}`).toBeGreaterThan(0);
+  const { node } = await cdp.send("DOM.describeNode", { nodeId });
+  const tree = await cdp.send("Accessibility.getFullAXTree");
+  return { nodes: tree.nodes as AxNode[], backendNodeId: node.backendNodeId };
+}
+
+/** The AX node whose backendDOMNodeId is the element matching `selector`. */
+async function axNodeFor(
+  cdp: import("@playwright/test").CDPSession,
+  selector: string,
+): Promise<AxNode | undefined> {
+  const { nodes, backendNodeId } = await axTreeAndBackendId(cdp, selector);
+  return nodes.find((n) => n.backendDOMNodeId === backendNodeId);
+}
+
+/** Names of the AX descendants of the element matching `selector`, joined. */
+async function axSubtreeText(
+  cdp: import("@playwright/test").CDPSession,
+  selector: string,
+): Promise<string | undefined> {
+  const { nodes, backendNodeId } = await axTreeAndBackendId(cdp, selector);
+  const byId = new Map(nodes.map((n) => [n.nodeId, n]));
+  const start = nodes.find((n) => n.backendDOMNodeId === backendNodeId);
+  if (start === undefined) return undefined;
+  const parts: string[] = [];
+  const visit = (n: AxNode): void => {
+    for (const id of n.childIds ?? []) {
+      const child = byId.get(id);
+      if (child === undefined) continue;
+      if (child.name?.value) parts.push(String(child.name.value));
+      visit(child);
+    }
+  };
+  visit(start);
+  return parts.join(" ");
+}
+
 test.describe("print media (built frontend)", () => {
   test("F28: viewer chrome is hidden, song content stays", async ({ page }) => {
     await openApp(page);
@@ -136,5 +192,63 @@ test.describe("accessibility (built frontend)", () => {
 
     await page.getByTestId("chord-input").fill("xyz");
     await expect(status).toHaveText(STRINGS.chordUnknown);
+  });
+  test("F51: the empty chord warning is a status node in Chromium's accessibility tree", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "CDP is Chromium-only");
+    await openApp(page);
+    await openSong(page, KEYED.title);
+    await page.getByTestId("edit-song").click();
+    await page.waitForSelector('[data-testid="editor-visual"]');
+    await page
+      .locator('[data-testid="visual-line"][data-kind="lyric"]')
+      .first()
+      .locator('[data-pos="1"]')
+      .click();
+    const status = page.getByTestId("chord-picker").getByRole("status");
+    await expect(status).toHaveCount(1);
+    await expect(status).toHaveText("");
+
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Accessibility.enable");
+    const selector = '[data-testid="chord-warning"]';
+    const before = await axNodeFor(cdp, selector);
+    expect(before, "no AX node for the empty chord warning").toBeDefined();
+    expect(before?.role?.value).toBe("status");
+    expect(before?.ignored).not.toBe(true);
+
+    await page.getByTestId("chord-input").fill("xyz");
+    await expect(status).toHaveText(STRINGS.chordUnknown);
+    const after = await axNodeFor(cdp, selector);
+    expect(after?.role?.value).toBe("status");
+    const name = String(after?.name?.value ?? "");
+    const descendants = (await axSubtreeText(cdp, selector)) ?? "";
+    expect(name + descendants).toContain(STRINGS.chordUnknown);
+  });
+
+  test("sidebar panels are tabpanels in Chromium's accessibility tree", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "CDP is Chromium-only");
+    await openApp(page);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Accessibility.enable");
+
+    const songs = await axNodeFor(cdp, '[data-testid="sidebar-panel-songs"]');
+    expect(songs, "no AX node for sidebar-panel-songs").toBeDefined();
+    expect(songs?.role?.value).toBe("tabpanel");
+    expect(songs?.ignored).not.toBe(true);
+
+    await page.getByTestId("tab-setlists").click();
+    const setlists = await axNodeFor(
+      cdp,
+      '[data-testid="sidebar-panel-setlists"]',
+    );
+    expect(setlists, "no AX node for sidebar-panel-setlists").toBeDefined();
+    expect(setlists?.role?.value).toBe("tabpanel");
+    expect(setlists?.ignored).not.toBe(true);
   });
 });

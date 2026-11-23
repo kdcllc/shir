@@ -89,17 +89,14 @@ describe("Import with AI in the real engine", () => {
   });
 
   it("renders the Hebrew song's chord as a left-to-right symbol", async () => {
-    const matching = (await textsOf("song-item")).filter((t) =>
-      t.includes(HEBREW_TITLE),
-    );
+    const items = await textsOf("song-item");
+    const matching = items.filter((t) => t.includes(HEBREW_TITLE));
     expect(matching).toHaveLength(1);
-    const index = (await textsOf("song-item")).findIndex((t) =>
-      t.includes(HEBREW_TITLE),
-    );
+    const index = items.findIndex((t) => t.includes(HEBREW_TITLE));
     await (await $$('[data-testid="song-item"]'))[index]!.click();
     await expect(tid("song-title")).toHaveText(HEBREW_TITLE);
 
-    // The pane holds other ltr bdi elements (key, meta); find the chord symbol.
+    // The selector bdi.chord[dir="ltr"] targets chord symbols only.
     await browser.waitUntil(
       async () => {
         const texts = await browser.execute(() =>

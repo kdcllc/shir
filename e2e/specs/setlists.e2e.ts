@@ -4,17 +4,13 @@ import { relaunch, tid, waitForShell } from "../src/harness";
 import { LANGS } from "../src/launch";
 import { createSong, textsOf } from "../src/ui";
 
-const HEBREW_TITLE = "שיר הבוקר";
+const HEBREW_TITLE = "שיר הסט";
 const ENGLISH_TITLE = "Open Road Probe";
 const HEBREW_SONG = `{title: ${HEBREW_TITLE}}\n{artist: זמר}\n{key: Am}\n\n[Am]אור בבוקר על [F]הדרך`;
 const ENGLISH_SONG = `{title: ${ENGLISH_TITLE}}\n{artist: Anne Singer}\n{key: C}\n\n[C]Morning [G]light on an open road`;
 const SETLIST_NAME = "סט הערב";
 
 const COPY_PREFIX = `${SETLIST_NAME} ${EN.duplicateSuffix}`;
-
-async function entryTitles(): Promise<string[]> {
-  return textsOf("setlist-entry-title");
-}
 
 /** Clicks the Setlists tab, retrying a dropped click until the panel shows. */
 async function openSetlistsTab(): Promise<void> {
@@ -61,7 +57,8 @@ async function selectSetlist(index: number): Promise<void> {
 async function waitForTitles(expected: string[]): Promise<void> {
   await browser.waitUntil(
     async () =>
-      JSON.stringify(await entryTitles()) === JSON.stringify(expected),
+      JSON.stringify(await textsOf("setlist-entry-title")) ===
+      JSON.stringify(expected),
     { timeoutMsg: `entries never became ${expected.join(" | ")}` },
   );
 }
@@ -173,9 +170,17 @@ describe("setlist core flow", () => {
     await tid("confirm-delete-yes").click();
     await waitGone("confirm-delete");
     await browser.waitUntil(
-      async () =>
-        !(await textsOf("song-item")).some((t) => t.includes(ENGLISH_TITLE)),
-      { timeoutMsg: "the deleted song is still listed" },
+      async () => {
+        const texts = await textsOf("song-item");
+        return (
+          texts.length > 0 &&
+          texts.some((t) => t.includes(HEBREW_TITLE)) &&
+          !texts.some((t) => t.includes(ENGLISH_TITLE))
+        );
+      },
+      {
+        timeoutMsg: "the song list never settled on only the Hebrew test song",
+      },
     );
     for (const index of [0, 1]) {
       await selectSetlist(index);

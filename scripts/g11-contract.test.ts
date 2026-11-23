@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AI_SONG_DELIMITER, buildAiPrompt } from "../packages/chord-core/src";
+import { DOC_FIXTURE_NAMES } from "../packages/test-fixtures/src/index";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -28,6 +29,10 @@ const CORE_FILES = [
   "packages/chord-core/src/aiReply.ts",
 ] as const;
 const AI_DIALOG = "apps/desktop/src/components/AiImportDialog.tsx";
+const AI_DIALOG_CSS = "apps/desktop/src/components/AiImportDialog.module.css";
+const ZIPXML_RS = "apps/desktop/src-tauri/src/commands/documents/zipxml.rs";
+const G11_INTEGRATION_RS =
+  "apps/desktop/src-tauri/tests/g11_documents_integration.rs";
 
 // ---- (a) command registration ------------------------------------------------------------
 
@@ -167,6 +172,16 @@ function permissionProblems(src: string): string[] {
   }
   return problems;
 }
+
+describe("(a) the extract_document ordering branch", () => {
+  it("negative: a command listed before a later log_webview_error is reported", () => {
+    expect(
+      collectCommandsProblems(
+        "collect_commands![a::log_webview_error, documents::extract_document, b::log_webview_error]",
+      ),
+    ).toEqual(["extract_document is after log_webview_error"]);
+  });
+});
 
 describe("(b) the capability grants no filesystem or save access", () => {
   it("has no fs:* and no dialog:allow-save", () => {
@@ -520,6 +535,102 @@ describe("(g) every dialog test id is documented", () => {
     expect(stripped).not.toBe(md);
     expect(undocumentedProblems(src, stripped)).toEqual([
       "ai-copy-failed is not in docs/DESKTOP.md ## Test ids",
+    ]);
+  });
+});
+
+// ---- (h) Rust fixture names equal DOC_FIXTURE_NAMES --------------------------------------
+
+/** The names in `const FIXTURE_NAMES: [&str; N] = [...]` and a problem list for the source. */
+function fixtureNamesProblems(
+  src: string,
+  expected: readonly string[],
+): string[] {
+  const m =
+    /\bconst FIXTURE_NAMES:\s*\[&str;\s*(\d+)\]\s*=\s*\[([^\]]*)\]/.exec(src);
+  if (!m) return ["no FIXTURE_NAMES const"];
+  const names = [...(m[2] as string).matchAll(/"([^"]*)"/g)].map(
+    (x) => x[1] as string,
+  );
+  const problems: string[] = [];
+  if (Number(m[1]) !== names.length) {
+    problems.push(`FIXTURE_NAMES length ${m[1]} but ${names.length} names`);
+  }
+  if (names.join(",") !== expected.join(",")) {
+    problems.push(
+      `FIXTURE_NAMES [${names.join(", ")}] differs from DOC_FIXTURE_NAMES [${expected.join(", ")}]`,
+    );
+  }
+  return problems;
+}
+
+describe("(h) the Rust FIXTURE_NAMES equal DOC_FIXTURE_NAMES", () => {
+  it.each([ZIPXML_RS, G11_INTEGRATION_RS])(
+    "%s lists the same names in order",
+    (file) => {
+      expect(fixtureNamesProblems(read(file), DOC_FIXTURE_NAMES)).toEqual([]);
+    },
+  );
+
+  it("negative: a source with one name removed or no const is reported", () => {
+    const src = read(ZIPXML_RS);
+    const mutated = src
+      .replace('"en_table", ', "")
+      .replace("[&str; 3]", "[&str; 2]");
+    expect(mutated).not.toBe(src);
+    expect(fixtureNamesProblems(mutated, DOC_FIXTURE_NAMES)).toHaveLength(1);
+    const lengthOnly = src.replace("[&str; 3]", "[&str; 4]");
+    expect(fixtureNamesProblems(lengthOnly, DOC_FIXTURE_NAMES)).toEqual([
+      "FIXTURE_NAMES length 4 but 3 names",
+    ]);
+    expect(
+      fixtureNamesProblems("const OTHER: u8 = 1;", DOC_FIXTURE_NAMES),
+    ).toEqual(["no FIXTURE_NAMES const"]);
+  });
+});
+
+// ---- (i) the dialog scrolls inside the viewport ------------------------------------------
+
+function ruleBody(css: string, selector: string): string | undefined {
+  const escaped = selector.replace(/[.]/g, "\\.");
+  return new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "m").exec(css)?.[1];
+}
+
+function dialogCssProblems(css: string): string[] {
+  const problems: string[] = [];
+  const dialog = ruleBody(css, ".dialog");
+  if (dialog === undefined) problems.push(".dialog rule not found");
+  else {
+    if (!/overflow:\s*auto\b/.test(dialog))
+      problems.push(".dialog lacks overflow: auto");
+    if (!/max-block-size:\s*100%/.test(dialog)) {
+      problems.push(".dialog lacks max-block-size: 100%");
+    }
+  }
+  const backdrop = ruleBody(css, ".backdrop");
+  if (backdrop === undefined) problems.push(".backdrop rule not found");
+  else {
+    if (!/position:\s*fixed\b/.test(backdrop))
+      problems.push(".backdrop lacks position: fixed");
+    if (!/inset:\s*0\b/.test(backdrop))
+      problems.push(".backdrop lacks inset: 0");
+    if (!/(?:^|[\s;])padding\s*:/.test(backdrop))
+      problems.push(".backdrop lacks padding");
+  }
+  return problems;
+}
+
+describe("(i) the dialog CSS scrolls inside the viewport (source check; jsdom has no layout)", () => {
+  it("has the scrolling dialog and the fixed padded backdrop", () => {
+    expect(dialogCssProblems(read(AI_DIALOG_CSS))).toEqual([]);
+  });
+
+  it("negative: a dialog without max-block-size is reported", () => {
+    const css = read(AI_DIALOG_CSS);
+    const mutated = css.replace("max-block-size: 100%;", "");
+    expect(mutated).not.toBe(css);
+    expect(dialogCssProblems(mutated)).toEqual([
+      ".dialog lacks max-block-size: 100%",
     ]);
   });
 });
