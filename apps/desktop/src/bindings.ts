@@ -18,7 +18,7 @@ export const commands = {
 	 *  Ask for a save location in a native dialog opened here (the webview never supplies a
 	 *  path) and write the Word document `bytes` there. `Ok(None)` when the user cancels.
 	 */
-	saveExportDocx: (defaultName: string, filterName: string, bytes: number[], options?: InvokeOptions) => typedError<string | null, FileError>(__TAURI_INVOKE("save_export_docx", { defaultName, filterName, bytes }, options)),
+	saveExportDocx: (defaultName: string, filterName: string, bytesBase64: string, options?: InvokeOptions) => typedError<string | null, FileError>(__TAURI_INVOKE("save_export_docx", { defaultName, filterName, bytesBase64 }, options)),
 	/**  Extract text blocks from a document picked by the user. */
 	extractDocument: (path: string, options?: InvokeOptions) => typedError<DocumentText, DocError>(__TAURI_INVOKE("extract_document", { path }, options)),
 	listSetlists: (options?: InvokeOptions) => typedError<SetlistSummary[], DbError>(__TAURI_INVOKE("list_setlists", undefined, options)),
@@ -92,9 +92,7 @@ export type FileError = {
 };
 
 /**  Category of a file failure. */
-export type FileErrorKind = "TooLarge" | "NotUtf8" | "Io" | 
-/**  The request itself is unacceptable (for example an empty or oversized payload). */
-"Invalid";
+export type FileErrorKind = "TooLarge" | "NotUtf8" | "Io" | "Invalid";
 
 /**  Dominant script of a song's lyrics. */
 export type Language = "he" | "en" | "mixed";

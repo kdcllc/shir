@@ -71,6 +71,26 @@ export const SONG_FILE_EXTENSIONS = [
 
 export const DOCUMENT_FILE_EXTENSIONS = ["docx", "odt", "rtf", "pdf"] as const;
 
+/** A readable message for any IPC rejection value; never `"[object Object]"`. */
+function rejectionMessage(reason: unknown): string {
+  if (typeof reason === "string") return reason;
+  if (reason instanceof Error) return reason.message;
+  if (typeof reason === "object" && reason !== null) {
+    const { message } = reason as { message?: unknown };
+    if (typeof message === "string") return message;
+  }
+  try {
+    const json = JSON.stringify(reason) as string | undefined;
+    if (typeof json === "string") return json;
+  } catch {
+    // fall through: circular or otherwise unserialisable
+  }
+  return reason === undefined ||
+    (typeof reason !== "object" && typeof reason !== "function")
+    ? String(reason)
+    : "unrecognised IPC rejection";
+}
+
 function isDocError(value: unknown): value is DocError {
   if (typeof value !== "object" || value === null) return false;
   const { kind, message } = value as { kind?: unknown; message?: unknown };
@@ -84,9 +104,7 @@ function isDocError(value: unknown): value is DocError {
 function toDocumentReadError(reason: unknown): DocumentReadError {
   if (isDocError(reason))
     return new DocumentReadError(reason.kind, reason.message);
-  if (reason instanceof Error)
-    return new DocumentReadError("Ipc", reason.message);
-  return new DocumentReadError("Ipc", String(reason));
+  return new DocumentReadError("Ipc", rejectionMessage(reason));
 }
 
 /** Extracts a document's text blocks (docx, odt, rtf, pdf) through the backend. */
@@ -114,8 +132,7 @@ function isFileError(value: unknown): value is FileError {
 function toFileReadError(reason: unknown): FileReadError {
   if (isFileError(reason))
     return new FileReadError(reason.kind, reason.message);
-  if (reason instanceof Error) return new FileReadError("Ipc", reason.message);
-  return new FileReadError("Ipc", String(reason));
+  return new FileReadError("Ipc", rejectionMessage(reason));
 }
 
 /** Reads a text file (UTF-8, at most 1 MiB, BOM removed) through the backend. */
@@ -135,8 +152,17 @@ function toFileWriteError(reason: unknown): FileWriteError {
     const kind = reason.kind === "Invalid" ? "Invalid" : "Io";
     return new FileWriteError(kind, reason.message);
   }
-  if (reason instanceof Error) return new FileWriteError("Ipc", reason.message);
-  return new FileWriteError("Ipc", String(reason));
+  return new FileWriteError("Ipc", rejectionMessage(reason));
+}
+
+/** Standard base64 (RFC 4648 section 4, padded) of `bytes`, built in chunks to keep the stack small. */
+export function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
 }
 
 /**
@@ -153,7 +179,7 @@ export async function saveExportDocx(
     result = await commands.saveExportDocx(
       defaultName,
       filterName,
-      Array.from(bytes),
+      bytesToBase64(bytes),
     );
   } catch (reason) {
     throw toFileWriteError(reason);

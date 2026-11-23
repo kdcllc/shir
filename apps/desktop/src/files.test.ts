@@ -16,6 +16,7 @@ import {
   pickDocumentFile,
   FileReadError,
   FileWriteError,
+  bytesToBase64,
   pickSongFiles,
   readTextFile,
   saveExportDocx,
@@ -74,7 +75,7 @@ describe("isFileError accepts Invalid", () => {
 });
 
 describe("saveExportDocx", () => {
-  it("invokes save_export_docx with number[] bytes and returns the saved path", async () => {
+  it("invokes save_export_docx with base64 bytes and returns the saved path", async () => {
     invoke.mockResolvedValue("/home/u/set.docx");
     await expect(
       saveExportDocx("set.docx", "Word", new Uint8Array([1, 2, 255])),
@@ -83,7 +84,7 @@ describe("saveExportDocx", () => {
     expect(invoke.mock.calls[0]![1]).toEqual({
       defaultName: "set.docx",
       filterName: "Word",
-      bytes: [1, 2, 255],
+      bytesBase64: "AQL/",
     });
   });
 
@@ -94,15 +95,20 @@ describe("saveExportDocx", () => {
     ).resolves.toBeNull();
   });
 
-  it.each(["Invalid", "Io"] as const)(
+  it.each([
+    ["Invalid", "Invalid"],
+    ["Io", "Io"],
+    ["TooLarge", "Io"],
+    ["NotUtf8", "Io"],
+  ] as const)(
     "maps a %s error result to FileWriteError",
-    async (kind) => {
+    async (kind, expected) => {
       invoke.mockImplementation(() => Promise.reject({ kind, message: "m" }));
       const err = await saveExportDocx("a", "W", new Uint8Array([1])).catch(
         (e: unknown) => e,
       );
       expect(err).toBeInstanceOf(FileWriteError);
-      expect((err as FileWriteError).kind).toBe(kind);
+      expect((err as FileWriteError).kind).toBe(expected);
       expect((err as FileWriteError).message).toBe("m");
     },
   );
@@ -124,6 +130,61 @@ describe("saveExportDocx", () => {
     );
     expect((err as FileWriteError).kind).toBe("Ipc");
     expect((err as FileWriteError).message).toBe("boom");
+  });
+});
+
+describe("bytesToBase64", () => {
+  it("encodes with the standard alphabet and padding", () => {
+    expect(bytesToBase64(new Uint8Array([1, 2, 255]))).toBe("AQL/");
+    expect(bytesToBase64(new Uint8Array([]))).toBe("");
+    expect(bytesToBase64(new Uint8Array([1]))).toBe("AQ==");
+    expect(bytesToBase64(new Uint8Array([1, 2]))).toBe("AQI=");
+  });
+
+  it("round-trips 100 000 pseudo-random bytes across chunk boundaries", () => {
+    const bytes = new Uint8Array(100_000);
+    let x = 12345;
+    for (let i = 0; i < bytes.length; i++) {
+      x = (x * 1103515245 + 12345) & 0x7fffffff;
+      bytes[i] = x >> 16;
+    }
+    const decoded = atob(bytesToBase64(bytes));
+    expect(decoded.length).toBe(bytes.length);
+    for (let i = 0; i < bytes.length; i++) {
+      if (decoded.charCodeAt(i) !== bytes[i]) {
+        throw new Error(`byte ${i} differs`);
+      }
+    }
+  });
+});
+
+describe("rejection messages never read [object Object]", () => {
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+
+  it.each([
+    [{ code: 5 }, '{"code":5}'],
+    [{ message: "m2", extra: 1 }, "m2"],
+    [circular, "unrecognised IPC rejection"],
+    ["boom", "boom"],
+  ] as const)(
+    "extractDocument rejected with %j reads %s",
+    async (reason, msg) => {
+      invoke.mockImplementation(() => Promise.reject(reason));
+      const err = await extractDocument("/x.pdf").catch((e: unknown) => e);
+      expect((err as DocumentReadError).kind).toBe("Ipc");
+      expect((err as DocumentReadError).message).toBe(msg);
+    },
+  );
+
+  it("readTextFile and saveExportDocx use the same message rules", async () => {
+    invoke.mockImplementation(() => Promise.reject({ code: 5 }));
+    const r = await readTextFile("/x").catch((e: unknown) => e);
+    expect((r as FileReadError).message).toBe('{"code":5}');
+    const w = await saveExportDocx("a", "W", new Uint8Array([1])).catch(
+      (e: unknown) => e,
+    );
+    expect((w as FileWriteError).message).toBe('{"code":5}');
   });
 });
 

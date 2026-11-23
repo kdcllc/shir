@@ -8,7 +8,7 @@ use shir_lib::db::setlists::{
     add_setlist_items, create_setlist, delete_setlist, duplicate_setlist, get_setlist,
     list_setlists, remove_setlist_item, rename_setlist, reorder_setlist_items, update_setlist_item,
 };
-use shir_lib::db::{ErrorKind, SaveSongInput, Setlist};
+use shir_lib::db::{DbError, ErrorKind, SaveSongInput, Setlist};
 use tempfile::TempDir;
 
 const OLD: &str = "2000-01-01T00:00:00.000Z";
@@ -110,6 +110,20 @@ fn create_get_round_trip_with_joined_song_fields() {
     assert_eq!(first.song_capo, Some(2));
     assert_eq!(got.items[1].title, "Beta");
     assert_eq!(got.items[1].artist, None);
+}
+
+#[test]
+fn name_validation_counts_astral_code_points() {
+    let (_d, _p, mut c) = open_db();
+    // 200 emoji = 800 UTF-8 bytes: valid. 201 is not.
+    let ok = "😀".repeat(200);
+    assert_eq!(create_setlist(&mut c, &ok).expect("200 emoji").name, ok);
+    assert_eq!(
+        create_setlist(&mut c, &"😀".repeat(201))
+            .expect_err("201 emoji")
+            .kind,
+        ErrorKind::Invalid
+    );
 }
 
 #[test]
@@ -730,7 +744,7 @@ fn every_mutation_touches_the_setlist_updated_at() {
 fn malformed_setlist_ids_are_invalid_at_every_entry_point() {
     let (_d, _p, mut c) = open_db();
     // A well-formed item id, so only the malformed setlist id can explain `Invalid`.
-    let kind = |e: shir_lib::db::DbError| e.kind;
+    let kind = |e: DbError| e.kind;
     assert_eq!(
         kind(get_setlist(&c, "x").expect_err("get")),
         ErrorKind::Invalid

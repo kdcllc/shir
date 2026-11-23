@@ -1,8 +1,10 @@
 //! G10 command layer: the pure helpers behind `save_export_docx` (no dialog in tests) and a
 //! setlist command round trip over a file database.
+use base64::Engine;
 use shir_lib::commands::files::{
-    resolve_docx_path, sanitize_export_name, validate_export_bytes, write_docx_atomically,
-    FileErrorKind, MAX_EXPORT_BYTES,
+    decode_export_payload, publish_docx_with, resolve_docx_path, sanitize_export_name,
+    save_export_with, validate_export_bytes, write_docx_atomically, write_docx_atomically_with,
+    FileErrorKind, MAX_EXPORT_BASE64_LEN, MAX_EXPORT_BYTES,
 };
 use shir_lib::commands::save_song_impl;
 use shir_lib::commands::setlists::{
@@ -12,7 +14,8 @@ use shir_lib::commands::setlists::{
 };
 use shir_lib::commands::state::DbState;
 use shir_lib::db::{ErrorKind, SaveSongInput};
-use std::path::Path;
+use std::cell::Cell;
+use std::path::{Path, PathBuf};
 
 fn names(dir: &Path) -> Vec<String> {
     let mut v: Vec<String> = std::fs::read_dir(dir)
@@ -189,4 +192,232 @@ fn setlist_commands_round_trip_on_a_file_database() {
         get_setlist_impl(&st, &sl.id).unwrap_err().kind,
         ErrorKind::NotFound
     );
+}
+
+fn b64(bytes: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+#[test]
+fn invalid_payload_never_calls_pick() {
+    let too_long = "A".repeat(MAX_EXPORT_BASE64_LEN + 4);
+    for payload in ["", "!!!", too_long.as_str()] {
+        let calls = Cell::new(0);
+        let e = save_export_with("x", "Word", payload, |_, _| {
+            calls.set(calls.get() + 1);
+            Ok(None)
+        })
+        .unwrap_err();
+        assert_eq!(e.kind, FileErrorKind::Invalid);
+        assert_eq!(calls.get(), 0, "pick must not run for {:?}", e.message);
+    }
+    let e = decode_export_payload(&too_long).unwrap_err();
+    assert!(e.message.contains("encoded"), "{}", e.message);
+    assert_eq!(
+        decode_export_payload("!!!").unwrap_err().message,
+        "document is not valid base64"
+    );
+    assert_eq!(
+        decode_export_payload("").unwrap_err().message,
+        "document is empty"
+    );
+}
+
+#[test]
+fn pick_receives_the_sanitized_name_and_the_filter() {
+    let seen = std::cell::RefCell::new(None);
+    let out = save_export_with("../a\u{202E}b", "Word", &b64(b"PK"), |name, filter| {
+        *seen.borrow_mut() = Some((name, filter));
+        Ok(None)
+    })
+    .unwrap();
+    assert_eq!(out, None);
+    assert_eq!(
+        seen.into_inner(),
+        Some(("ab.docx".to_string(), "Word".to_string()))
+    );
+}
+
+#[test]
+fn cancel_writes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = save_export_with("x", "Word", &b64(b"PK"), |_, _| Ok(None)).unwrap();
+    assert_eq!(out, None);
+    assert!(names(dir.path()).is_empty());
+}
+
+#[test]
+fn pick_error_is_returned_unchanged() {
+    let e = save_export_with("x", "Word", &b64(b"PK"), |_, _| {
+        Err(shir_lib::commands::files::FileError {
+            kind: FileErrorKind::Io,
+            message: "dialog".into(),
+        })
+    })
+    .unwrap_err();
+    assert_eq!((e.kind, e.message.as_str()), (FileErrorKind::Io, "dialog"));
+}
+
+#[test]
+fn happy_path_writes_the_decoded_bytes_at_chosen_docx() {
+    let dir = tempfile::tempdir().unwrap();
+    let chosen = dir.path().join("out");
+    let bytes: Vec<u8> = (0..=255u8).collect();
+    let saved = save_export_with("x", "Word", &b64(&bytes), |_, _| Ok(Some(chosen.clone())))
+        .unwrap()
+        .unwrap();
+    let expected = dir.path().join("out.docx");
+    assert_eq!(PathBuf::from(&saved), expected);
+    assert_eq!(std::fs::read(&expected).unwrap(), bytes);
+    assert_eq!(names(dir.path()), ["out.docx"]);
+}
+
+#[test]
+fn size_boundary_reaches_pick_only_when_within_the_limit() {
+    let calls = Cell::new(0);
+    let at_limit = b64(&vec![7u8; MAX_EXPORT_BYTES]);
+    assert_eq!(at_limit.len(), MAX_EXPORT_BASE64_LEN);
+    save_export_with("x", "Word", &at_limit, |_, _| {
+        calls.set(calls.get() + 1);
+        Ok(None)
+    })
+    .unwrap();
+    assert_eq!(calls.get(), 1);
+    let over = b64(&vec![7u8; MAX_EXPORT_BYTES + 1]);
+    let e = save_export_with("x", "Word", &over, |_, _| {
+        calls.set(calls.get() + 1);
+        Ok(None)
+    })
+    .unwrap_err();
+    assert_eq!(e.kind, FileErrorKind::Invalid);
+    assert!(e.message.contains("document is larger"), "{}", e.message);
+    assert_eq!(calls.get(), 1);
+}
+
+#[test]
+fn temp_collision_keeps_the_foreign_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let foreign = dir.path().join("foreign.tmp");
+    std::fs::write(&foreign, b"foreign").unwrap();
+    let free = dir.path().join("free.tmp");
+    let mut names_iter = vec![foreign.clone(), free].into_iter();
+    let target = dir.path().join("a.docx");
+    let out = write_docx_atomically_with(&target, b"new", || names_iter.next().unwrap()).unwrap();
+    assert_eq!(out, target);
+    assert_eq!(std::fs::read(&foreign).unwrap(), b"foreign");
+    assert_eq!(std::fs::read(&target).unwrap(), b"new");
+    assert_eq!(names(dir.path()), ["a.docx", "foreign.tmp"]);
+}
+
+#[test]
+fn temp_collision_exhaustion_is_io_and_leaves_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let foreign = dir.path().join("foreign.tmp");
+    std::fs::write(&foreign, b"foreign").unwrap();
+    let calls = Cell::new(0);
+    let e = write_docx_atomically_with(&dir.path().join("a.docx"), b"new", || {
+        calls.set(calls.get() + 1);
+        foreign.clone()
+    })
+    .unwrap_err();
+    assert_eq!(e.kind, FileErrorKind::Io);
+    assert_eq!(e.message, "no free temporary file name");
+    assert_eq!(calls.get(), 100);
+    assert_eq!(std::fs::read(&foreign).unwrap(), b"foreign");
+    assert_eq!(names(dir.path()), ["foreign.tmp"]);
+}
+
+#[test]
+fn publish_never_replaces_a_file_created_after_the_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = Cell::new(true);
+    let out = publish_docx_with(&dir.path().join("x"), b"new", |a, b| {
+        if first.replace(false) {
+            std::fs::write(dir.path().join("x.docx"), b"foreign").unwrap();
+        }
+        std::fs::hard_link(a, b)
+    })
+    .unwrap();
+    assert_eq!(out, dir.path().join("x (2).docx"));
+    assert_eq!(std::fs::read(&out).unwrap(), b"new");
+    assert_eq!(
+        std::fs::read(dir.path().join("x.docx")).unwrap(),
+        b"foreign"
+    );
+    assert_eq!(names(dir.path()), ["x (2).docx", "x.docx"], "no .tmp left");
+}
+
+#[test]
+fn publish_falls_back_to_rename_when_links_are_unsupported() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = publish_docx_with(&dir.path().join("x"), b"new", |_, _| {
+        Err(std::io::ErrorKind::Unsupported.into())
+    })
+    .unwrap();
+    assert_eq!(out, dir.path().join("x.docx"));
+    assert_eq!(std::fs::read(&out).unwrap(), b"new");
+    assert_eq!(names(dir.path()), ["x.docx"]);
+}
+
+#[test]
+fn publish_exhausting_every_name_is_io_and_leaves_no_temp() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = publish_docx_with(&dir.path().join("x"), b"new", |_, _| {
+        Err(std::io::ErrorKind::AlreadyExists.into())
+    })
+    .unwrap_err();
+    assert_eq!(e.kind, FileErrorKind::Io);
+    assert_eq!(e.message, "no free file name available");
+    assert!(names(dir.path()).is_empty());
+}
+
+#[test]
+fn publish_replaces_an_explicit_docx_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("x.docx");
+    std::fs::write(&target, b"old").unwrap();
+    let out =
+        publish_docx_with(&target, b"new", |_, _| panic!("explicit names do not link")).unwrap();
+    assert_eq!(out, target);
+    assert_eq!(std::fs::read(&target).unwrap(), b"new");
+    assert_eq!(names(dir.path()), ["x.docx"]);
+}
+
+#[test]
+fn sanitize_drops_bidi_and_zero_width_format_characters() {
+    assert_eq!(sanitize_export_name("abc\u{202E}def"), "abcdef.docx");
+    assert_eq!(sanitize_export_name("\u{2067}שיר\u{2069}"), "שיר.docx");
+    assert_eq!(sanitize_export_name("a\u{200B}b\u{FEFF}"), "ab.docx");
+    assert_eq!(sanitize_export_name("a\u{200F}b"), "a\u{200F}b.docx");
+    assert_eq!(sanitize_export_name("a\u{200E}b"), "a\u{200E}b.docx");
+}
+
+#[test]
+fn sanitize_caps_the_stem_without_splitting_a_combining_cluster() {
+    assert_eq!(
+        sanitize_export_name(&"ש".repeat(150)),
+        format!("{}.docx", "ש".repeat(100))
+    );
+    assert_eq!(
+        sanitize_export_name(&format!("{} .x", "a".repeat(99))),
+        format!("{}.docx", "a".repeat(99))
+    );
+    assert_eq!(
+        sanitize_export_name(&format!("a{}", "שָ".repeat(60))),
+        format!("a{}.docx", "שָ".repeat(49))
+    );
+    assert_eq!(
+        sanitize_export_name(&format!("ab{}", "שָׁ".repeat(40))),
+        format!("ab{}.docx", "שָׁ".repeat(32))
+    );
+}
+
+#[test]
+fn sanitize_defuses_windows_device_names() {
+    assert_eq!(sanitize_export_name("CON"), "_CON.docx");
+    assert_eq!(sanitize_export_name("nul.docx"), "_nul.docx");
+    assert_eq!(sanitize_export_name("com1.txt"), "_com1.txt.docx");
+    assert_eq!(sanitize_export_name("lpt9"), "_lpt9.docx");
+    assert_eq!(sanitize_export_name("CONCERT"), "CONCERT.docx");
+    assert_eq!(sanitize_export_name("com10"), "com10.docx");
 }
