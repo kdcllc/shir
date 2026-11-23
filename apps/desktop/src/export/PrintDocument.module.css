@@ -50,10 +50,6 @@
 }
 
 @media print {
-  :root:not([data-printing="export"]) [data-print-root] {
-    display: none;
-  }
-
   :root[data-printing="export"] :global(#root) {
     display: none !important;
   }

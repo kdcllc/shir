@@ -192,17 +192,30 @@ describe("buildDocx output", () => {
   });
 
   it("scales a too-wide line down to the printable width", async () => {
-    const chords = Array.from({ length: 30 }, () => "[Am7/G]x").join("");
+    const lead = "a long original lyric line that runs on and on ";
+    const chords = Array.from({ length: 24 }, () => "[Am7/G]x").join("");
     const d = await documentXml(
-      docOf("T", [inlineEntry(`{title: Wide}\n\n${chords}\n`)]),
+      docOf("T", [inlineEntry(`{title: Wide}\n\n${lead}${chords}\n`)]),
       false,
-      { lang: "en", dir: "ltr", dateText: "x" },
+      LTR_META,
     );
-    const grid = all(d, "w:gridCol").map((g) => Number(g.getAttribute("w:w")));
-    expect(grid).toHaveLength(30);
-    const sum = grid.reduce((a, b) => a + b, 0);
-    expect(sum).toBeLessThanOrEqual(9638 + grid.length);
-    expect(sum).toBeGreaterThan(9638 - grid.length);
+    const tbl = all(d, "w:tbl")[0] as Element;
+    const grid = all(tbl, "w:gridCol").map((g) =>
+      Number(g.getAttribute("w:w")),
+    );
+    const [chordRow, lyricRow] = rows(tbl) as [Element, Element];
+    const chordTexts = cellsOf(chordRow).map(text);
+    const lyricTexts = cellsOf(lyricRow).map(text);
+    const cells = chordTexts.map((chord, i) => ({
+      chord,
+      text: lyricTexts[i] as string,
+    }));
+    expect(lyricTexts.some((t) => t.length >= 40)).toBe(true);
+    expect(grid.length).toBeGreaterThanOrEqual(21);
+    const natural = estimateColumnWidths(cells).reduce((a, b) => a + b, 0);
+    expect(natural).toBeGreaterThan(9638);
+    expect(grid).toEqual(fitColumnWidths(estimateColumnWidths(cells), 9638));
+    expect(new Set(grid).size).toBeGreaterThan(1);
   });
 
   it("aligns rtl tables to the right margin (w:jc) and leaves ltr tables unaligned", async () => {
@@ -309,6 +322,33 @@ describe("buildDocx output", () => {
     expect(breaks.map(text)).toEqual(["שיר השלום", "Morning Light"]);
   });
 
+  it("gives the cover title its own direction, falling back to the UI direction", async () => {
+    const song = inlineEntry("{title: Road}\n\n[C]la\n");
+    const firstTwo = async (
+      title: string,
+      meta: typeof META | typeof LTR_META,
+    ) => {
+      const d = await documentXml(docOf(title, [song]), true, meta);
+      const [titleP, dateP] = all(d, "w:p") as [Element, Element];
+      return { titleP, dateP };
+    };
+    // (a) an rtl title in an ltr UI: only the title paragraph is bidi.
+    const a = await firstTwo("רשימה", LTR_META);
+    expect(has(a.titleP, "w:bidi")).toBe(true);
+    expect(rtlRuns(a.titleP)).toHaveLength(1);
+    expect(has(a.dateP, "w:bidi")).toBe(false);
+    // (b) an ltr title in an rtl UI: the title is not bidi, the date line is.
+    const b = await firstTwo("Sunday Set", META);
+    expect(has(b.titleP, "w:bidi")).toBe(false);
+    expect(rtlRuns(b.titleP)).toHaveLength(0);
+    expect(has(b.dateP, "w:bidi")).toBe(true);
+    // (c) no strong character: the UI direction decides.
+    const c1 = await firstTwo("2026", META);
+    expect(has(c1.titleP, "w:bidi")).toBe(true);
+    const c2 = await firstTwo("2026", LTR_META);
+    expect(has(c2.titleP, "w:bidi")).toBe(false);
+  });
+
   it("has no cover and no leading page break for a single song without cover", async () => {
     const d = await documentXml(docOf("שיר", [entry("he_niqqud")]));
     expect(all(d, "w:pageBreakBefore")).toHaveLength(0);
@@ -413,6 +453,18 @@ describe("buildDocx chord direction (04b)", () => {
         /[\u200E\u200F\u2066-\u2069]/.test(t.textContent ?? ""),
       ),
     ).toBe(false);
+  });
+
+  it("applies the ltr rules to an ltr chords line (chordsTable ltr branch)", async () => {
+    const d = await documentXml(
+      docOf("T", [inlineEntry("{title: Road}\n\n[C] [G] [Am] [F]\n")]),
+      false,
+      LTR_META,
+    );
+    const tbl = all(d, "w:tbl")[0] as Element;
+    const cells = chordCellsOf(tbl);
+    expect(cells.map(text)).toEqual(["C", "G", "Am", "F"]);
+    for (const tc of cells) expectChordCell(tc, false);
   });
 
   it("gives ltr cells of the mixed line left alignment and a right margin, rtl cells the mirror", async () => {

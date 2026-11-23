@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { STRINGS } from "../strings";
 import type { SetlistSummary } from "../storage";
@@ -16,8 +16,8 @@ const LISTS = [summary("s1", "Friday", 1), summary("s2", "שבת בבוקר", 3)
 function setup(over: Partial<Parameters<typeof SetlistsPanel>[0]> = {}) {
   const handlers = {
     onSelect: vi.fn(),
-    onCreate: vi.fn(),
-    onRename: vi.fn(),
+    onCreate: vi.fn(() => Promise.resolve(true)),
+    onRename: vi.fn(() => Promise.resolve(true)),
     onDuplicate: vi.fn(),
     onDelete: vi.fn(),
   };
@@ -42,6 +42,10 @@ const input = () => screen.getByTestId("setlist-name-input");
 const create = () => screen.getByTestId("setlist-create");
 const type = (value: string) =>
   fireEvent.change(input(), { target: { value } });
+const flush = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 
 describe("SetlistsPanel list", () => {
   it("shows each name in a bdi and the plural item count", () => {
@@ -120,13 +124,65 @@ describe("SetlistsPanel create", () => {
     expect(create()).toBeDisabled();
   });
 
-  it("creates with the trimmed name and clears the field", () => {
+  it("creates with the trimmed name and clears the field", async () => {
     const { onCreate } = setup();
     type("  Sunday  ");
     fireEvent.click(create());
     expect(onCreate).toHaveBeenCalledTimes(1);
     expect(onCreate).toHaveBeenCalledWith("Sunday");
+    await flush();
     expect(input()).toHaveValue("");
+  });
+
+  it("keeps the draft when the create resolves false", async () => {
+    const { onCreate } = setup();
+    onCreate.mockResolvedValue(false);
+    type("Evening set");
+    fireEvent.click(create());
+    await flush();
+    expect(onCreate).toHaveBeenCalledWith("Evening set");
+    expect(input()).toHaveValue("Evening set");
+    expect(create()).toBeEnabled();
+  });
+
+  it("keeps the draft when the create rejects and raises no unhandled rejection", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const { onCreate } = setup();
+      onCreate.mockRejectedValue(new Error("storage down"));
+      type("Evening set");
+      fireEvent.click(create());
+      await flush();
+      expect(input()).toHaveValue("Evening set");
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
+  it("clears the draft when the create resolves true", async () => {
+    setup();
+    type("Evening set");
+    fireEvent.click(create());
+    await flush();
+    expect(input()).toHaveValue("");
+  });
+
+  it("keeps a draft edited while the create is pending", async () => {
+    const { onCreate } = setup();
+    let settle: (ok: boolean) => void = () => undefined;
+    onCreate.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    type("Evening set");
+    fireEvent.click(create());
+    type("Morning set");
+    settle(true);
+    await flush();
+    expect(input()).toHaveValue("Morning set");
   });
 
   it("submitting an invalid name (Enter) creates nothing", () => {
@@ -149,13 +205,45 @@ describe("SetlistsPanel rename", () => {
     expect(within(rows()[0]!).queryByTestId("setlist-select")).toBeNull();
   });
 
-  it("Enter commits the trimmed new name", () => {
+  it("Enter commits the trimmed new name", async () => {
     const { onRename } = setup();
     startRename();
     fireEvent.change(renameInput(), { target: { value: "  Saturday " } });
     fireEvent.keyDown(renameInput(), { key: "Enter" });
     expect(onRename).toHaveBeenCalledWith("s1", "Saturday");
+    await flush();
     expect(screen.queryByTestId("setlist-rename-input")).toBeNull();
+  });
+
+  it("keeps the rename input open with the typed value when the rename resolves false", async () => {
+    const { onRename } = setup();
+    onRename.mockResolvedValue(false);
+    startRename();
+    fireEvent.change(renameInput(), { target: { value: "Morning set" } });
+    fireEvent.keyDown(renameInput(), { key: "Enter" });
+    await flush();
+    expect(onRename).toHaveBeenCalledWith("s1", "Morning set");
+    expect(renameInput()).toHaveValue("Morning set");
+  });
+
+  it("closes the rename input when the rename resolves true", async () => {
+    setup();
+    startRename();
+    fireEvent.change(renameInput(), { target: { value: "Morning set" } });
+    fireEvent.keyDown(renameInput(), { key: "Enter" });
+    expect(renameInput()).toHaveValue("Morning set");
+    await flush();
+    expect(screen.queryByTestId("setlist-rename-input")).toBeNull();
+  });
+
+  it("Enter in the rename input while busy makes no call", () => {
+    const { onRename, rerender, props } = setup();
+    startRename();
+    fireEvent.change(renameInput(), { target: { value: "Morning set" } });
+    rerender({ ...props, busy: true });
+    fireEvent.keyDown(renameInput(), { key: "Enter" });
+    expect(onRename).not.toHaveBeenCalled();
+    expect(renameInput()).toHaveValue("Morning set");
   });
 
   it("Escape cancels without a call", () => {

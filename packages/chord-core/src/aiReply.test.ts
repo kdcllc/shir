@@ -17,7 +17,10 @@ describe("parseAiReply", () => {
 
   it("extracts titles", () => {
     const r = parseAiReply(readAiReply("two_songs_fenced"));
-    expect(r.songs.map((s) => s.title)).toEqual(["שיר הנחל", "Harbor Light"]);
+    expect(r.songs.map((s) => s.title)).toEqual([
+      "שיר הנחל",
+      "Saltwater Steps",
+    ]);
   });
 
   it("leaves title unset when the song has none", () => {
@@ -95,5 +98,52 @@ describe("parseAiReply", () => {
         Array.from({ length: 500 }, (_, i) => song(i)).join("{ns}\n"),
       ).truncated,
     ).toBe(false);
+  });
+
+  describe("CommonMark fences", () => {
+    const chordpro = (reply: string): string[] =>
+      parseAiReply(reply).songs.map((x) => x.chordpro);
+
+    it("closes only on the same character, at least as long, with nothing after", () => {
+      expect(
+        chordpro("```\n{title: A}\n```chordpro\nA [C]line\n```\n"),
+      ).toEqual(["{title: A}\n```chordpro\nA [C]line\n"]);
+      expect(chordpro("````\n{title: A}\n```\nA [C]line\n````\n")).toEqual([
+        "{title: A}\n```\nA [C]line\n",
+      ]);
+    });
+
+    it("closes on a fence followed by trailing spaces", () => {
+      expect(chordpro("```\n{title: A}\nA [C]line\n```   \n")).toEqual([
+        "{title: A}\nA [C]line\n",
+      ]);
+    });
+  });
+
+  describe("unfenced fallback", () => {
+    const chordpro = (reply: string): string[] =>
+      parseAiReply(reply).songs.map((x) => x.chordpro);
+
+    it("keeps an unfenced reply that ends with a stray fence line", () => {
+      expect(chordpro("{title: A}\nA [C]line\n```\n")).toEqual([
+        "{title: A}\nA [C]line\n",
+      ]);
+    });
+
+    it("keeps the songs before a decorative fence line", () => {
+      expect(
+        chordpro(
+          "{title: A}\nA [C]line\n{new_song}\n~~~~\n{title: B}\nB [G]line\n",
+        ),
+      ).toEqual(["{title: A}\nA [C]line\n", "{title: B}\nB [G]line\n"]);
+    });
+
+    it("keeps an unfenced reply when its only fence has nothing inside", () => {
+      expect(chordpro("Intro text\n```\n")).toEqual(["Intro text\n"]);
+    });
+
+    it("gives no songs for an empty fenced block", () => {
+      expect(chordpro("```\n```\n")).toEqual([]);
+    });
   });
 });

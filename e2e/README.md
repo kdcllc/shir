@@ -60,6 +60,7 @@ hard-coded copies.
 | `library.e2e.ts`   | language filter, artist sort, persistence across a restart                                                                                       |
 | `editor.e2e.ts`    | g7 F19 (real double-click) and F54 (picker vs Add section)                                                                                       |
 | `setlists.e2e.ts`  | setlist core flow: create, add two songs, reorder, transpose/capo, persistence after a restart, duplicate, song-delete cascade, delete duplicate |
+| `print.e2e.ts`     | g7 F28: print rules unwrapped in the real WebKitGTK cascade; chrome hidden, lyrics visible (English and Hebrew UI)                               |
 | `ai-import.e2e.ts` | Import with AI paste-back: attach prompt, copy result, a two-song reply reviewed and saved, Hebrew chord rendered as an LTR symbol               |
 
 ## F39 (Paste from the real clipboard): not added
@@ -78,7 +79,7 @@ current context, possibly because the user denied permission.
 (`navigator.clipboard.readText` exists and `window.isSecureContext` is true.) The editor
 then shows its own fallback, "Could not read the clipboard. Paste with Ctrl+V, then use
 Convert." (`editor-paste-error`). The clipboard is never faked inside the page, so no
-F39 spec exists.
+F39 spec exists. This was re-checked in g12 and stays a recorded limitation (wontfix, D4).
 
 ## Node version
 

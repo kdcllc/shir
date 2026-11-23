@@ -1,0 +1,32 @@
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.label {
+  color: GrayText;
+  font-size: 0.85rem;
+}
+
+.input {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: 0.3rem;
+  padding-inline: 0.5rem;
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 1px;
+}

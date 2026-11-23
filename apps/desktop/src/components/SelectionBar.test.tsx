@@ -122,6 +122,19 @@ describe("SelectionBar", () => {
     expect(props.onDelete).not.toHaveBeenCalled();
   });
 
+  it("addDisabled disables Add to setlist even with a selection", () => {
+    const props = setup({ selecting: true, count: 2, addDisabled: true });
+    const add = screen.getByTestId("add-selected-to-setlist");
+    expect(add).toBeDisabled();
+    fireEvent.click(add);
+    expect(props.onAddToSetlist).not.toHaveBeenCalled();
+  });
+
+  it("leaves Add to setlist enabled when addDisabled is omitted", () => {
+    setup({ selecting: true, count: 2 });
+    expect(screen.getByTestId("add-selected-to-setlist")).toBeEnabled();
+  });
+
   it("startRef receives the Select button", () => {
     const startRef = createRef<HTMLButtonElement>();
     setup({ startRef });

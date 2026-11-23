@@ -101,12 +101,30 @@ function saveExportArgs(src: string): string | undefined {
   return /^\s*saveExportDocx: \(([^)]*)\)/m.exec(src)?.[1];
 }
 
+/** Commands (by camelCase name) whose bindings argument list has a path-like parameter. */
+function pathParamProblems(src: string, commands: readonly string[]): string[] {
+  const problems: string[] = [];
+  for (const c of commands) {
+    const args = new RegExp(`^\\s*${c}: \\(([^)]*)\\)`, "m").exec(src)?.[1];
+    if (args === undefined) {
+      problems.push(`bindings.ts has no ${c}`);
+    } else if (/\b(path|filePath|file_path|filename)\b\s*[:?]/i.test(args)) {
+      problems.push(`${c} takes a path argument`);
+    }
+  }
+  return problems;
+}
+
 function noPathProblems(src: string): string[] {
-  const args = saveExportArgs(src);
-  if (args === undefined) return ["bindings.ts has no saveExportDocx"];
-  return /\b(path|filePath|file_path|filename)\b\s*[:?]/i.test(args)
-    ? ["saveExportDocx takes a path argument"]
-    : [];
+  return pathParamProblems(src, ["saveExportDocx"]);
+}
+
+function saveExportArgProblems(src: string): string[] {
+  return /^defaultName: string, filterName: string, bytesBase64: string, options\?: InvokeOptions$/.test(
+    saveExportArgs(src) ?? "",
+  )
+    ? []
+    : ["saveExportDocx does not take bytesBase64: string"];
 }
 
 function wrapperProblems(storage: string, files: string): string[] {
@@ -212,7 +230,10 @@ describe("(a) the 11 new commands are registered end to end", () => {
 describe("(b) no webview-supplied write path", () => {
   it("saveExportDocx takes no path argument; dialog:allow-save and fs: are absent", () => {
     const args = saveExportArgs(read(BINDINGS));
-    expect(args).toMatch(/^defaultName: string, filterName: string, bytes: /);
+    expect(args).toBe(
+      "defaultName: string, filterName: string, bytesBase64: string, options?: InvokeOptions",
+    );
+    expect(saveExportArgProblems(read(BINDINGS))).toEqual([]);
     expect(noPathProblems(read(BINDINGS))).toEqual([]);
     const perms = (JSON.parse(read(CAPABILITY)) as { permissions: string[] })
       .permissions;
@@ -221,14 +242,33 @@ describe("(b) no webview-supplied write path", () => {
   });
 
   it("no setlist or export command in bindings has a path-like parameter", () => {
+    expect(pathParamProblems(read(BINDINGS), NEW_COMMANDS.map(camel))).toEqual(
+      [],
+    );
+  });
+
+  it("negative: a path argument on renameSetlist is reported", () => {
     const src = read(BINDINGS);
-    for (const c of NEW_COMMANDS) {
-      const args = new RegExp(`^\\s*${camel(c)}: \\(([^)]*)\\)`, "m").exec(
-        src,
-      )?.[1];
-      expect(args, c).toBeDefined();
-      expect(args, c).not.toMatch(/\b(path|filePath|filename)\b/i);
-    }
+    const mutated = src.replace(
+      "renameSetlist: (",
+      "renameSetlist: (path: string, ",
+    );
+    expect(mutated).not.toBe(src);
+    expect(pathParamProblems(mutated, NEW_COMMANDS.map(camel))).toEqual([
+      "renameSetlist takes a path argument",
+    ]);
+  });
+
+  it("negative: the pre-base64 bytes: number[] binding is reported", () => {
+    const src = read(BINDINGS);
+    const mutated = src.replace(
+      "bytesBase64: string, options",
+      "bytes: number[], options",
+    );
+    expect(mutated).not.toBe(src);
+    expect(saveExportArgProblems(mutated)).toEqual([
+      "saveExportDocx does not take bytesBase64: string",
+    ]);
   });
 
   it("negative: a path argument on saveExportDocx is reported", () => {

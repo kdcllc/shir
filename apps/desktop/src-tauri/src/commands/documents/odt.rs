@@ -17,6 +17,12 @@ struct Walker {
     skip_depth: usize,
     /// Repeat count of each open cell (innermost last); `None` marks a covered cell.
     cells: Vec<Option<usize>>,
+    /// White space seen in the open paragraph, not yet written (ODF 1.2 section 6.1.2).
+    pending_space: bool,
+    /// The open paragraph already holds output, so a pending space is not at its start.
+    para_has_output: bool,
+    /// Open `text:p` / `text:h` nesting; the white-space state belongs to the outermost.
+    para_depth: usize,
 }
 
 fn parse_count(v: Option<String>) -> usize {
@@ -26,6 +32,41 @@ fn parse_count(v: Option<String>) -> usize {
 }
 
 impl Walker {
+    /// Write the output of a special element (`text:s`, `text:tab`, `text:line-break`):
+    /// never collapsed, but a pending literal space comes first.
+    fn emit(&mut self, s: &str) {
+        self.flush_pending_space();
+        self.b.push_str(s);
+        self.para_has_output = true;
+    }
+
+    fn flush_pending_space(&mut self) {
+        if self.pending_space && self.para_has_output {
+            self.b.push_str(" ");
+        }
+        self.pending_space = false;
+    }
+
+    /// Literal text: a run of white space becomes one space, dropped at the paragraph start
+    /// and end (the end drop happens by resetting the flag).
+    fn literal(&mut self, s: &str) {
+        for c in s.chars() {
+            if matches!(c, ' ' | '\t' | '\r' | '\n') {
+                self.pending_space = true;
+            } else {
+                self.flush_pending_space();
+                let mut buf = [0u8; 4];
+                self.b.push_str(c.encode_utf8(&mut buf));
+                self.para_has_output = true;
+            }
+        }
+    }
+
+    fn reset_para(&mut self) {
+        self.pending_space = false;
+        self.para_has_output = false;
+    }
+
     /// Handle an opening tag. Returns `true` when its subtree must be skipped.
     fn start(&mut self, e: &BytesStart<'_>) -> Result<bool, DocError> {
         let name = e.local_name();
@@ -36,12 +77,18 @@ impl Walker {
                     .warn_skipped("image", "an embedded image was skipped");
                 return Ok(true);
             }
-            "p" | "h" => self.b.begin_para(),
-            "tab" => self.b.push_str("\t"),
-            "line-break" => self.b.push_str("\n"),
+            "p" | "h" => {
+                if self.para_depth == 0 {
+                    self.reset_para();
+                }
+                self.para_depth += 1;
+                self.b.begin_para();
+            }
+            "tab" => self.emit("\t"),
+            "line-break" => self.emit("\n"),
             "s" => {
                 let n = parse_count(attr(e, "c")?);
-                self.b.push_str(&" ".repeat(n));
+                self.emit(&" ".repeat(n));
             }
             "table" => self.b.begin_table(),
             "table-row" => self.b.begin_row(),
@@ -61,7 +108,13 @@ impl Walker {
 
     fn end(&mut self, local: &str) {
         match local {
-            "p" | "h" => self.b.end_para(),
+            "p" | "h" => {
+                self.para_depth = self.para_depth.saturating_sub(1);
+                if self.para_depth == 0 {
+                    self.reset_para();
+                }
+                self.b.end_para();
+            }
             "table" => self.b.end_table(),
             "table-row" => self.b.end_row(),
             "table-cell" | "covered-table-cell" => {
@@ -81,6 +134,9 @@ fn walk(xml: &[u8]) -> Result<DocumentText, DocError> {
         b: Builder::default(),
         skip_depth: 0,
         cells: Vec::new(),
+        pending_space: false,
+        para_has_output: false,
+        para_depth: 0,
     };
     let mut depth = 0usize;
     loop {
@@ -108,11 +164,11 @@ fn walk(xml: &[u8]) -> Result<DocumentText, DocError> {
                     w.end(e.local_name().as_ref());
                 }
             }
-            Event::Text(t) if w.skip_depth == 0 => w.b.push_str(&t.xml10_content()),
-            Event::CData(t) if w.skip_depth == 0 => w.b.push_str(&t.xml10_content()),
+            Event::Text(t) if w.skip_depth == 0 => w.literal(&t.xml10_content()),
+            Event::CData(t) if w.skip_depth == 0 => w.literal(&t.xml10_content()),
             Event::GeneralRef(r) if w.skip_depth == 0 => {
                 let s = resolve_ref(&r)?;
-                w.b.push_str(&s);
+                w.literal(&s);
             }
             _ => {}
         }
@@ -210,6 +266,17 @@ mod tests {
     }
 
     #[test]
+    fn nested_table_with_trailing_empty_paragraph_has_no_trailing_newline() {
+        let b = blocks(
+            "<table:table><table:table-row><table:table-cell><text:p>top</text:p>\
+             <table:table><table:table-row><table:table-cell><text:p>a</text:p></table:table-cell>\
+             <table:table-cell><text:p>b</text:p></table:table-cell></table:table-row></table:table>\
+             <text:p/></table:table-cell></table:table-row></table:table>",
+        );
+        assert_eq!(b, vec![table(&[&["top\na\tb"]])]);
+    }
+
+    #[test]
     fn skipped_content_and_warnings() {
         let d = extract(&odt(
             "<text:p>keep<text:soft-page-break/><office:annotation><text:p>note</text:p></office:annotation>\
@@ -224,9 +291,35 @@ mod tests {
     }
 
     #[test]
-    fn entities_and_preserved_whitespace() {
+    fn entities_are_decoded_and_literal_whitespace_collapses() {
         let b = blocks("<text:p>  A &amp; B &lt;c&gt;  </text:p>");
-        assert_eq!(b, vec![para("  A & B <c>  ")]);
+        assert_eq!(b, vec![para("A & B <c>")]);
+    }
+
+    #[test]
+    fn literal_whitespace_collapses() {
+        assert_eq!(blocks("<text:p>\n  a \t\n b  </text:p>"), vec![para("a b")]);
+        assert_eq!(
+            blocks("<text:p>a <text:span> b</text:span></text:p>"),
+            vec![para("a b")]
+        );
+        assert_eq!(
+            blocks("<text:p><text:s text:c=\"2\"/>Am <text:s/>D</text:p>"),
+            vec![para("  Am  D")]
+        );
+        assert_eq!(
+            blocks("<text:p>x<text:tab/> y</text:p>"),
+            vec![para("x\t y")]
+        );
+    }
+
+    #[test]
+    fn nested_note_paragraph_keeps_surrounding_spaces() {
+        let b = blocks(
+            "<text:p>word <text:note><text:note-citation>1</text:note-citation><text:note-body>\
+             <text:p>fn</text:p></text:note-body></text:note> next</text:p>",
+        );
+        assert_eq!(b, vec![para("word 1fn next")]);
     }
 
     #[test]

@@ -189,13 +189,14 @@ export function buildExportDocument(
   };
 }
 
+/** Hebrew or Arabic first code point; the same set as `RTL_LETTER` in `direction.ts`. */
+const RTL_START = /^[\p{Script=Hebrew}\p{Script=Arabic}]/u;
+
 type CharClass = "rtl" | "ltr" | "neutral";
 
 function classify(grapheme: string): CharClass {
   const cp = grapheme.codePointAt(0) ?? 0;
-  if ((cp >= 0x0590 && cp <= 0x05ff) || (cp >= 0xfb1d && cp <= 0xfb4f)) {
-    return "rtl";
-  }
+  if (RTL_START.test(grapheme)) return "rtl";
   if (/^\p{L}/u.test(grapheme) || (cp >= 0x30 && cp <= 0x39)) return "ltr";
   return "neutral";
 }

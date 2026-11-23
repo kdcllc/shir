@@ -4,7 +4,8 @@
 use super::{
     DocBlock, DocError, DocErrorKind, DocFormat, DocWarning, DocWarningKind, DocumentText,
 };
-use pdf_extract::{Document, MediaBox, OutputDev, OutputError, Transform};
+use pdf_extract::{Document, MediaBox, Object, ObjectId, OutputDev, OutputError, Transform};
+use std::ops::Range;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -51,15 +52,24 @@ fn is_hebrew_mark(c: char) -> bool {
         || matches!(c, '\u{05C4}'..='\u{05C5}' | '\u{05C7}' | '\u{FB1E}')
 }
 
-/// A glyph that carries visible text. A zero-width glyph that is neither a mark nor a letter
-/// is an unmapped placeholder (the crate decodes a missing ToUnicode entry as its byte, e.g.
-/// "0") and is dropped.
+/// A glyph that carries visible text. A zero-width `Neutral` glyph whose text is exactly one
+/// ASCII graphic character is an unmapped placeholder (the crate falls back to the encoding for
+/// a missing ToUnicode entry and yields the byte, e.g. "0") and is dropped. A zero-width
+/// non-ASCII neutral (maqaf, sof pasuq) is real text and is kept. The clusters such placeholders
+/// used to hide (LibreOffice ligature glyphs for niqqud) are restored from the page's
+/// `/ActualText` spans (see `scan_page_spans`).
 fn is_visible(g: &Glyph) -> bool {
     match kind_of(&g.text) {
         Kind::Blank => false,
-        Kind::Neutral => g.width > 0.0,
+        Kind::Neutral => g.width > 0.0 || !is_placeholder(&g.text),
         _ => true,
     }
+}
+
+/// Exactly one ASCII graphic character.
+fn is_placeholder(text: &str) -> bool {
+    let mut chars = text.chars();
+    matches!((chars.next(), chars.next()), (Some(c), None) if c.is_ascii_graphic())
 }
 
 fn kind_of(text: &str) -> Kind {
@@ -196,9 +206,10 @@ fn line_is_rtl(items: &[Item]) -> bool {
 }
 
 /// Convert one visual line (glyphs sorted by x) to logical text. `avg` is the typical character
-/// width and `left_edge` the page's minimum glyph x. Returns the text and whether any RTL run
-/// was reordered.
-fn reorder_line(line: &[&Glyph], avg: f64, left_edge: f64) -> (String, bool) {
+/// width, `left_edge` the page's minimum glyph x and `right_edge` its maximum glyph right edge.
+/// A right-to-left line is indented from the right edge, any other line from the left edge.
+/// Returns the text and whether any RTL run was reordered.
+fn reorder_line(line: &[&Glyph], avg: f64, left_edge: f64, right_edge: f64) -> (String, bool) {
     let mut items = attach_marks(line);
     items.sort_by(|a, b| a.x.total_cmp(&b.x));
     if items.is_empty() {
@@ -228,7 +239,11 @@ fn reorder_line(line: &[&Glyph], avg: f64, left_edge: f64) -> (String, bool) {
         }
     }
     let reordered = runs.iter().any(|r| r.2);
-    let mut out = " ".repeat(spaces_for(items[0].x - left_edge, avg));
+    let indent = match items.last() {
+        Some(last) if rtl_line => spaces_for(right_edge - last.right, avg),
+        _ => spaces_for(items[0].x - left_edge, avg),
+    };
+    let mut out = " ".repeat(indent);
     let emit_run = |out: &mut String, r: &(usize, usize, bool)| {
         if r.2 {
             for i in (r.0..=r.1).rev() {
@@ -273,6 +288,12 @@ fn build_page_lines(page: &[&Glyph]) -> (Vec<String>, bool) {
     }
     let avg = median_width(&glyphs);
     let left_edge = glyphs.iter().map(|g| g.x).fold(f64::INFINITY, f64::min);
+    // Marks are zero-width and may sit outside every base: they never set the edge.
+    let right_edge = glyphs
+        .iter()
+        .filter(|g| kind_of(&g.text) != Kind::Mark)
+        .map(|g| g.x + g.width)
+        .fold(f64::NEG_INFINITY, f64::max);
     // Total order, so the stream order of the input never matters.
     glyphs.sort_by(|a, b| {
         b.y.total_cmp(&a.y)
@@ -302,7 +323,7 @@ fn build_page_lines(page: &[&Glyph]) -> (Vec<String>, bool) {
     let mut out = Vec::with_capacity(lines.len());
     for mut line in lines {
         line.sort_by(|a, b| a.x.total_cmp(&b.x).then_with(|| a.text.cmp(&b.text)));
-        let (text, r) = reorder_line(&line, avg, left_edge);
+        let (text, r) = reorder_line(&line, avg, left_edge, right_edge);
         reordered |= r;
         out.push(text);
     }
@@ -330,6 +351,33 @@ struct Collector {
     page: u32,
     glyphs: Vec<Glyph>,
     too_large: bool,
+    /// Most glyphs accepted before the collection fails.
+    max_glyphs: usize,
+    /// (page number, index of the page's first glyph), in page order.
+    page_starts: Vec<(u32, usize)>,
+}
+
+impl Collector {
+    fn new(max_glyphs: usize) -> Self {
+        Collector {
+            page: 0,
+            glyphs: Vec::new(),
+            too_large: false,
+            max_glyphs,
+            page_starts: Vec::new(),
+        }
+    }
+
+    /// Index range of the glyphs collected for page `page_num`.
+    fn page_range(&self, page_num: u32) -> Option<Range<usize>> {
+        let i = self.page_starts.iter().position(|(p, _)| *p == page_num)?;
+        let start = self.page_starts[i].1;
+        let end = self
+            .page_starts
+            .get(i + 1)
+            .map_or(self.glyphs.len(), |(_, s)| *s);
+        Some(start..end)
+    }
 }
 
 impl OutputDev for Collector {
@@ -340,6 +388,7 @@ impl OutputDev for Collector {
         _art_box: Option<(f64, f64, f64, f64)>,
     ) -> Result<(), OutputError> {
         self.page = page_num;
+        self.page_starts.push((page_num, self.glyphs.len()));
         Ok(())
     }
     fn end_page(&mut self) -> Result<(), OutputError> {
@@ -353,7 +402,7 @@ impl OutputDev for Collector {
         font_size: f64,
         char: &str,
     ) -> Result<(), OutputError> {
-        if self.glyphs.len() >= MAX_GLYPHS {
+        if self.glyphs.len() >= self.max_glyphs {
             self.too_large = true;
             return Err(OutputError::IoError(std::io::Error::other(
                 "too many glyphs",
@@ -393,17 +442,178 @@ fn load_error(e: &pdf_extract::Error) -> DocError {
     }
 }
 
+/// The `/ActualText` spans of one page, counted in character codes shown by the page's own
+/// content stream (the unit pdf-extract reports one glyph for).
+#[derive(Debug, Clone, PartialEq)]
+struct PageSpans {
+    /// Character codes shown by the page.
+    total_codes: usize,
+    /// Outermost spans as (first code index, code count, replacement text), in stream order.
+    spans: Vec<(usize, usize, String)>,
+}
+
+/// Marked-content nesting entry.
+#[derive(Clone, Copy)]
+enum Frame {
+    /// `BMC`, or `BDC` without `/ActualText`.
+    Plain,
+    /// An `/ActualText` span that is not inside another one.
+    Outer,
+    /// An `/ActualText` span covered by an outer one.
+    Nested,
+}
+
+/// Bytes per character code of a font, or `None` when it cannot be told: a `Type0` font is
+/// counted only with an `/Identity-H` or `/Identity-V` encoding name; every other `Type0`
+/// CMap is left alone.
+fn code_width(doc: &Document, font: &pdf_extract::Dictionary) -> Option<usize> {
+    let name_of = |key: &[u8]| -> Option<Vec<u8>> {
+        let (_, obj) = doc.dereference(font.get(key).ok()?).ok()?;
+        obj.as_name().ok().map(<[u8]>::to_vec)
+    };
+    if name_of(b"Subtype").as_deref() == Some(b"Type0") {
+        let enc = name_of(b"Encoding")?;
+        (enc == b"Identity-H" || enc == b"Identity-V").then_some(2)
+    } else {
+        Some(1)
+    }
+}
+
+/// Character codes in a shown string, `None` for an odd length in a 2-byte font.
+fn code_count(s: &[u8], width: usize) -> Option<usize> {
+    s.len().is_multiple_of(width).then_some(s.len() / width)
+}
+
+/// Walk the page content and collect its `/ActualText` spans. `None` leaves the page alone
+/// (missing content, bad operands, unknown font). Only an inline property-list dictionary is
+/// read; a named property list (`/Span /MC0 BDC`, resolved through `/Properties`) is out of
+/// scope and counts as "no ActualText".
+fn scan_page_spans(doc: &Document, page_id: ObjectId) -> Option<PageSpans> {
+    let content = doc.get_and_decode_page_content(page_id).ok()?;
+    let fonts = doc.get_page_fonts(page_id).ok()?;
+    let mut width: Option<usize> = None;
+    let mut stack: Vec<Frame> = Vec::new();
+    // The open outermost span: (first code index, decoded text or None on a decode error).
+    let mut open: Option<(usize, Option<String>)> = None;
+    let mut total = 0usize;
+    let mut spans = Vec::new();
+    for op in &content.operations {
+        let shown: Option<usize> = match op.operator.as_str() {
+            "Tf" => {
+                let name = op.operands.first()?.as_name().ok()?;
+                width = fonts.get(name).and_then(|f| code_width(doc, f));
+                None
+            }
+            "BMC" => {
+                stack.push(Frame::Plain);
+                None
+            }
+            "BDC" => {
+                let text = match op.operands.get(1) {
+                    Some(Object::Dictionary(d)) => d.get(b"ActualText").ok(),
+                    _ => None,
+                };
+                match text {
+                    None => stack.push(Frame::Plain),
+                    Some(_) if open.is_some() => stack.push(Frame::Nested),
+                    Some(obj) => {
+                        open = Some((total, pdf_extract::decode_text_string(obj).ok()));
+                        stack.push(Frame::Outer);
+                    }
+                }
+                None
+            }
+            "EMC" => {
+                if let Some(Frame::Outer) = stack.pop() {
+                    if let Some((start, Some(text))) = open.take() {
+                        if total > start {
+                            spans.push((start, total - start, text));
+                        }
+                    }
+                }
+                None
+            }
+            "Tj" | "'" => match op.operands.first()? {
+                Object::String(s, _) => code_count(s, width?),
+                _ => return None,
+            },
+            "\"" => match op.operands.get(2)? {
+                Object::String(s, _) => code_count(s, width?),
+                _ => return None,
+            },
+            "TJ" => {
+                let Object::Array(items) = op.operands.first()? else {
+                    return None;
+                };
+                let mut n = 0usize;
+                for e in items {
+                    if let Object::String(s, _) = e {
+                        n = n.checked_add(code_count(s, width?)?)?;
+                    }
+                }
+                Some(n)
+            }
+            _ => None,
+        };
+        if let Some(n) = shown {
+            total = total.checked_add(n)?;
+        }
+    }
+    Some(PageSpans {
+        total_codes: total,
+        spans,
+    })
+}
+
+/// Replace each span's glyphs (a contiguous run in stream order) with one glyph carrying the
+/// span's text. Only applies when the page's glyph count equals the pre-pass's code count;
+/// otherwise (Form XObjects, other CMaps, decode failures) the page is left unchanged.
+fn apply_actual_text(glyphs: &mut Vec<Glyph>, page_range: Range<usize>, spans: &PageSpans) {
+    if page_range.end > glyphs.len() || page_range.len() != spans.total_codes {
+        return;
+    }
+    // Back to front, so earlier indices stay valid while spans shrink.
+    for (start, len, text) in spans.spans.iter().rev() {
+        let lo = page_range.start + start;
+        let hi = lo + len;
+        if start + len > spans.total_codes || *len == 0 {
+            continue;
+        }
+        if text.is_empty() {
+            glyphs.drain(lo..hi);
+            continue;
+        }
+        let run = &glyphs[lo..hi];
+        let min_x = run.iter().map(|g| g.x).fold(f64::INFINITY, f64::min);
+        let max_right = run
+            .iter()
+            .map(|g| g.x + g.width)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let first = &run[0];
+        let merged = Glyph {
+            page: first.page,
+            x: min_x,
+            y: first.y,
+            width: max_right - min_x,
+            font_size: first.font_size,
+            text: text.clone(),
+        };
+        glyphs.splice(lo..hi, [merged]);
+    }
+}
+
 /// The crate work: load, collect glyphs, build blocks.
 fn extract_blocking(bytes: &[u8]) -> Result<DocumentText, DocError> {
+    extract_with_limit(bytes, MAX_GLYPHS)
+}
+
+/// `extract_blocking` with an explicit glyph cap.
+fn extract_with_limit(bytes: &[u8], max_glyphs: usize) -> Result<DocumentText, DocError> {
     let mut doc = Document::load_mem(bytes).map_err(|e| load_error(&e))?;
     if doc.is_encrypted() && doc.decrypt("").is_err() {
         return Err(corrupt("encrypted PDF"));
     }
-    let mut collector = Collector {
-        page: 0,
-        glyphs: Vec::new(),
-        too_large: false,
-    };
+    let mut collector = Collector::new(max_glyphs);
     let result = pdf_extract::output_doc(&doc, &mut collector);
     if collector.too_large {
         return Err(DocError::new(
@@ -412,6 +622,15 @@ fn extract_blocking(bytes: &[u8]) -> Result<DocumentText, DocError> {
         ));
     }
     result.map_err(|e| corrupt(format!("cannot read PDF text: {e}")))?;
+    // Last page first: a replacement shrinks the vector and moves later pages only.
+    for (page_num, page_id) in doc.get_pages().into_iter().rev() {
+        if let (Some(range), Some(spans)) = (
+            collector.page_range(page_num),
+            scan_page_spans(&doc, page_id),
+        ) {
+            apply_actual_text(&mut collector.glyphs, range, &spans);
+        }
+    }
     let (lines, reordered) = build_lines(&collector.glyphs);
     let blocks: Vec<DocBlock> = lines
         .into_iter()
@@ -668,12 +887,16 @@ mod tests {
 
     /// A one-page PDF with an empty content stream (no text objects).
     fn blank_pdf() -> Vec<u8> {
-        let objs = [
+        assemble(&[
             "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>".to_string(),
             "<< /Length 0 >>\nstream\n\nendstream".to_string(),
-        ];
+        ])
+    }
+
+    /// Serialize objects 1..=n (object 1 is the catalog) with an xref table.
+    fn assemble(objs: &[String]) -> Vec<u8> {
         let mut out = b"%PDF-1.4\n".to_vec();
         let mut offsets = Vec::new();
         for (i, o) in objs.iter().enumerate() {
@@ -693,6 +916,34 @@ mod tests {
             .bytes(),
         );
         out
+    }
+
+    /// `blank_pdf` with a page that has the Helvetica font `/F1` and the given content stream.
+    fn text_pdf(content: &str) -> Vec<u8> {
+        assemble(&[
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 800] /Contents 4 0 R \
+             /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
+             /Encoding /WinAnsiEncoding >> >> >> >>"
+                .to_string(),
+            format!(
+                "<< /Length {} >>\nstream\n{content}\nendstream",
+                content.len() + 1
+            ),
+        ])
+    }
+
+    fn paragraphs(bytes: &[u8]) -> Vec<String> {
+        extract(bytes)
+            .unwrap()
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                DocBlock::Paragraph { text } => Some(text.clone()),
+                DocBlock::Table { .. } => None,
+            })
+            .collect()
     }
 
     #[test]
@@ -740,13 +991,6 @@ mod tests {
             .collect()
     }
 
-    /// Fixture lines (name, 0-based line index) that cannot match the oracle with marks kept.
-    /// Cause: LibreOffice 7.3 draws "shin + segol + shin dot" as one glyph whose ToUnicode
-    /// entry is ambiguous, and a zero-width mark glyph has no ToUnicode entry, so the segol of
-    /// "השמש" cannot be placed on the mem from the PDF's own text mapping (pdftotext garbles
-    /// the same line). Line 5 (0-based) of he_chords_above.pdf.lines.json is that line.
-    const KNOWN_LOSSY_PDF_LINES: &[(&str, usize)] = &[("he_chords_above", 5)];
-
     fn strip_marks(s: &str) -> String {
         s.chars().filter(|c| !is_hebrew_mark(*c)).collect()
     }
@@ -770,24 +1014,186 @@ mod tests {
     }
 
     #[test]
-    fn fixture_lines_match_the_oracle_with_marks_except_known_lossy() {
-        assert_eq!(KNOWN_LOSSY_PDF_LINES.len(), 1);
+    fn fixture_lines_match_the_oracle_with_marks() {
         for name in FIXTURE_NAMES {
             let want = oracle(name);
             let got = fixture_paragraphs(name);
             assert_eq!(got.len(), want.len(), "fixture {name}: line count");
             for (i, (g, w)) in got.iter().zip(&want).enumerate() {
-                let lossy = KNOWN_LOSSY_PDF_LINES.contains(&(name, i));
-                if lossy {
-                    assert_ne!(g, w, "fixture {name} line {i} now matches: drop the entry");
-                } else {
-                    assert_eq!(g, w, "fixture {name} line {i}");
-                }
+                assert_eq!(g, w, "fixture {name} line {i}");
             }
         }
-        for (name, i) in KNOWN_LOSSY_PDF_LINES {
-            assert!(FIXTURE_NAMES.contains(name) && *i < oracle(name).len());
+    }
+
+    #[test]
+    fn actual_text_replaces_span_glyphs() {
+        // 16.672 = Helvetica "b" advance (556/1000 * 12) past x=10: no gap between the two glyphs.
+        let pdf = text_pdf(
+            "BT /F1 12 Tf 1 0 0 1 16.672 700 Tm /Span <</ActualText <FEFF05E905B605C1>>> BDC (a) Tj EMC \
+             1 0 0 1 10 700 Tm /Span <</ActualText <FEFF05DC>>> BDC (b) Tj EMC ET",
+        );
+        assert_eq!(paragraphs(&pdf), vec!["שֶׁל"]);
+        // Without spans the same glyphs read "ba".
+        let plain =
+            text_pdf("BT /F1 12 Tf 1 0 0 1 16.672 700 Tm (a) Tj 1 0 0 1 10 700 Tm (b) Tj ET");
+        assert_eq!(paragraphs(&plain), vec!["ba"]);
+    }
+
+    #[test]
+    fn actual_text_span_over_two_glyphs_and_nesting() {
+        let two = text_pdf(
+            "BT /F1 12 Tf 10 700 Td /Span <</ActualText <FEFF05D205B605BC>>> BDC (ab) Tj EMC ET",
+        );
+        assert_eq!(paragraphs(&two), vec!["גֶּ"]);
+        let nested = text_pdf(
+            "BT /F1 12 Tf 10 700 Td /Span <</ActualText <FEFF05D0>>> BDC \
+             /Span <</ActualText <FEFF05D1>>> BDC (ab) Tj EMC (c) Tj EMC ET",
+        );
+        assert_eq!(paragraphs(&nested), vec!["א"]);
+        let empty =
+            text_pdf("BT /F1 12 Tf 10 700 Td /Span <</ActualText ()>> BDC (zz) Tj EMC (k) Tj ET");
+        assert_eq!(paragraphs(&empty), vec!["k"]);
+        // A plain BDC / BMC only nests; its glyphs stay.
+        let plain =
+            text_pdf("BT /F1 12 Tf 10 700 Td /P <</MCID 0>> BDC /Span BMC (ab) Tj EMC EMC ET");
+        assert_eq!(paragraphs(&plain), vec!["ab"]);
+    }
+
+    #[test]
+    fn actual_text_count_mismatch_leaves_glyphs() {
+        let glyphs = row(0, 700.0, "abc");
+        let spans = PageSpans {
+            total_codes: 5,
+            spans: vec![(0, 2, "x".to_string())],
+        };
+        let mut got = glyphs.clone();
+        apply_actual_text(&mut got, 0..3, &spans);
+        assert_eq!(got, glyphs);
+        // The same span applies once the counts agree.
+        let spans = PageSpans {
+            total_codes: 3,
+            spans: vec![(0, 2, "x".to_string())],
+        };
+        apply_actual_text(&mut got, 0..3, &spans);
+        let texts: Vec<&str> = got.iter().map(|g| g.text.as_str()).collect();
+        assert_eq!(texts, vec!["x", "c"]);
+        assert_eq!(got[0].width, 2.0 * W);
+    }
+
+    #[test]
+    fn mark_follows_containment_not_nearest_centre() {
+        let glyph = |x: f64, width: f64, t: &str| {
+            let mut gl = g(x, 700.0, t);
+            gl.width = width;
+            gl
+        };
+        // The patah centre (18) is inside nun [0, 20) but nearer the centre of he (22).
+        let gl = vec![
+            glyph(0.0, 20.0, "נ"),
+            glyph(20.0, 4.0, "ה"),
+            glyph(18.0, 0.0, "\u{05B7}"),
+        ];
+        assert_eq!(lines(&gl), vec!["הנ\u{05B7}"]);
+        // Mirrored: the centre (5) is inside he [4, 24) but nearer the centre of nun (2).
+        let gl = vec![
+            glyph(0.0, 4.0, "נ"),
+            glyph(4.0, 20.0, "ה"),
+            glyph(5.0, 0.0, "\u{05B7}"),
+        ];
+        assert_eq!(lines(&gl), vec!["ה\u{05B7}נ"]);
+    }
+
+    #[test]
+    fn glyph_cap_is_a_collector_field() {
+        let mut c = Collector::new(2);
+        let t = Transform::identity();
+        assert!(c.output_character(&t, 0.5, 0.0, 12.0, "a").is_ok());
+        assert!(c.output_character(&t, 0.5, 0.0, 12.0, "b").is_ok());
+        assert!(!c.too_large);
+        assert!(c.output_character(&t, 0.5, 0.0, 12.0, "c").is_err());
+        assert!(c.too_large);
+        assert_eq!(c.glyphs.len(), 2);
+    }
+
+    #[test]
+    fn extract_with_limit_over_cap_is_text_too_large() {
+        let pdf = text_pdf("BT /F1 12 Tf 10 700 Td (abc) Tj ET");
+        let e = extract_with_limit(&pdf, 2).unwrap_err();
+        assert_eq!(e.kind, DocErrorKind::TextTooLarge);
+        assert_eq!(e.message, "PDF has too many characters");
+        let d = extract_with_limit(&pdf, 3).unwrap();
+        assert_eq!(
+            d.blocks,
+            vec![DocBlock::Paragraph {
+                text: "abc".to_string()
+            }]
+        );
+    }
+
+    /// `text_pdf` encrypted with RC4-128 under `user_password` (owner password "owner").
+    fn encrypted_pdf(user_password: &str) -> Vec<u8> {
+        use pdf_extract::{EncryptionState, EncryptionVersion, Permissions, StringFormat};
+        let mut doc =
+            Document::load_mem(&text_pdf("BT /F1 12 Tf 10 700 Td (secret) Tj ET")).unwrap();
+        let id = Object::String(b"0123456789abcdef".to_vec(), StringFormat::Literal);
+        doc.trailer.set("ID", Object::Array(vec![id.clone(), id]));
+        let state = EncryptionState::try_from(EncryptionVersion::V2 {
+            document: &doc,
+            owner_password: "owner",
+            user_password,
+            key_length: 128,
+            permissions: Permissions::all(),
+        })
+        .unwrap();
+        doc.encrypt(&state).unwrap();
+        let mut out = Vec::new();
+        doc.save_to(&mut out).unwrap();
+        out
+    }
+
+    #[test]
+    fn encrypted_pdf_with_a_user_password_is_corrupt() {
+        let e = extract(&encrypted_pdf("hunter2")).unwrap_err();
+        assert_eq!(e.kind, DocErrorKind::Corrupt);
+        assert_eq!(e.message, "encrypted PDF");
+    }
+
+    #[test]
+    fn encrypted_pdf_with_an_empty_user_password_extracts() {
+        assert_eq!(paragraphs(&encrypted_pdf("")), vec!["secret"]);
+    }
+
+    #[test]
+    fn load_error_maps_password_errors_to_encrypted_pdf() {
+        for e in [
+            pdf_extract::Error::InvalidPassword,
+            pdf_extract::Error::AlreadyEncrypted,
+        ] {
+            let d = load_error(&e);
+            assert_eq!(d.kind, DocErrorKind::Corrupt);
+            assert_eq!(d.message, "encrypted PDF");
         }
+    }
+
+    #[test]
+    fn zero_width_placeholder_is_dropped_but_other_neutrals_kept() {
+        let zero = |x: f64, t: &str| {
+            let mut gl = g(x, 700.0, t);
+            gl.width = 0.0;
+            gl
+        };
+        let gl = vec![g(0.0, 700.0, "a"), zero(W, "0"), g(W, 700.0, "b")];
+        assert_eq!(lines(&gl), vec!["ab"]);
+        let gl = vec![g(0.0, 700.0, "א"), zero(W, "\u{05BE}"), g(W, 700.0, "ב")];
+        assert_eq!(lines(&gl), vec!["ב\u{05BE}א"]);
+    }
+
+    #[test]
+    fn rtl_indentation_is_measured_from_the_right_edge() {
+        let mut gl = row(0, 700.0, "םולש");
+        gl.extend(row(2, 680.0, "בא"));
+        gl.extend(row(0, 660.0, "בא"));
+        assert_eq!(lines(&gl), vec!["שלום", "אב", "  אב"]);
     }
 
     #[test]

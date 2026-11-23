@@ -24,7 +24,7 @@ export function PrintDocument({
   return (
     <div data-print-root="" dir={meta.dir} lang={meta.lang}>
       {cover && (
-        <section data-print-cover="" className={styles.cover}>
+        <section data-print-cover="">
           <h1 className={styles.title}>
             <bdi>{doc.title}</bdi>
           </h1>

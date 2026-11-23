@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useT } from "../i18n";
+import { MAX_SETLIST_NAME_CHARS, setlistNameLength } from "../setlists";
 import type { SetlistSummary } from "../storage";
 import { ConfirmDeleteSetlist } from "./ConfirmDeleteSetlist";
 import styles from "./SetlistsPanel.module.css";
@@ -11,22 +12,15 @@ export interface SetlistsPanelProps {
   /** A storage call is running: actions are disabled. */
   busy: boolean;
   onSelect(id: string): void;
-  onCreate(name: string): void;
-  onRename(id: string, name: string): void;
+  onCreate(name: string): Promise<boolean>;
+  onRename(id: string, name: string): Promise<boolean>;
   onDuplicate(id: string): void;
   onDelete(id: string): void;
 }
 
-/** Maximum setlist name length in characters (the storage rule). */
-const MAX_NAME = 200;
-
-/** Typed `null` start values of the rename and delete states. */
-const NO_RENAME = null as { id: string; name: string } | null;
-const NO_SETLIST = null as SetlistSummary | null;
-
 const validName = (name: string): boolean => {
-  const length = [...name.trim()].length;
-  return length !== 0 && length <= MAX_NAME;
+  const length = setlistNameLength(name);
+  return length !== 0 && length <= MAX_SETLIST_NAME_CHARS;
 };
 
 /** Sidebar list of setlists with create, select, rename, duplicate and delete. */
@@ -43,14 +37,28 @@ export function SetlistsPanel({
   const t = useT();
   const nameId = useId();
   const [draft, setDraft] = useState("");
-  const [renaming, setRenaming] = useState(NO_RENAME);
-  const [deleting, setDeleting] = useState(NO_SETLIST);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const [deleting, setDeleting] = useState<SetlistSummary | null>(null);
+
+  /** Keeps the typed name until the parent reports success; a rejection counts as failure. */
+  const settle = (call: Promise<boolean>, onOk: () => void) =>
+    call.then(
+      (ok) => {
+        if (ok) onOk();
+      },
+      () => undefined,
+    );
 
   const submitCreate = (e: FormEvent) => {
     e.preventDefault();
     if (busy || !validName(draft)) return;
-    onCreate(draft.trim());
-    setDraft("");
+    const submitted = draft;
+    // The updater sees the latest draft: one edited while the call ran is kept.
+    void settle(onCreate(submitted.trim()), () =>
+      setDraft((cur) => (cur === submitted ? "" : cur)),
+    );
   };
 
   const onRenameKey = (e: KeyboardEvent<HTMLInputElement>, current: string) => {
@@ -61,8 +69,17 @@ export function SetlistsPanel({
       e.preventDefault();
       if (!validName(renaming.name)) return;
       const next = renaming.name.trim();
-      setRenaming(null);
-      if (next !== current) onRename(renaming.id, next);
+      if (next === current) {
+        setRenaming(null);
+        return;
+      }
+      if (busy) return;
+      const { id, name: typed } = renaming;
+      void settle(onRename(id, next), () =>
+        setRenaming((cur) =>
+          cur?.id === id && cur.name === typed ? null : cur,
+        ),
+      );
     }
   };
 

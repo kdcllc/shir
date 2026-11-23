@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { STRINGS } from "../strings";
-import { SidebarTabs } from "./SidebarTabs";
+import { SIDEBAR_PANEL_IDS, SIDEBAR_TAB_IDS, SidebarTabs } from "./SidebarTabs";
 
 function setup(view: "songs" | "setlists", dir?: "rtl" | "ltr") {
   const onChange = vi.fn();
@@ -35,6 +35,28 @@ describe("SidebarTabs", () => {
     expect(setlists()).toHaveAttribute("aria-selected", "true");
     expect(songs()).toHaveAttribute("tabindex", "-1");
     expect(setlists()).toHaveAttribute("tabindex", "0");
+  });
+
+  it("gives the tabs ids and points aria-controls from the selected tab only", () => {
+    expect(SIDEBAR_TAB_IDS).toEqual({
+      songs: "sidebar-tab-songs",
+      setlists: "sidebar-tab-setlists",
+    });
+    expect(SIDEBAR_PANEL_IDS).toEqual({
+      songs: "sidebar-panel-songs",
+      setlists: "sidebar-panel-setlists",
+    });
+    const view = render(<SidebarTabs view="songs" onChange={vi.fn()} />);
+    expect(songs()).toHaveAttribute("id", SIDEBAR_TAB_IDS.songs);
+    expect(setlists()).toHaveAttribute("id", SIDEBAR_TAB_IDS.setlists);
+    expect(songs()).toHaveAttribute("aria-controls", SIDEBAR_PANEL_IDS.songs);
+    expect(setlists()).not.toHaveAttribute("aria-controls");
+    view.rerender(<SidebarTabs view="setlists" onChange={vi.fn()} />);
+    expect(songs()).not.toHaveAttribute("aria-controls");
+    expect(setlists()).toHaveAttribute(
+      "aria-controls",
+      SIDEBAR_PANEL_IDS.setlists,
+    );
   });
 
   it("a click selects that view", () => {

@@ -31,6 +31,9 @@ import {
   readExportGolden,
   readFixture,
   readGolden,
+  WORD_RTF_FIXTURE,
+  readWordRtfExpected,
+  wordRtfFixturePath,
   type AiReplyFixtureName,
   type DocFixtureName,
   type DocFormat,
@@ -595,6 +598,8 @@ describe("document fixtures", () => {
       "GENERATED.md",
       "NOTES.md",
       "he_chords_above.anchors.json",
+      "he_word_cp1255.rtf",
+      "he_word_cp1255.expected.json",
       ...DOC_FIXTURE_NAMES.flatMap((n) => [
         `${n}.fodt`,
         `${n}.docx`,
@@ -696,6 +701,70 @@ describe("document fixtures", () => {
     expect(() => readDocPdfLines(bad)).toThrow(TypeError);
     expect(() => readDocExpected("__proto__" as DocFixtureName)).toThrow(
       TypeError,
+    );
+  });
+});
+
+describe("Word-style RTF fixture", () => {
+  const rtfBytes = () => readFileSync(wordRtfFixturePath());
+  const rtfText = () => rtfBytes().toString("latin1");
+  const expected = () =>
+    readWordRtfExpected() as { kind: string; text: string }[];
+
+  it("has an absolute path and a cp1252 Word header", () => {
+    expect(WORD_RTF_FIXTURE).toBe("he_word_cp1255");
+    expect(isAbsolute(wordRtfFixturePath())).toBe(true);
+    expect(rtfText().startsWith("{\\rtf1\\ansi\\ansicpg1252")).toBe(true);
+  });
+  it("is 7-bit CRLF text with Hebrew only behind rtlch and af", () => {
+    expect([...rtfBytes()].every((b) => b < 0x80)).toBe(true);
+    const t = rtfText();
+    expect(t).toContain("\r\n");
+    for (const needle of [
+      "\\rtlch",
+      "\\af",
+      "\\fcharset177",
+      "\\fcharset0",
+      "\\'",
+    ]) {
+      expect(t).toContain(needle);
+    }
+    expect(t).not.toContain("\\ansicpg1255");
+  });
+  it("has no \\uN escapes", () => {
+    expect(rtfText()).not.toMatch(/\\u-?[0-9]/);
+  });
+  it("expected JSON is UTF-8, LF only, DocBlock paragraphs with final forms", () => {
+    expectUtf8NoCr(`${DOC_DIR}he_word_cp1255.expected.json`);
+    const blocks = expected();
+    expect(blocks[0]).toEqual({ kind: "paragraph", text: CC0_LINE });
+    for (const b of blocks) {
+      expect(Object.keys(b).sort()).toEqual(["kind", "text"]);
+      expect(b.kind).toBe("paragraph");
+      expect(b.text.trim()).not.toBe("");
+      expect(finalFormErrors(b.text)).toEqual([]);
+    }
+  });
+  it("oracle self-check: the cp1255 bytes decode to the expected Hebrew", () => {
+    const bytes = [...rtfText().matchAll(/\\'([0-9a-fA-F]{2})/g)].map((m) =>
+      parseInt(m[1] ?? "", 16),
+    );
+    const decoded = new TextDecoder("windows-1255", { fatal: true }).decode(
+      Uint8Array.from(bytes),
+    );
+    const hebrew = expected()
+      .map((b) =>
+        [...b.text].filter((c) => /[\u0590-\u05FF]/u.test(c)).join(""),
+      )
+      .join("");
+    expect(bytes.length).toBeGreaterThan(0);
+    expect(decoded).toBe(hebrew);
+  });
+  it("has niqqud and a chord line above Hebrew lyrics", () => {
+    const texts = expected().map((b) => b.text);
+    expect(texts.some((t) => /[\u05B0-\u05C7]/u.test(t))).toBe(true);
+    expect(texts.some((t) => /^[A-G][#b]?\S*( +[A-G][#b]?\S*)+$/.test(t))).toBe(
+      true,
     );
   });
 });

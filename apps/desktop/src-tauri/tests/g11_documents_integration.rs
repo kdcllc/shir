@@ -11,10 +11,6 @@ use zip::write::SimpleFileOptions;
 /// Equal to `DOC_FIXTURE_NAMES` in `packages/test-fixtures/src/index.ts`.
 const FIXTURE_NAMES: [&str; 3] = ["he_chords_above", "en_table", "songbook_mixed"];
 
-/// PDF lines (name, 0-based index) that cannot match the oracle with marks kept. Same single
-/// entry, and same cause, as `KNOWN_LOSSY_PDF_LINES` in `commands/documents/pdf.rs`; never widen.
-const KNOWN_LOSSY_PDF_LINES: &[(&str, usize)] = &[("he_chords_above", 5)];
-
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../packages/test-fixtures/doc")
 }
@@ -109,17 +105,9 @@ fn every_pdf_fixture_equals_its_oracle_lines() {
         let w: Vec<String> = want.iter().map(|l| strip_marks(l)).collect();
         assert_eq!(g, w, "fixture {name} without marks");
 
-        // (b) with marks kept, every line matches except the known lossy one.
-        assert_eq!(got.len(), want.len(), "fixture {name}: line count");
-        for (i, (g, w)) in got.iter().zip(&want).enumerate() {
-            if KNOWN_LOSSY_PDF_LINES.contains(&(name, i)) {
-                assert_ne!(g, w, "fixture {name} line {i} now matches: drop the entry");
-            } else {
-                assert_eq!(g, w, "fixture {name} line {i}");
-            }
-        }
+        // (b) with marks kept, every line matches.
+        assert_eq!(got, want, "fixture {name} with marks");
     }
-    assert_eq!(KNOWN_LOSSY_PDF_LINES.len(), 1);
 }
 
 #[test]

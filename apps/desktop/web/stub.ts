@@ -56,11 +56,12 @@ function install(): void {
       artist: null,
       key: "C",
       capo: null,
-      language: "en",
+      language: "he",
       createdAt: stamp,
       updatedAt: stamp,
+      // RTL like packages/test-fixtures/fixtures/dense_chords.cho (body lines 5-7).
       chordpro:
-        "{title: Dense Chords}\n{key: C}\n\n[C]a[G]b[Am]c[F]d [C]e[G]f[Dm]g[F]h\n[Am7]Short [Dsus4]words [G7]here\n",
+        "{title: Dense Chords}\n{meta: direction rtl}\n{key: C}\n\n[Am7/G]ש[Cmaj7]מ[Dsus4]י[F#m7]ם [Am7/G]א[Cmaj7]ו[Dsus4]ר [F#m7]ע[Am7/G]ל\n\n[Am]ושוב חוזר השיר\n",
     },
   };
   type Item = Record<string, unknown>;
@@ -216,7 +217,10 @@ function install(): void {
       case "save_export_docx":
         w.__savedExport = {
           defaultName: args?.defaultName,
-          bytes: args?.bytes,
+          bytes:
+            typeof args?.bytesBase64 === "string"
+              ? Array.from(atob(args.bytesBase64), (c) => c.charCodeAt(0))
+              : args?.bytes,
         };
         return "/tmp/stub-export.docx";
       default:

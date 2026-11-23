@@ -1,4 +1,4 @@
-import { transposeChord, transposeKey } from "./chord";
+import { noteToPitchClass, transposeChord, transposeKey } from "./chord";
 import type { SpellingPreference } from "./chord";
 import { splitGraphemes } from "./graphemes";
 import type { ChordAnchor, SongLine, SongModel } from "./model";
@@ -545,11 +545,42 @@ export function songChords(song: SongModel): string[] {
   return [...seen];
 }
 
+/** Letter offsets from the tonic letter of each triad, by key mode. */
+const MAJOR_LETTER_OFFSETS: readonly number[] = [0, 1, 2, 3, 4, 5];
+const MINOR_LETTER_OFFSETS: readonly number[] = [0, 2, 3, 4, 5, 6];
+const LETTERS = "CDEFGAB";
+
+/**
+ * Triads spelled by letter (Gb gives `Cb`, C# gives `E#m`); `null` when a triad
+ * would need a double accidental.
+ */
+function letterTriads(tonic: string, minor: boolean): string[] | null {
+  const tonicLetter = LETTERS.indexOf(tonic.charAt(0));
+  const tonicPc = noteToPitchClass(tonic);
+  if (tonicLetter < 0 || tonicPc === null) return null;
+  const triads = minor ? MINOR_TRIADS : MAJOR_TRIADS;
+  const offsets = minor ? MINOR_LETTER_OFFSETS : MAJOR_LETTER_OFFSETS;
+  const out: string[] = [];
+  for (let i = 0; i < triads.length; i++) {
+    const [degree, suffix] = triads[i] as readonly [number, string];
+    const letter = LETTERS[
+      (tonicLetter + (offsets[i] as number)) % 7
+    ] as string;
+    const letterPc = noteToPitchClass(letter) as number;
+    const acc = ((((tonicPc + degree - letterPc) % 12) + 12 + 6) % 12) - 6;
+    if (acc < -1 || acc > 1) return null;
+    out.push(letter + (acc === -1 ? "b" : acc === 1 ? "#" : "") + suffix);
+  }
+  return out;
+}
+
 /** The six diatonic triads of a key, spelled in the key's own style; `[]` when it is not a key. */
 function diatonicTriads(key: string | undefined): string[] {
   if (key === undefined || transposeKey(key, 0) === null) return [];
   const minor = key.endsWith("m");
   const tonic = minor ? key.slice(0, -1) : key;
+  const lettered = letterTriads(tonic, minor);
+  if (lettered !== null) return lettered;
   // A key named with an accidental spells every triad with that accidental
   // (`transposeKey` would rename a tie key such as `Gb` or `C#`).
   const prefer: SpellingPreference | undefined = tonic.includes("b")

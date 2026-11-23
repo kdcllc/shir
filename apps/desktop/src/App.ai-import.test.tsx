@@ -5,19 +5,28 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { documentToText, importText } from "chord-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { i18n } from "./i18n";
 import {
   DocumentReadError,
+  FileReadError,
   extractDocument,
   pickDocumentFile,
   pickSongFiles,
   readTextFile,
 } from "./files";
+import { withTitleFallback } from "./importFiles";
 import { getSong, listSongs, saveSong } from "./storage";
 import type { Song } from "./storage";
 import { STRINGS } from "./strings";
 
+// Passthrough: every test keeps the real `documentToText`; a test overrides it once.
+vi.mock("chord-core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("chord-core")>();
+  return { ...actual, documentToText: vi.fn(actual.documentToText) };
+});
 vi.mock("./uiReady", () => ({ signalUiReady: vi.fn() }));
 vi.mock("./storage", () => ({
   listSongs: vi.fn(),
@@ -84,6 +93,7 @@ beforeEach(() => {
   vi.mocked(readTextFile).mockReset();
   vi.mocked(extractDocument).mockReset();
   vi.mocked(pickDocumentFile).mockReset();
+  vi.mocked(documentToText).mockReset();
 });
 
 afterEach(() => {
@@ -178,6 +188,35 @@ describe("Import with AI", () => {
     expect(extractDocument).toHaveBeenCalledWith("/m/sheet.docx");
   });
 
+  it("a PDF picked in the dialog puts the approximate-positions line in the prompt", async () => {
+    vi.mocked(pickDocumentFile).mockResolvedValue("/m/tune.pdf");
+    vi.mocked(extractDocument).mockResolvedValue({
+      format: "pdf",
+      blocks: [{ kind: "paragraph", text: "Am  G" }],
+      warnings: [],
+    });
+    await renderDb();
+    click("ai-import");
+    click("ai-pick-document");
+    await screen.findByTestId("ai-picked");
+    expect((byId("ai-prompt") as HTMLTextAreaElement).value).toContain(
+      "The text was extracted from a PDF, so chord positions above lyrics may be approximate",
+    );
+  });
+
+  it("a failed native picker shows the localized message, not the raw text", async () => {
+    vi.mocked(pickDocumentFile).mockRejectedValue(
+      new FileReadError("Ipc", "raw plugin text"),
+    );
+    await renderDb();
+    click("ai-import");
+    click("ai-pick-document");
+    const error = await screen.findByTestId("ai-pick-error");
+    expect(error.textContent).toBe(STRINGS.importPickFailed);
+    expect(error.textContent).not.toContain("raw plugin text");
+    expect(extractDocument).not.toHaveBeenCalled();
+  });
+
   it("a cancelled document pick leaves the dialog as it was", async () => {
     vi.mocked(pickDocumentFile).mockResolvedValue(undefined);
     await renderDb();
@@ -214,6 +253,42 @@ describe("Import with AI", () => {
     expect((await screen.findByTestId("ai-pick-error")).textContent).toBe(
       STRINGS.docNoText,
     );
+  });
+});
+
+const UNTITLED_REPLY = `\`\`\`chordpro\n${SONG_ONE}{new_song}\n[Am]Morning light on the [F]hill\n\`\`\``;
+
+describe("AI songs without a title", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("saves the plain ordinal title and keeps the source in the review label", async () => {
+    await renderDb();
+    click("ai-import");
+    reviewReply(UNTITLED_REPLY);
+    await screen.findByTestId("editor");
+    await saveCurrent(1);
+    await waitFor(() => expect(reviewing()).toContain("AI · Song 2"));
+    await saveCurrent(2);
+    const saved = vi.mocked(saveSong).mock.calls.map((c) => c[0]);
+    expect(saved[0]).toBe(SONG_ONE);
+    expect(saved[1]).toBe(
+      "{title: Song 2}\n[Am]Morning light on the [F]hill\n",
+    );
+  });
+
+  it("saves the Hebrew ordinal title in the Hebrew locale", async () => {
+    await i18n.changeLanguage("he");
+    await renderDb();
+    click("ai-import");
+    reviewReply(UNTITLED_REPLY);
+    await screen.findByTestId("editor");
+    await saveCurrent(1);
+    await waitFor(() => expect(reviewing()).toContain("שיר 2"));
+    await saveCurrent(2);
+    const second = vi.mocked(saveSong).mock.calls[1]?.[0] ?? "";
+    expect(second.split("\n")[0]).toBe("{title: שיר 2}");
   });
 });
 
@@ -286,6 +361,57 @@ describe("document review", () => {
     expect(screen.queryByTestId("editor-convert-ai")).toBeNull();
   });
 
+  it("Convert with AI asks before discarding after Flip changed the text", async () => {
+    await openDocx();
+    click("editor-flip");
+    click("editor-convert-ai");
+    reviewReply(REPLY);
+    expect(screen.getByTestId("confirm-discard-yes")).toBeInTheDocument();
+    click("confirm-discard-yes");
+    await waitFor(() =>
+      expect(reviewing()).toContain("sheet.docx · Garden Gate"),
+    );
+  });
+
+  it("a queued document's logical column order reaches the editor seed", async () => {
+    const text = "Am      G\nשלום עולם יפה\n";
+    vi.mocked(documentToText).mockImplementationOnce(() => ({
+      text,
+      rtlColumns: "logical",
+    }));
+    await openDocx();
+    expect(documentToText).toHaveBeenCalled();
+    const logical = withTitleFallback(
+      importText(text, { rtlColumns: "logical" }).chordpro,
+      "/m/sheet.docx",
+    );
+    const mirror = withTitleFallback(
+      importText(text, { rtlColumns: "mirror" }).chordpro,
+      "/m/sheet.docx",
+    );
+    expect(mirror).not.toBe(logical);
+    click("editor-tab-source");
+    expect((byId("editor-input") as HTMLTextAreaElement).value).toBe(logical);
+    click("editor-flip");
+    expect((byId("editor-input") as HTMLTextAreaElement).value).toBe(mirror);
+  });
+
+  it("Convert with AI passes the document format to the prompt", async () => {
+    const line =
+      "The text was extracted from a PDF, so chord positions above lyrics may be approximate";
+    await renderDb();
+    vi.mocked(pickSongFiles).mockResolvedValue(["/m/tune.pdf"]);
+    vi.mocked(extractDocument).mockResolvedValue({
+      format: "pdf",
+      blocks: [{ kind: "paragraph", text: "Am  G\nla la" }],
+      warnings: [],
+    });
+    click("open-files");
+    await screen.findByTestId("editor");
+    click("editor-convert-ai");
+    expect((byId("ai-prompt") as HTMLTextAreaElement).value).toContain(line);
+  });
+
   it("the AI songs go ahead of the rest of the queue", async () => {
     vi.mocked(pickSongFiles).mockResolvedValue([
       "/m/sheet.docx",
@@ -303,6 +429,24 @@ describe("document review", () => {
     );
     await saveCurrent(1);
     await waitFor(() => expect(reviewing()).toContain("other.docx"));
+  });
+
+  it("a title with a slash is shown whole in the review and in the skipped list", async () => {
+    await openDocx();
+    click("editor-convert-ai");
+    reviewReply("```chordpro\n{title: Left/Right}\n[C]Open the [G]gate\n```");
+    await waitFor(() =>
+      expect(reviewing()).toContain("sheet.docx · Left/Right"),
+    );
+    click("editor-cancel");
+    click("confirm-discard-yes");
+    await waitFor(() => expect(screen.queryByTestId("editor")).toBeNull());
+    const skipped = byId("import-skipped");
+    const entry = within(skipped).getAllByRole("listitem")[0]!;
+    expect(entry.textContent).toBe("sheet.docx · Left/Right");
+    expect(
+      [...entry.querySelectorAll("bdi")].map((b) => b.textContent),
+    ).toEqual(["sheet.docx", "Left/Right"]);
   });
 
   it("closing the dialog keeps the document under review", async () => {
@@ -346,6 +490,19 @@ describe("failed documents in the import report", () => {
     expect(
       await importFailure("/m/f.docx", new DocumentReadError(kind, "raw")),
     ).toBe(`f.docx: ${message}`);
+  });
+
+  it("a failure after extraction shows the damaged-file message", async () => {
+    vi.mocked(documentToText).mockImplementationOnce(() => {
+      throw new Error("boom");
+    });
+    vi.mocked(pickSongFiles).mockResolvedValue(["/m/f.docx"]);
+    vi.mocked(extractDocument).mockResolvedValue(DOC);
+    await renderDb();
+    click("open-files");
+    expect((await screen.findByTestId("import-failed")).textContent).toBe(
+      `f.docx: ${STRINGS.docCorrupt}`,
+    );
   });
 
   it("an IPC failure keeps the raw message", async () => {

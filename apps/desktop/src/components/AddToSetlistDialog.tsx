@@ -1,9 +1,10 @@
 import { useId, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useT } from "../i18n";
+import { MAX_SETLIST_NAME_CHARS, setlistNameLength } from "../setlists";
 import type { SetlistSummary } from "../storage";
 import styles from "./ConfirmDiscard.module.css";
-import listStyles from "./SetlistsPanel.module.css";
+import listStyles from "./AddToSetlistDialog.module.css";
 import { useDialogFocus } from "./useDialogFocus";
 
 export interface AddToSetlistDialogProps {
@@ -16,10 +17,7 @@ export interface AddToSetlistDialogProps {
   onCreateAndAdd(name: string): void;
 }
 
-const MAX_NAME = 200;
 const NEW = "new";
-/** Typed `null` start value of the choice state. */
-const NO_CHOICE = null as string | null;
 const FOCUSABLE = "button:not(:disabled), input:not(:disabled)";
 
 /** Modal that adds the chosen songs to an existing setlist or to a new one. */
@@ -34,15 +32,17 @@ export function AddToSetlistDialog({
   const t = useT();
   const titleId = useId();
   const groupName = useId();
-  const [choice, setChoice] = useState(setlists.length === 0 ? NEW : NO_CHOICE);
+  const [choice, setChoice] = useState<string | null>(
+    setlists.length === 0 ? NEW : null,
+  );
   const [name, setName] = useState("");
   const { dialog, onKeyDown } = useDialogFocus(onCancel);
 
   const trimmed = name.trim();
-  const nameLength = [...trimmed].length;
+  const nameLength = setlistNameLength(name);
   const valid =
     choice === NEW
-      ? nameLength !== 0 && nameLength <= MAX_NAME
+      ? nameLength !== 0 && nameLength <= MAX_SETLIST_NAME_CHARS
       : choice !== null && setlists.some((s) => s.id === choice);
 
   const submit = (e: FormEvent) => {

@@ -1108,6 +1108,28 @@ describe("Editor Hebrew flow", () => {
   });
 });
 
+describe("review file label", () => {
+  it("fileLabel renders source and title in two separate bdi and ignores fileName", () => {
+    setup({
+      initialText: "{title: Morning Field}\n[C]Open the [G]gate\n",
+      fileLabel: { source: "שיר.pdf", title: "Morning Field" },
+      fileName: "ignored.txt",
+    });
+    const bdis = byId("reviewing-file").querySelectorAll("bdi");
+    expect([...bdis].map((b) => b.textContent)).toEqual([
+      "שיר.pdf",
+      "Morning Field",
+    ]);
+    expect(byId("reviewing-file").textContent).not.toContain("ignored.txt");
+  });
+
+  it("without fileLabel one bdi holds fileName", () => {
+    setup({ initialText: "[C]hi\n", fileName: "song.txt" });
+    const bdis = byId("reviewing-file").querySelectorAll("bdi");
+    expect([...bdis].map((b) => b.textContent)).toEqual(["song.txt"]);
+  });
+});
+
 describe("document review additions", () => {
   const seedResult = {
     chordpro: HE_LOGICAL,

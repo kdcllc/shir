@@ -331,6 +331,9 @@ describe("setlist editing flow", () => {
       expect(updateSetlistItem).toHaveBeenLastCalledWith("sl1", second, 1, 4),
     );
     expect(updateSetlistItem).toHaveBeenCalledTimes(2);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("setlist-entry-capo")[0]).toHaveValue("4"),
+    );
 
     // Remove the first entry: only the other one remains.
     fireEvent.click(screen.getAllByTestId("setlist-entry-remove")[0]!);
@@ -380,6 +383,40 @@ describe("setlist editing flow", () => {
     );
     await waitFor(() => expect(heading()).toBe("Evening"));
     expect(find("sl1").name).toBe("Evening");
+  });
+
+  it("a failed create keeps the typed name; a later successful create clears it", async () => {
+    render(<App />);
+    await screen.findByTestId("song-title");
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    const nameInput = () =>
+      screen.getByTestId("setlist-name-input") as HTMLInputElement;
+    fireEvent.change(nameInput(), { target: { value: "Evening set" } });
+    vi.mocked(createSetlist).mockRejectedValueOnce(new Error("disk"));
+    fireEvent.click(screen.getByTestId("setlist-create"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.setlistSaveFailed,
+    );
+    expect(nameInput().value).toBe("Evening set");
+    fireEvent.click(screen.getByTestId("setlist-create"));
+    await screen.findByTestId("setlist-editor");
+    await waitFor(() => expect(nameInput().value).toBe(""));
+  });
+
+  it("a failed rename keeps the rename input open with the typed value", async () => {
+    seed("Sunday");
+    await openSeeded();
+    fireEvent.click(screen.getByTestId("setlist-rename"));
+    const input = screen.getByTestId("setlist-rename-input");
+    fireEvent.change(input, { target: { value: "Morning set" } });
+    vi.mocked(renameSetlist).mockRejectedValueOnce(new Error("disk"));
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.setlistSaveFailed,
+    );
+    expect(
+      (screen.getByTestId("setlist-rename-input") as HTMLInputElement).value,
+    ).toBe("Morning set");
   });
 
   it("duplicate stores the plain localized suffix, with no bidi isolate characters", async () => {
@@ -475,6 +512,76 @@ describe("setlist editing flow", () => {
   });
 });
 
+describe("empty Setlists pane", () => {
+  const pane = () => screen.getByTestId("song-pane");
+
+  async function renderEmptyLibrary() {
+    vi.mocked(listSongs).mockResolvedValue([]);
+    seed("Sunday");
+    render(<App />);
+    await screen.findByTestId("tab-songs");
+    await waitFor(() =>
+      expect(pane()).toHaveTextContent(STRINGS.noSongSelected),
+    );
+  }
+
+  it("shows noSongSelected on Songs, noSetlistSelected on Setlists, and hides it once a setlist opens", async () => {
+    await renderEmptyLibrary();
+    // Before any setlist is open, the Songs tab shows the song placeholder only.
+    expect(pane()).toHaveTextContent(STRINGS.noSongSelected);
+    expect(pane()).not.toHaveTextContent(STRINGS.noSetlistSelected);
+
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    expect(pane()).toHaveTextContent(STRINGS.noSetlistSelected);
+    expect(pane()).not.toHaveTextContent(STRINGS.noSongSelected);
+
+    fireEvent.click(await screen.findByTestId("setlist-select"));
+    await screen.findByTestId("setlist-editor");
+    expect(pane()).not.toHaveTextContent(STRINGS.noSetlistSelected);
+  });
+
+  it("shows the Hebrew value in the Hebrew locale", async () => {
+    await renderEmptyLibrary();
+    fireEvent.click(screen.getByTestId("locale-he"));
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    await waitFor(() => expect(pane()).toHaveTextContent(HE.noSetlistSelected));
+    expect(HE.noSetlistSelected).not.toBe(STRINGS.noSetlistSelected);
+  });
+});
+
+describe("selection bar while a setlist call runs", () => {
+  it("disables Add to setlist while a setlist call is pending and re-enables it after", async () => {
+    seed("Sunday", ["a", "b"]);
+    await openSeeded();
+    fireEvent.click(screen.getByTestId("tab-songs"));
+    fireEvent.click(screen.getByTestId("select-songs"));
+    fireEvent.click(screen.getAllByTestId("song-check")[0]!);
+    expect(screen.getByTestId("add-selected-to-setlist")).toBeEnabled();
+
+    let finish: (value: Setlist) => void = () => undefined;
+    vi.mocked(removeSetlistItem).mockImplementationOnce(
+      () =>
+        new Promise<Setlist>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const firstId = find("sl1").items[0]!.id;
+    fireEvent.click(screen.getAllByTestId("setlist-entry-remove")[0]!);
+    await waitFor(() =>
+      expect(screen.getByTestId("add-selected-to-setlist")).toBeDisabled(),
+    );
+    finish(
+      put({
+        ...find("sl1"),
+        items: find("sl1").items.filter((i) => i.id !== firstId),
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("add-selected-to-setlist")).toBeEnabled(),
+    );
+  });
+});
+
 describe("exports", () => {
   it("setlist Print, PDF and Word pass cover: true and each entry's transpose and capo", async () => {
     seed("Sunday", ["a", "b"]);
@@ -519,7 +626,7 @@ describe("exports", () => {
     // The status names the saved file (basename), isolated for bidi.
     await waitFor(() =>
       expect(screen.getByTestId("app-status").textContent).toBe(
-        "Saved ⁨Sunday (2).docx⁩",
+        i18n.t("exportSaved", { name: "Sunday (2).docx" }),
       ),
     );
     // Word never goes through the print path.
@@ -551,6 +658,24 @@ describe("exports", () => {
     expect((await screen.findByTestId("app-notice")).textContent).toBe(
       STRINGS.exportFailed,
     );
+  });
+
+  it("a failed open-song export shows exportSongFailed, not the setlist wording", async () => {
+    render(<App />);
+    await screen.findByTestId("song-title");
+    vi.mocked(saveDocx).mockRejectedValueOnce(new Error("disk full"));
+    fireEvent.click(screen.getByTestId("song-export-word"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.exportSongFailed,
+    );
+    vi.mocked(printExport).mockRejectedValueOnce(new Error("no print"));
+    fireEvent.click(screen.getByTestId("song-print"));
+    await waitFor(() =>
+      expect(screen.getByTestId("app-notice").textContent).toBe(
+        STRINGS.exportSongFailed,
+      ),
+    );
+    expect(STRINGS.exportSongFailed).not.toBe(STRINGS.exportFailed);
   });
 
   it("open-song exports use cover: false and the current transpose and capo", async () => {

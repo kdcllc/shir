@@ -278,6 +278,7 @@ describe("STACK.md consistency with pnpm and cargo", () => {
     const crateRows = installed.filter((r) => r.ecosystem === "crate");
     expect(crateRows.map((r) => r.pkg).sort()).toEqual(
       [
+        "base64",
         "encoding_rs",
         "pdf-extract",
         "quick-xml",

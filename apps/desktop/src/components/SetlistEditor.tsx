@@ -10,8 +10,10 @@ export interface SetlistEditorProps {
   setlist: Setlist;
   /** A storage call is running: edits are disabled. */
   busy: boolean;
-  onReorder(itemIds: string[]): void;
-  onMove(itemId: string, delta: -1 | 1): void;
+  /** Resolves `true` only when storage accepted the new order. */
+  onReorder(itemIds: string[]): Promise<boolean>;
+  /** Resolves `true` only when storage accepted the move. */
+  onMove(itemId: string, delta: -1 | 1): Promise<boolean>;
   onTranspose(itemId: string, transpose: number): void;
   onCapo(itemId: string, capo: number | null): void;
   onRemove(itemId: string): void;
@@ -23,13 +25,12 @@ export interface SetlistEditorProps {
 
 const MAX_TRANSPOSE = 11;
 
-/** Typed `null` start value of the refocus ref. */
-const NO_ID = null as string | null;
-
 /** The part of a key event the row handler reads. */
 interface RowKeyEvent {
   altKey: boolean;
   key: string;
+  target: EventTarget | null;
+  currentTarget: EventTarget | null;
   preventDefault(): void;
 }
 
@@ -53,15 +54,20 @@ export function SetlistEditor({
   const items = setlist.items;
   const ids = items.map((item) => item.id);
   const [announcement, setAnnouncement] = useState("");
-  const refocus = useRef(NO_ID);
+  const refocus = useRef<string | null>(null);
 
   const announce = (item: SetlistItem, position: number) =>
     setAnnouncement(t("movedAnnounce", { title: item.title, n: position }));
 
   const drag = useReorderDrag(ids, (next, movedId) => {
+    if (busy) return;
     const item = items.find((candidate) => candidate.id === movedId);
-    onReorder(next);
-    if (item) announce(item, next.indexOf(item.id) + 1);
+    onReorder(next).then(
+      (saved) => {
+        if (saved && item) announce(item, next.indexOf(item.id) + 1);
+      },
+      () => undefined,
+    );
   });
   const { rowElement } = drag;
 
@@ -78,12 +84,16 @@ export function SetlistEditor({
     if (!item || busy || index + delta < 0 || index + delta >= items.length)
       return;
     if (keepFocus) refocus.current = item.id;
-    onMove(item.id, delta);
-    announce(item, index + delta + 1);
+    const settle = (saved: boolean) => {
+      if (saved) announce(item, index + delta + 1);
+      else if (refocus.current === item.id) refocus.current = null;
+    };
+    onMove(item.id, delta).then(settle, () => settle(false));
   };
 
   const onRowKeyDown = (e: RowKeyEvent, index: number) => {
     if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    if (e.target !== e.currentTarget) return;
     e.preventDefault();
     move(index, e.key === "ArrowUp" ? -1 : 1, true);
   };
@@ -104,7 +114,12 @@ export function SetlistEditor({
           <bdi>{setlist.name}</bdi>
         </h2>
         <div className={styles.exports} data-ui-chrome>
-          <button type="button" data-testid="setlist-print" onClick={onPrint}>
+          <button
+            type="button"
+            disabled={busy}
+            data-testid="setlist-print"
+            onClick={onPrint}
+          >
             {t("print")}
           </button>
           <button

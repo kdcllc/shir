@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const FIXTURE_NAMES = [
@@ -294,13 +295,14 @@ function assertAiName(name: string): void {
   }
 }
 
-// Built from a variable (see the note above EDIT_CASES_FILE).
+// import.meta.dirname, not import.meta.url: under the desktop jsdom vitest config
+// import.meta.url is a `/@fs/` URL that `fileURLToPath` rejects.
 function docFile(file: string): string {
-  return fileURLToPath(new URL(`../doc/${file}`, import.meta.url));
+  return join(import.meta.dirname, "..", "doc", file);
 }
 
 function aiFile(file: string): string {
-  return fileURLToPath(new URL(`../ai/${file}`, import.meta.url));
+  return join(import.meta.dirname, "..", "ai", file);
 }
 
 /** Absolute path of `<package>/doc/<name>.<format>`. */
@@ -313,6 +315,21 @@ export function docFixturePath(
     throw new TypeError(`Unknown document format: ${String(format)}`);
   }
   return docFile(`${name}.${format}`);
+}
+
+/** Name of the hand-written, RTF-only Word-style fixture (`doc/he_word_cp1255.rtf`). */
+export const WORD_RTF_FIXTURE = "he_word_cp1255" as const;
+
+/** Absolute path of `doc/he_word_cp1255.rtf`. */
+export function wordRtfFixturePath(): string {
+  return docFile(`${WORD_RTF_FIXTURE}.rtf`);
+}
+
+/** Expected extraction (`DocBlock` JSON array) of the Word-style RTF fixture. */
+export function readWordRtfExpected(): unknown[] {
+  return JSON.parse(
+    readFileSync(docFile(`${WORD_RTF_FIXTURE}.expected.json`), "utf8"),
+  ) as unknown[];
 }
 
 /** Expected extraction (`DocBlock` JSON array) of a document fixture. */

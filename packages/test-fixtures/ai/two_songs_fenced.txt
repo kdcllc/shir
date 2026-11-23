@@ -7,7 +7,7 @@ Here are the songs from your document:
 הנחל [Am]זורם [G]לאט
 ושיר [C]קטן [F]בלב
 {new_song}
-{title: Harbor Light}
+{title: Saltwater Steps}
 {key: Am}
 Walking [Am]down to the [F]harbor
 Lanterns [C]swing in the [G]dark

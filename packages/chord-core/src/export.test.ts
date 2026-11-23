@@ -34,7 +34,7 @@ function firstLyric(
   return out;
 }
 
-// "שָׁלוֹם עולם": graphemes שָׁ ל וֹ ם " " ע ו ל ם (10)
+// "שָׁלוֹם עולם": graphemes שָׁ ל וֹ ם " " ע ו ל ם (9)
 const NIQQUD = "שָׁלוֹם עולם";
 
 describe("lyric segmentation (R3)", () => {
@@ -94,7 +94,7 @@ describe("lyric segmentation (R3)", () => {
           { index: 0, chord: "A" },
           { index: 4, chord: "B" },
           { index: 4, chord: "C" },
-          { index: 10, chord: "D" },
+          { index: 9, chord: "D" },
         ]),
       ]),
     );
@@ -361,6 +361,21 @@ function lyricExport(
 }
 
 describe("directionalCells (R12)", () => {
+  it("treats Arabic like Hebrew (rtl)", () => {
+    const cells = directionalCells({
+      kind: "lyric",
+      direction: "rtl",
+      segments: [
+        { chord: "Am", text: "مرحبا " },
+        { chord: "G", text: "عالم" },
+      ],
+    });
+    expect(cells.map((c) => [c.chord, c.text, c.direction])).toEqual([
+      ["Am", "مرحبا ", "rtl"],
+      ["G", "عالم", "rtl"],
+    ]);
+  });
+
   it("splits the mixed_he_en line into single-direction cells", () => {
     const parsed = parseSong(
       "{meta: direction rtl}\n[Am]אנחנו שרים [G]rock and r[F]oll עד הבוקר\n",

@@ -51,10 +51,24 @@ function baseNameOf(path: string): string {
  * `{title` / `{t:` directive. The one shared title-fallback rule (import and Flip).
  */
 export function withTitleFallback(chordpro: string, path: string): string {
+  return withTitle(chordpro, baseNameOf(path));
+}
+
+/**
+ * Prepends `{title: <title>}` unless the text already has a `{title` / `{t:` directive
+ * or the trimmed title is empty.
+ */
+export function withTitle(chordpro: string, title: string): string {
   if (TITLE_DIRECTIVE.test(chordpro)) return chordpro;
-  const base = baseNameOf(path).trim();
-  if (base === "") return chordpro;
-  return `{title: ${base}}\n${chordpro}`;
+  const trimmed = title.trim();
+  if (trimmed === "") return chordpro;
+  return `{title: ${trimmed}}\n${chordpro}`;
+}
+
+/** Source and title of an AI song under review, kept as two values so each can be isolated. */
+export interface ReviewLabel {
+  source: string;
+  title: string;
 }
 
 export interface FileImportDeps {
@@ -81,6 +95,8 @@ export interface QueuedFile {
   result: ImportResult;
   /** Column order of a document's table rows; absent means `"mirror"`. */
   rtlColumns?: RtlColumns;
+  /** Display label of an AI song. When set, the UI shows it, not `fileNameOf(path)`. */
+  label?: ReviewLabel;
   /** Present for a converted document: its extracted text, format and warnings. */
   document?: {
     name: string;
@@ -103,6 +119,16 @@ export interface FileImportReport {
   failed: FailedFile[];
 }
 
+/** Known document failure kinds; a `Record` keeps it exhaustive against `bindings.ts`. */
+const DOC_FAILURE_KINDS: Readonly<Record<DocErrorKind | "Ipc", true>> = {
+  TooLarge: true,
+  TextTooLarge: true,
+  Unsupported: true,
+  Corrupt: true,
+  Io: true,
+  Ipc: true,
+};
+
 function messageOf(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
@@ -110,7 +136,9 @@ function messageOf(reason: unknown): string {
 /** The `kind` of a `DocumentReadError` (duck-typed, see above), else `"Ipc"`. */
 function documentFailureReason(reason: unknown): DocErrorKind | "Ipc" {
   const kind = (reason as { kind?: unknown } | null)?.kind;
-  return typeof kind === "string" ? (kind as DocErrorKind | "Ipc") : "Ipc";
+  return typeof kind === "string" && Object.hasOwn(DOC_FAILURE_KINDS, kind)
+    ? (kind as DocErrorKind | "Ipc")
+    : "Ipc";
 }
 
 async function importDocument(
@@ -150,7 +178,11 @@ async function importDocument(
       document: { name, format: doc.format, text, warnings: doc.warnings },
     });
   } catch (reason) {
-    report.failed.push({ path, message: messageOf(reason) });
+    report.failed.push({
+      path,
+      message: messageOf(reason),
+      reason: "Corrupt",
+    });
   }
 }
 

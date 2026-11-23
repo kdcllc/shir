@@ -638,9 +638,7 @@ describe("queued import review", () => {
     expect(byId("editor-tab-visual")).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByTestId("editor-source")).toBeNull();
     expect(byId("reviewing-file").textContent).toContain("he.txt");
-    expect(byId("import-queued").textContent).toBe(
-      "1 file needs alignment review",
-    );
+    expect(byId("import-queued").textContent).toBe("1 file needs review");
     expect(byId("editor-flip").textContent).toBe(STRINGS.flipAlignment);
     // Nothing is saved before the review.
     expect(saveSong).not.toHaveBeenCalled();
