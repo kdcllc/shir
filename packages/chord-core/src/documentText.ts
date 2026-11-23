@@ -102,7 +102,7 @@ function tableLines(rows: readonly (readonly string[])[]): string[] {
     } else {
       lines.push(
         row
-          .map((c) => c.trim())
+          .map((c) => c.replace(/\n/g, " ").trim())
           .filter((c) => c !== "")
           .join(" "),
       );

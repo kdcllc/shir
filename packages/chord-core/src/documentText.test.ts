@@ -173,6 +173,28 @@ describe("documentToText tables", () => {
     expect(r.text).toBe("Verse 1\n");
   });
 
+  it("trims each label cell and drops the empty ones", () => {
+    const r = convert([table([["", " Verse ", "  ", " 1 ", ""]])]);
+    expect(r.text).toBe("Verse 1\n");
+  });
+
+  it("turns a line break inside a label cell into a space", () => {
+    expect(convert([table([["Chorus\nagain"]])]).text).toBe("Chorus again\n");
+    const r = documentToText({
+      format: "docx",
+      blocks: [
+        { kind: "paragraph", text: "Dm C" },
+        {
+          kind: "table",
+          rows: [["\u05E9\u05DC\u05D5\u05DD\n\u05E2\u05D5\u05DC\u05DD"]],
+        },
+      ],
+    });
+    expect(r.text).toBe(
+      "     Dm C\n\u05E9\u05DC\u05D5\u05DD \u05E2\u05D5\u05DC\u05DD\n",
+    );
+  });
+
   it("a row with one non-chord token is not a chord row", () => {
     const r = convert([
       table([

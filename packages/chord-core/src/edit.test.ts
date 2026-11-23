@@ -5,6 +5,7 @@ import {
   applyEdits,
   isValidChordText,
   listSections,
+  parseChord,
   parseSong,
   serializeSong,
   songChords,
@@ -1323,7 +1324,7 @@ describe("suggestChords", () => {
       "Gb",
       "Abm",
       "Bbm",
-      "B",
+      "Cb",
       "Db",
       "Ebm",
     ]);
@@ -1332,7 +1333,7 @@ describe("suggestChords", () => {
       "Gb",
       "Abm",
       "Bbm",
-      "B",
+      "Cb",
       "Db",
     ]);
     for (const key of ["Gb", "Db", "Cb", "Ab", "Eb", "Bb", "Ebm", "Abm"]) {
@@ -1350,7 +1351,7 @@ describe("suggestChords", () => {
     expect(suggestChords(keyed("C#"), "")).toEqual([
       "C#",
       "D#m",
-      "Fm",
+      "E#m",
       "F#",
       "G#",
       "A#m",
@@ -1359,7 +1360,7 @@ describe("suggestChords", () => {
       "A#m",
       "C#",
       "D#m",
-      "Fm",
+      "E#m",
       "F#",
       "G#",
     ]);
@@ -1371,6 +1372,64 @@ describe("suggestChords", () => {
         chords.filter((chord) => /^[A-G]b/.test(chord)),
         key,
       ).toEqual([]);
+    }
+  });
+
+  it.each([
+    ["Cb", ["Cb", "Dbm", "Ebm", "Fb", "Gb", "Abm"]],
+    ["Abm", ["Abm", "Cb", "Dbm", "Ebm", "Fb", "Gb"]],
+    ["G#", ["G#", "A#m", "B#m", "C#", "D#", "E#m"]],
+    ["E#m", ["E#m", "G#", "A#m", "B#m", "C#", "D#"]],
+    ["F#", ["F#", "G#m", "A#m", "B", "C#", "D#m"]],
+    ["Db", ["Db", "Ebm", "Fm", "Gb", "Ab", "Bbm"]],
+    ["D#m", ["D#m", "F#", "G#m", "A#m", "B", "C#"]],
+    ["G#m", ["G#m", "B", "C#m", "D#m", "E", "F#"]],
+    ["C", ["C", "Dm", "Em", "F", "G", "Am"]],
+    ["Am", ["Am", "C", "Dm", "Em", "F", "G"]],
+  ])("letter-spells key %s", (key, expected) => {
+    expect(suggestChords(keyed(key), "")).toEqual(expected);
+  });
+
+  it.each([
+    ["Fb", ["Fb", "Gbm", "Abm", "A", "B", "Dbm"]],
+    ["D#", ["D#", "Fm", "Gm", "G#", "A#", "Cm"]],
+    ["A#", ["A#", "Cm", "Dm", "D#", "F", "Gm"]],
+    ["Gbm", ["Gbm", "A", "Bm", "Dbm", "D", "E"]],
+  ])(
+    "keys needing a double accidental keep the table spelling: %s",
+    (key, expected) => {
+      expect(suggestChords(keyed(key), "")).toEqual(expected);
+    },
+  );
+
+  it("every suggestion of every flat and sharp key parses as a chord", () => {
+    const keys = [
+      "Gb",
+      "Db",
+      "Cb",
+      "Ab",
+      "Eb",
+      "Bb",
+      "Ebm",
+      "Abm",
+      "C#",
+      "F#",
+      "A#m",
+      "C#m",
+      "F#m",
+      "G#m",
+      "D#m",
+      "G#",
+      "E#m",
+      "Fb",
+      "D#",
+      "A#",
+      "Gbm",
+    ];
+    for (const key of keys) {
+      for (const chord of suggestChords(keyed(key), "")) {
+        expect(parseChord(chord), `${key}: ${chord}`).not.toBeNull();
+      }
     }
   });
 

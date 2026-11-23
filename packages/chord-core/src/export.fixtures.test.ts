@@ -29,7 +29,7 @@ describe("export segmentation over every fixture", () => {
     (name) => {
       const song = parseSong(readFixture(name)).song;
       const out = buildExportSong(song, { transpose: 0, capo: 0 });
-      const lyrics = out.model.lines.filter((l) => l.kind === "lyric");
+      const lyrics = song.lines.filter((l) => l.kind === "lyric");
       const exported = out.lines.filter((l) => l.kind === "lyric");
       expect(exported).toHaveLength(lyrics.length);
       lyrics.forEach((src, i) => {
@@ -49,4 +49,30 @@ describe("export segmentation over every fixture", () => {
       });
     },
   );
+});
+
+describe("rtl_ltr_tail cells", () => {
+  it("splits each lyric line into direction runs, cell by cell", () => {
+    const song = parseSong(readFixture("rtl_ltr_tail")).song;
+    const out = buildExportSong(song, { transpose: 0, capo: 0 });
+    const cells = out.lines.flatMap((l) =>
+      l.kind === "lyric"
+        ? [directionalCells(l).map((c) => [c.chord, c.text, c.direction])]
+        : [],
+    );
+    expect(cells).toEqual([
+      [
+        ["Am", "שיר של ", "rtl"],
+        ["F", "אהבה ו", "rtl"],
+        ["C", "hope", "ltr"],
+        ["G", "", "rtl"],
+      ],
+      [
+        ["Em", "הלב שר ב", "rtl"],
+        ["D", "שקט עם ", "rtl"],
+        [undefined, "you", "ltr"],
+        ["C", "", "rtl"],
+      ],
+    ]);
+  });
 });
