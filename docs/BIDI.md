@@ -205,7 +205,12 @@ becomes static with `inline-size: auto`, and each song after the first starts on
 ## Word export
 
 `buildDocx` (`apps/desktop/src/export/docx.ts`) maps the rules onto Word output. The export model
-comes from chord-core (`directionalCells`, `packages/chord-core/src/export.ts`).
+comes from chord-core (`directionalCells`, `packages/chord-core/src/export.ts`). Cell and run
+direction come from its `classify`: any Hebrew-script or Arabic-script character is RTL (letters,
+and also script punctuation such as maqaf, geresh and gershayim, and Arabic-Indic digits), other
+letters (and ASCII digits) are LTR, and other punctuation, spaces and other characters are neutral.
+The letter classes are those of `firstStrongDirection` (which skips the non-letters); a neutral run
+takes the direction around it when both neighbors agree, otherwise the line direction.
 
 - **B1** A chord paragraph is never `w:bidi` (a trailing neutral such as `#` would take the
   paragraph's RTL direction and read "#F"). In an RTL cell it is right-aligned and the cell's end
@@ -214,16 +219,31 @@ comes from chord-core (`directionalCells`, `packages/chord-core/src/export.ts`).
   direction. An RTL line's table is `w:bidiVisual` with table alignment right. Characters are never
   reordered: each maximal group of consecutive cells opposite to the line direction is emitted in
   reverse logical order as whole cells. Inside lyric-line tables, `w:bidi` and `w:rtl` are set only on
-  RTL cells. Outside them a paragraph is `w:bidi`/`w:rtl` when its own direction is RTL: a section label takes the song direction, a comment the first strong direction of its text, a chordless lyric line its line direction, and the setlist cover the interface language's direction (`ExportMeta.dir`).
+  RTL cells. Outside them a paragraph is `w:bidi`/`w:rtl` when its own direction is RTL:
+  - a section label takes the song direction;
+  - a comment takes the first strong direction of its text;
+  - a chordless lyric line takes its line direction;
+  - a song heading takes the first strong direction of the title;
+  - a facts line takes the song direction, with each part (artist, key, capo) a run in its own
+    first strong direction;
+  - a raw line takes its first strong direction;
+  - a tab line is never right-to-left (monospace, LTR);
+  - on the setlist cover, the title takes the first strong direction of the title, falling back to
+    `ExportMeta.dir` when it has no strong character; the date line, the Songs heading and the
+    numbered song list take `ExportMeta.dir`, with each list part keeping its own run direction.
 - **B6** A chord-only line is a one-row table in the song direction, each chord LTR.
-- Column widths (`columnWidths.ts`) are estimated from Liberation Sans advance widths
-  (`fontMetrics.ts`) times 1.1 plus 60 twips, and scaled down proportionally only when the sum exceeds
-  the printable width of 9638 twips.
+- Column widths (`columnWidths.ts`, `estimateColumnWidths`) are estimated from Liberation Sans
+  advance widths (`fontMetrics.ts`): `max(ceil(lyric × 1.1) + 60, ceil(chord × 1.1) + 60 + 100, 60)`
+  twips. The 100 twips are the chord cell's end margin and 60 twips is the minimum. Widths are
+  scaled down proportionally only when the sum exceeds the printable width of 9638 twips.
+- Each song after the cover, and each song after the first when there is no cover, starts on a new
+  page (`pageBreakBefore = opts.cover || i > 0`).
 
 Verified scope: the layout was checked against LibreOffice, which reads `w:tcMar` left and right as
 physical sides and is what the chord-cell margins target. Word's reading of `w:tcMar` inside a
-`w:bidiVisual` table is unverified, and a very long lyric line stays one table row instead of
-wrapping (`docx.ts`).
+`w:bidiVisual` table is unverified, and so is the RTL table's right alignment (`w:jc="right"`
+together with `w:bidiVisual`) in Microsoft Word. A very long lyric line stays one table row
+instead of wrapping (`docx.ts`).
 
 ## Verifying
 

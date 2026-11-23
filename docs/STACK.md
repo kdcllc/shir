@@ -70,6 +70,7 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | XML reader                               | `quick-xml`                     | 0.42.0                                   | crate     | installed (G11) |
 | Legacy encodings (RTF cp1255)            | `encoding_rs`                   | 0.8.44                                   | crate     | installed (G11) |
 | PDF text extraction                      | `pdf-extract`                   | 0.12.1                                   | crate     | installed (G11) |
+| Base64 (export payload decoding)         | `base64`                        | 0.23.1                                   | crate     | installed (G12) |
 | Playwright                               | `@playwright/test`              | 1.65.0                                   | npm       | installed (G1)  |
 | WebdriverIO                              | `webdriverio`                   | 10.1.0                                   | npm       | installed (G8)  |
 | WDIO CLI                                 | `@wdio/cli`                     | 10.1.0                                   | npm       | installed (G8)  |
@@ -80,7 +81,7 @@ JavaScript dependencies are pinned to exact versions in the `catalog:` of `pnpm-
 | WDIO assertions (pinned for Node floor)  | `expect-webdriverio`            | 8.0.0                                    | npm       | installed (G8)  |
 | WDIO Tauri service                       | `@wdio/tauri-service`           | 1.5.1                                    | npm       | not used (G8)   |
 | Tauri WebDriver server (cargo install)   | `tauri-driver`                  | 2.1.0                                    | tool      | installed (G8)  |
-| Tauri updater plugin                     | `tauri-plugin-updater`          | 2.14.1                                   | crate     | planned (G10)   |
+| Tauri updater plugin                     | `tauri-plugin-updater`          | 2.14.1                                   | crate     | planned         |
 | Noto Sans Hebrew                         | `@fontsource/noto-sans-hebrew`  | 5.3.0                                    | npm       | installed (G1)  |
 | Noto Serif Hebrew                        | `@fontsource/noto-serif-hebrew` | 5.3.0                                    | npm       | installed (G1)  |
 | Heebo                                    | `@fontsource/heebo`             | 5.3.0                                    | npm       | installed (G1)  |

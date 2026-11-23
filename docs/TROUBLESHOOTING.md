@@ -78,6 +78,26 @@ against a cached WebKit build whose revision differs from the pinned Playwright 
 `SHIR_WEBKIT_EXECUTABLE` to that build's executable. It is a local-only escape hatch; CI installs
 the matching browser.
 
+## PDF import: niqqud missing or on the wrong letter
+
+Symptom: after Open files on a `.pdf`, a niqqud mark is missing or sits on the wrong letter.
+
+Cause: Shir reads the inline `/ActualText` spans that LibreOffice and many other producers write for
+ligature glyphs, so those PDFs import with their niqqud intact. The limitation applies to PDFs
+without `/ActualText` spans, PDFs whose `/ActualText` spans are named-property spans (referenced
+through the page's `/Properties` resources), and PDFs with non-Identity CID encodings, and to pages
+that show text with the `'` or `"` operators or use Form XObjects. These can still drop or misplace
+marks.
+
+Workarounds:
+
+- Open the source `.docx`, `.odt` or `.rtf` file instead.
+- Fix the letters in the editor.
+- Attach the PDF in Import with AI.
+
+See [`docs/DESKTOP.md` § Editor and import](DESKTOP.md#editor-and-import) for how document
+import behaves.
+
 ## Real-app E2E (`e2e/`)
 
 Setup and the run command are in [`e2e/README.md`](../e2e/README.md). Common failures:

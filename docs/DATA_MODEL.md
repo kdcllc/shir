@@ -235,15 +235,28 @@ bytes; also a DOCX or ODT XML part over 20 MiB, or a PDF with over 2,000,000 gly
 file, or a read failure). The formats:
 
 - DOCX and ODT: paragraphs and tables, with tabs kept.
-- RTF: a hand-written tokenizer that decodes `\uN` and hex bytes. The code page
-  of a byte comes from the current font's `\fcharset` first: 177 and 181 give
+  In DOCX, moved-from text (`w:moveFrom`) is dropped, like deleted text; a
+  non-breaking hyphen becomes U+2011, a soft hyphen is dropped, and a `w:sym`
+  gives its character (Word's symbol-font private-use codes are dropped). In
+  ODT, a run of literal white space becomes one space and is dropped at the
+  start and end of a paragraph, while `text:s`, `text:tab` and
+  `text:line-break` are kept as written.
+- RTF: a hand-written tokenizer that decodes `\uN` and hex bytes. In a
+  right-to-left (`\rtlch`) run whose associated font (`\af`) has a Hebrew or
+  Arabic charset, that font decides the code page. Otherwise the code page of
+  a byte comes from the current font's `\fcharset` first: 177 and 181 give
   cp1255 (Hebrew), 178 to 180 give cp1256 (Arabic). Only otherwise does
-  `\ansicpg` apply, defaulting to 1252.
+  `\ansicpg` apply, defaulting to 1252. `\binN` binary data is skipped.
+  Content after the closing brace of the document is `Corrupt`.
 - PDF: text PDFs only, run on a worker thread with a 30 second timeout; a
   timeout or a worker failure is `Corrupt`. Lines are rebuilt from glyph
   baselines, and Hebrew runs are converted from visual to logical order with a
   `PdfReordered` warning. A PDF with no extractable text (likely a scan) gives
   zero blocks and a `PdfNoText` warning, not an error.
+  Inline `/ActualText` spans replace the glyphs they cover when the page's
+  glyph count matches (otherwise the page is left as extracted); a
+  right-to-left line's leading spaces are counted from the page's right text
+  edge.
 
 Ten setlist commands live in `src/commands/setlists.rs`: `list_setlists`,
 `get_setlist`, `create_setlist`, `rename_setlist`, `delete_setlist`,
@@ -251,12 +264,27 @@ Ten setlist commands live in `src/commands/setlists.rs`: `list_setlists`,
 `reorder_setlist_items` and `update_setlist_item`. Each is
 `#[tauri::command(async)]` and uses `DbState`.
 
-`save_export_docx(default_name, filter_name, bytes)` (`src/commands/files.rs`)
-is `#[tauri::command(async)]` and does not use `DbState`. It validates the bytes
-first: empty or over 20 MiB gives a `FileError` of kind `Invalid`. The default
-name is sanitized to a bare `.docx` name. The native save dialog is opened in
-Rust, so the webview never supplies a path. A cancelled dialog returns `null`. A chosen name that already ends in `.docx` is used as is (the dialog confirmed any overwrite); otherwise `.docx` is appended and, when that path already exists, the first free `<name> (2).docx`, `(3)`, ... is used. The file is written atomically (temporary file, then rename) and never through a
-symlink, and the written path is returned.
+`save_export_docx(default_name, filter_name, bytes_base64)`
+(`src/commands/files.rs`) is `#[tauri::command(async)]` and does not use
+`DbState`. `bytes_base64: String` is the standard base64 (padded) encoding of
+the document. It validates the payload first, each failure a `FileError` of kind
+`Invalid`: an encoded length over `MAX_EXPORT_BASE64_LEN` (`ceil(20 MiB / 3) × 4`
+characters) is refused before decoding; invalid base64, an empty payload and a
+decoded payload over 20 MiB are refused too. The default name is sanitized to a
+bare `.docx` name: bidi and zero-width format characters (U+202A–U+202E,
+U+2066–U+2069, U+200B, U+FEFF) are removed (LRM and RLM are kept), the stem is
+capped at 100 characters, and a Windows reserved device name (`CON`, `PRN`,
+`AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`) is prefixed with `_`. The native
+save dialog is opened in Rust, so the webview never supplies a path. A cancelled
+dialog returns `null`. The document is first written to a temporary file next
+to the target; when that temporary name is already taken, the next name is
+tried (a foreign file is never deleted). A chosen name that already ends in
+`.docx` is used as is (the dialog confirmed any overwrite) and written
+atomically (temporary file, then rename), and never through a symlink.
+Otherwise `.docx` is appended and the file is published without replacing a
+file that appeared after the free-name check: the temporary file is hard-linked
+to the first free `<name>.docx`, `<name> (2).docx`, `(3)`, ..., falling back to
+rename where hard links are unsupported. The written path is returned.
 
 The database file is `<app_data_dir>/shir.db` (app identifier
 `com.kdcllc.shir`). If it cannot be opened, startup logs one line,
@@ -317,7 +345,8 @@ deletion: once the delete confirmation dialog is confirmed, `deleteMany`
 `readTextFile(path)` and the dialog plugin as `pickSongFiles()`. A failure of
 `readTextFile` throws a `FileReadError` whose `kind` is a `FileErrorKind`
 (`TooLarge`, `NotUtf8`, `Io`, `Invalid`) or `"Ipc"` (the call itself failed). `readTextFile` itself never receives `Invalid`.
-It also exports `saveExportDocx`, which wraps `save_export_docx`; a failure
+It also exports `saveExportDocx`, which wraps `save_export_docx`: it takes a
+`Uint8Array` and base64-encodes it for the command. A failure
 throws a `FileWriteError` whose `kind` is `Invalid`, `Io` or `"Ipc"`.
 
 It also exports `extractDocument(path)`, which wraps `extract_document` and
@@ -328,6 +357,10 @@ single-file picker filtered to `DOCUMENT_FILE_EXTENSIONS` (`docx`, `odt`, `rtf`,
 `pdf`) and resolves the path, or `undefined` on cancel. `pickSongFiles()`
 filters the song extensions (`cho`, `chopro`, `chordpro`, `txt`) together with
 `DOCUMENT_FILE_EXTENSIONS`.
+
+For an `"Ipc"` failure of any of these `files.ts` wrappers (the two pickers throw a
+`FileReadError` too), the error message is the rejection's text, its `message`, or its
+JSON; it is never `[object Object]`.
 
 ## Invariants
 

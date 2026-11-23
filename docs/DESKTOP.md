@@ -10,8 +10,10 @@ and the Hebrew resource is `apps/desktop/src/i18n/he.ts`.
 Two panes. The song list (`<nav>`, accessible name `Songs`) sits on the
 inline-start side under the app heading `<h1>`, rendered as
 `{appName} {separator} <bdi lang="he">{appNameHebrew}</bdi>`, which shows as
-`Shir · שיר`. In database mode a Songs / Setlists switch (`SidebarTabs`) sits
-under the heading; the Setlists view shows `SetlistsPanel` in the sidebar and
+`Shir · שיר`. In database mode a Songs / Setlists switch (`SidebarTabs`, whose tabs carry the
+ids `SIDEBAR_TAB_IDS`, the selected tab carrying `aria-controls`) sits under the
+heading, and the selected view's sidebar content sits in a `role="tabpanel"`
+wrapper (`sidebar-panel-songs` / `sidebar-panel-setlists`); the Setlists view shows `SetlistsPanel` in the sidebar and
 `SetlistEditor` in the song pane (§ Setlists view). The song pane is `<main>`. While the editor is open (database
 mode only), it replaces the song view in the song pane (see § Editor and
 import).
@@ -263,9 +265,12 @@ Selecting another song applies the same reset. The rendered song is
 
 Database mode only. The `SidebarTabs` switch chooses between the Songs view
 (search, library controls and song list) and the Setlists view. In the Setlists
-view the sidebar shows `SetlistsPanel`; opening a setlist shows `SetlistEditor`
-in the song pane, with the `pdfHint` text (`setlist-pdf-hint`) above it (§
-Components, Setlists). `App` owns the state and runs one setlist call or export
+view the sidebar shows `SetlistsPanel` inside the `sidebar-panel-setlists`
+`role="tabpanel"` wrapper, which is labelled by the Setlists tab (the tabs carry
+`SIDEBAR_TAB_IDS` ids and the selected tab carries `aria-controls`). With no
+open setlist the song pane shows `noSetlistSelected`. Opening a setlist shows
+`SetlistEditor` in the song pane, with the `pdfHint` text (`setlist-pdf-hint`)
+above it (§ Components, Setlists). `App` owns the state and runs one setlist call or export
 at a time; a failed setlist call leaves the state as it was and shows an
 `app-notice` alert.
 
@@ -283,7 +288,9 @@ at a time; a failed setlist call leaves the state as it was and shows an
 
 `apps/desktop/src/setlists.ts` also exports `moveItem` (one-place reorder that
 ignores a move past either end), `duplicateName` (name, a space and the suffix,
-cut on a grapheme boundary to at most 200 characters) and `songToExport`.
+cut on a grapheme boundary to at most 200 characters) and `songToExport`. It
+also exports `MAX_SETLIST_NAME_CHARS` (200) and `setlistNameLength` (the length
+of the trimmed name in code points), the name rule shared with storage.
 
 ## Print and export
 
@@ -292,7 +299,8 @@ mode for the open setlist. Both go through the shared document model of
 chord-core (`buildExportDocument`, `buildExportSong`, `directionalCells`;
 `packages/chord-core/src/export.ts`). The open song exports at its current
 transpose and capo, without a cover page, under the song's title. A failure
-shows the `exportFailed` alert in `app-notice`.
+shows the `exportSongFailed` alert in `app-notice`; a failed setlist export
+shows `exportFailed`.
 
 - Print and Export PDF (`apps/desktop/src/export/printExport.ts`): both open
   the webview's print dialog; Export PDF additionally sets `document.title` to
@@ -300,26 +308,43 @@ shows the `exportFailed` alert in `app-notice`.
   dialog proposes it, and the `pdfHint` text tells the user to choose "Save as
   PDF". `printExport` mounts `PrintDocument` (`data-print-root`) appended to
   `<body>`, laid out off-screen at 180 mm (A4 minus 15 mm margins) so that
-  chord-render's overlap pass runs, sets `:root[data-printing="export"]`, waits for the fonts, the overlap pass (2 s cap) and two animation frames, and calls `window.print()`. The print CSS hides `#root`, shows the print root,
-  starts every song on a new page (`break-before: page`) and sets
-  `@page { size: A4; margin: 15mm }`, which is global. Cleanup runs on
+  chord-render's overlap pass runs, sets `:root[data-printing="export"]`, waits for the fonts,
+  the overlap pass (2 s cap) and two animation frames, and calls `window.print()`. The print CSS
+  hides `#root`, shows the print root, starts every song on a new page (`break-before: page`) and
+  sets `@page { size: A4; margin: 15mm }`, which is global. Cleanup runs on
   `afterprint` or, for webviews that never fire it, on the first pointer or key
   input after `print()` returned.
 - Export Word (`apps/desktop/src/export/docx.ts`, `buildDocx`; `saveDocx.ts`):
-  a cover page (setlist only) and one song per page. Lyric lines with at least one chord are borderless
-  two-row tables of single-direction cells from `directionalCells`; RTL tables
+  a cover page (setlist only) and one song per page. Lyric lines with at least one chord are
+  borderless two-row tables of single-direction cells from `directionalCells`; RTL tables
   are `w:bidiVisual` with the table right-aligned, and cell groups of the
   opposite direction are reversed as whole cells, never as strings. `w:bidi` /
   `w:rtl` are set only on RTL lyric cells inside those tables; chord paragraphs
   are never bidi (B1) and sit right-aligned in RTL cells; a chord-only line is
-  a one-row table in the song direction (B6). Outside those tables a paragraph is bidirectional / right-to-left when its own direction is RTL: a section label takes the song direction, a comment the first strong direction of its text, a chordless lyric line its line direction, and the setlist cover the interface language's direction (`ExportMeta.dir`). Column widths come from Liberation Sans advance widths
-  (`fontMetrics.ts`) times 1.1 plus 60 twips, scaled down proportionally only
-  when the sum exceeds 9638 twips (`columnWidths.ts`).
+  a one-row table in the song direction (B6). Outside those tables a paragraph is bidirectional /
+  right-to-left when its own direction is RTL: a section label takes the song direction, a comment
+  the first strong direction of its text, a chordless lyric line its line direction, a song heading
+  the first strong direction of the title, a facts line the song direction (each part, artist, key
+  and capo, is a run in its own first strong direction), and a raw line its first strong direction.
+  A tab line is never right-to-left (monospace, LTR). On the setlist cover the title takes the first
+  strong direction of the title, falling back to the interface language's direction
+  (`ExportMeta.dir`) when it has no strong character; the date line, the Songs heading and the
+  numbered song list take `ExportMeta.dir`, with each list part keeping its own run direction.
+  Column widths come from Liberation Sans advance widths (`fontMetrics.ts`):
+  `max(ceil(lyric × 1.1) + 60, ceil(chord × 1.1) + 60 + 100, 60)` twips, where 100 twips is the
+  chord cell's end margin and 60 twips the minimum. They are scaled down proportionally only
+  when the sum exceeds 9638 twips (`columnWidths.ts`). A very long lyric line stays one table row
+  (it does not wrap).
 - `exportFileName(title, ext)` (`fileName.ts`) replaces forbidden characters
-  with `-`, collapses whitespace, caps the name at 100 graphemes and falls back
-  to `setlist`.
-- `saveDocx` builds the file and calls `saveExportDocx(defaultName, filterName,
-bytes)` from `files.ts`. The native save dialog opens in the backend; the
+  with `-`, collapses each run of whitespace, tabs and newlines included, to one space, caps the
+  name at 100 graphemes and falls back to `setlist`.
+- `saveDocx` builds the file and calls
+  `saveExportDocx(defaultName, filterName, bytes)` from `files.ts`. `bytes` is a
+  `Uint8Array` that `saveExportDocx` base64-encodes, and the `save_export_docx` command receives a
+  base64 `String` (binding argument `bytesBase64: string`, Rust parameter `bytes_base64`). The
+  backend refuses, with kind `Invalid`, an encoded payload longer than `ceil(20 MiB / 3) × 4`
+  characters (checked before decoding), invalid base64, an empty payload and a decoded payload
+  over 20 MiB. The native save dialog opens in the backend; the
   webview never supplies a path. It resolves the saved path, or `null` when the
   user cancels (no status is shown then). A failure throws `FileWriteError`
   whose `kind` is `Invalid` (the backend refused the payload), `Io` or `"Ipc"`;
@@ -355,7 +380,8 @@ Each component lives at `apps/desktop/src/components/<Name>.tsx`.
 - `SelectionBar`: the `selection-bar` element. It shows `Select` outside select
   mode and the count, `Select all`, `Delete selected` and `Done` in select mode
   (see § Library) and, in select mode, `Add to setlist`
-  (`add-selected-to-setlist`, disabled when `count` is 0). `Delete selected` is
+  (`add-selected-to-setlist`, disabled when `count` is 0 or `addDisabled` is
+  set; `App` sets it while a delete or a setlist call runs). `Delete selected` is
   disabled when `count` is 0 or `busy` is set. The optional `startRef` receives the `Select` button, so that the owner
   can focus it.
 - `ConfirmDelete`: the delete confirmation dialog described in § Library. It
@@ -440,6 +466,7 @@ SongIndex { items: readonly SongIndexItem[]; selectedId: string | undefined;
 LibraryControls { sort: SortOrder; language: LanguageFilter;
   onSort(next: SortOrder): void; onLanguage(next: LanguageFilter): void }
 SelectionBar { selecting: boolean; count: number; busy: boolean;
+  addDisabled?: boolean | undefined;
   onStart(): void; onSelectAll(): void; onDelete(): void;
   onAddToSetlist(): void; onDone(): void;
   startRef?: RefObject<HTMLButtonElement | null> | undefined }
@@ -452,7 +479,8 @@ ViewControls { transpose: number; capo: number;
   onReset(): void }
 DiagnosticsPanel { diagnostics: readonly Diagnostic[] }
 Editor { initialText: string; baseline?: string; seed?: ImportSeed;
-  titlePath?: string; fileName?: string; notes?: readonly string[];
+  titlePath?: string; fileName?: string; fileLabel?: ReviewLabel;
+  notes?: readonly string[];
   onConvertWithAi?(text: string): void; onSave(text: string): Promise<void>;
   onCancel(): void; onDirtyChange?(dirty: boolean): void }
 AiImportDialog { initial?: AiDocument;
@@ -475,6 +503,9 @@ SectionControls { section: string; label?: string | undefined;
   onMove(direction: "up" | "down"): void; onRemove(): void }
 ```
 
+`ReviewLabel` is `{ source: string; title: string }` (`importFiles.ts`). When
+`Editor` gets a `fileLabel`, it ignores `fileName`.
+
 ### Setlists
 
 Controlled components in `apps/desktop/src/components/`; the owner (`App`) holds
@@ -482,7 +513,11 @@ every state and calls storage. None of them calls storage or IPC, and every
 control carries `data-ui-chrome`.
 
 - `SidebarTabs`: the `sidebar-tabs` `role="tablist"` with a Songs and a Setlists
-  tab (`tab-songs`, `tab-setlists`). Arrow keys select the visually next or
+  tab (`tab-songs`, `tab-setlists`). The tabs have the ids `SIDEBAR_TAB_IDS` and
+  the selected tab has `aria-controls` set to the id from `SIDEBAR_PANEL_IDS`
+  of its panel. `App` renders that panel as a `role="tabpanel"` wrapper
+  (`aria-labelledby` the tab, `display: contents` so the sidebar layout does
+  not change). Arrow keys select the visually next or
   previous tab (`dir="rtl"` swaps them; no wrap), `Home` and `End` jump to the
   ends.
 - `SetlistsPanel`: the sidebar list of setlists. Each row (keyed by setlist id)
@@ -499,8 +534,12 @@ control carries `data-ui-chrome`.
   (−11..+11), capo (`Song default (N)` = `null`, 0..12 and the song's own capo
   when 13..24), Move up / Move down (disabled at the ends), Remove and a drag
   handle. Alt+ArrowUp / Alt+ArrowDown on a focused row move it and keep focus on
-  it after the owner re-renders the new order. Moves are announced in the
-  `setlist-announce` live region.
+  it after the owner re-renders the new order. Print, Export PDF and Export Word
+  are disabled while `busy`. Moves are announced in the `setlist-announce` live
+  region, and only after storage reports success (`onMove` and `onReorder`
+  return a promise that resolves `true` only then); a drop while `busy` is
+  ignored, and Alt+Arrow from a control inside the row (such as the capo select)
+  does not move the row.
 - `useReorderDrag(ids, onReorder)` (`useReorderDrag.ts`): pointer-event
   reordering (no HTML5 drag API). Pointerdown on a handle captures the pointer,
   the target index is the number of other rows whose block-axis midpoint is above
@@ -516,12 +555,14 @@ control carries `data-ui-chrome`.
 
 ```ts
 SidebarTabs { view: "songs" | "setlists"; onChange(view: "songs" | "setlists"): void }
+  // tab ids SIDEBAR_TAB_IDS; the selected tab has aria-controls = SIDEBAR_PANEL_IDS[view]
 SetlistsPanel { setlists: readonly SetlistSummary[]; selectedId: string | null;
-  busy: boolean; onSelect(id: string): void; onCreate(name: string): void;
-  onRename(id: string, name: string): void; onDuplicate(id: string): void;
+  busy: boolean; onSelect(id: string): void; onCreate(name: string): Promise<boolean>;
+  onRename(id: string, name: string): Promise<boolean>; onDuplicate(id: string): void;
   onDelete(id: string): void }
+  // the panel keeps the typed name (create field, open rename input) until the call succeeds
 SetlistEditor { setlist: Setlist; busy: boolean;
-  onReorder(itemIds: string[]): void; onMove(itemId: string, delta: -1 | 1): void;
+  onReorder(itemIds: string[]): Promise<boolean>; onMove(itemId: string, delta: -1 | 1): Promise<boolean>;
   onTranspose(itemId: string, transpose: number): void;
   onCapo(itemId: string, capo: number | null): void;
   onRemove(itemId: string): void; onOpenSong(songId: string, itemId: string): void;
@@ -531,6 +572,11 @@ AddToSetlistDialog { setlists: readonly SetlistSummary[]; songCount: number;
   onCreateAndAdd(name: string): void }
 ConfirmDeleteSetlist { name: string; onCancel(): void; onConfirm(): void }
 ```
+
+The `Promise<boolean>` returned by `SetlistEditor`'s `onReorder` and `onMove`
+resolves `true` only when storage succeeded; `SetlistEditor` announces a move
+only then. `App` returns the result of its serialised setlist call, and `false`
+when another call is running, the call fails or no setlist is open.
 
 ## Editor and import
 
@@ -587,7 +633,7 @@ instead` (`editor-convert-ai`, § Import with AI).
 - `Save` calls `saveSong(text, id)` (`id` is set when editing an existing song);
   on failure the `saveFailed` alert shows the error message. After a save the
   list reloads and the saved song is selected.
-- Leaving a dirty editor (cancel, another song, New, Edit, Open files) shows
+- Leaving a dirty editor (cancel, another song, New, Edit, Open files, Import with AI) shows
   `ConfirmDiscard` (`role="alertdialog"`, `Keep editing` / `Discard`; Esc keeps
   editing). The app never uses `window.confirm`.
 
@@ -623,10 +669,13 @@ Visual tab:
   with a `dir="auto"` text input (`line-input`). A double-click on a lyric row
   leaves no chord picker open: the second click of the double-click does not
   reopen the picker the first click opened, and the `dblclick` closes it as
-  lyric-edit mode starts. An empty row (not the extra last row) also has an
-  `Add chord` button (`row-add-chord`, accessible name `chordAddEmpty`) that
-  opens the picker at position 0, so pointer users can add a chord before
-  typing text. Applying a chord (adding, replacing or choosing a suggestion)
+  lyric-edit mode starts. An empty row, and the extra last (phantom) row, also
+  have an `Add chord` button (`row-add-chord`, accessible name `chordAddEmpty`)
+  that opens the picker at position 0, so pointer users can add a chord before
+  typing text. On the phantom row it opens the picker on that row directly (as
+  Enter does): no line is inserted until a chord is chosen, and cancelling
+  leaves the song unchanged. The phantom row's button is one more Tab stop.
+  Applying a chord (adding, replacing or choosing a suggestion)
   closes the picker. The picker sits in the flow below its row, so it pushes the
   rows after it down instead of covering them (`add-section` stays clickable
   with the picker open on the last row).
@@ -693,13 +742,13 @@ Visual tab:
   recently focused row follow their line after the editor's own edits that
   add, remove or move lines, after reorders that keep the line count, and after
   changes from outside the visual editor (Undo, Redo, edits in the Source tab
-  and song-details changes); the
-  picker closes when its own line is removed. On a reorder that keeps the line
-  count, a line follows its content only when that content occurs exactly once
-  in the changed span on both sides. Every row has a stable identity (its React
-  key) that follows its line through the same moves, so a row that shifts stays
-  the same element: an open picker is not remounted, keeps its unsubmitted text,
-  and focus stays on the control the user clicked.
+  and song-details changes); the picker closes when its own line is removed.
+  On a reorder that keeps the line count, a line follows its content only when
+  that content occurs exactly once in the changed span on both sides. Every row
+  has a stable identity (its React key) that follows its line through the same
+  moves, so a row that shifts stays the same element: an open picker is not
+  remounted, keeps its unsubmitted text, and focus stays on the control the
+  user clicked.
 
 Open files (`apps/desktop/src/importFiles.ts`, `importSongFiles`):
 
@@ -730,21 +779,29 @@ Open files (`apps/desktop/src/importFiles.ts`, `importSongFiles`):
   with AI).
 - A document that cannot be read is an `import-failed` entry with a `reason`:
   the `kind` of the `DocumentReadError` (`TooLarge`, `TextTooLarge`,
-  `Unsupported`, `Corrupt`, `Io` or `"Ipc"`), or `NoText` for a document that
-  holds no blocks. The report shows a localized message for every reason
+  `Unsupported`, `Corrupt`, `Io` or `"Ipc"`; any other `kind` counts as
+  `"Ipc"`), or `NoText` for a document that holds no blocks. The report shows
+  a localized message for every reason
   except `"Ipc"`: `docTooLarge`, `docTextTooLarge`, `docUnsupported`,
   `docCorrupt`, `docIo` and `docNoText`. An `"Ipc"` failure shows the raw
-  error message. When `documentToText` or `importText` throws, the file fails
-  with no `reason` and the report shows the raw error message.
+  error message (the rejection's text, its `message`, or its JSON; never
+  `[object Object]`). When `documentToText` or `importText` throws, the file
+  fails with reason `Corrupt` and the report shows the localized `docCorrupt`
+  text.
 - `withTitleFallback(chordpro, path)` prepends `{title: <file name without
 extension>}` unless the text already has a `{title` or `{t:` directive.
+- An AI song without a `{title}` is saved with the title `Song N`
+  (`aiSongLabel`, `שיר N` in Hebrew). The review label of an AI song keeps its
+  source and title as two values (`QueuedFile.label`), and each is shown in its
+  own `<bdi>` (`reviewing-file`, `import-skipped`), so a `/` or `\` in a title
+  is never cut.
 - One file's failure never stops the others; each failure is an
   `import-failed` alert with the file name and message. A failure of the dialog
   itself shows the `app-notice` alert (`importPickFailed`).
 - The sidebar report (`import-report`) shows the `importSummary` template
   (`Imported 2 of 3 files`, `Imported 1 of 1 file`), counting saved files, and
-  the `importQueued` template (`1 file needs alignment review`, otherwise
-  `N files need alignment review`) when files are queued. Converted `.txt`
+  the `importQueued` template (`1 file needs review`, otherwise
+  `N files need review`) when files are queued. Converted `.txt`
   files that were saved at once are listed under `importConverted`.
 
 ## Import with AI
@@ -765,14 +822,19 @@ scans, .doc and others)` (`ai-source-attach`) is the default when the dialog
   `.docx`, `.odt`, `.rtf` and `.pdf`. `App` extracts it on this computer
   (`extractDocument`, then the text of `documentToText`). The picked file shows
   as its name, `·` and its character count (`ai-picked`); its extraction
-  warnings are listed under `ai-pick-warnings`; a failure shows in `ai-pick-error` the
-  message the import report shows for it (Open files, § Editor and import), and
-  a document with no blocks shows `docNoText`.
+  warnings are listed under `ai-pick-warnings`. When the file picker itself
+  fails (`pickDocumentFile` rejects), `ai-pick-error` shows the localized
+  `importPickFailed` text, the same text Open files shows when its dialog
+  fails (`pickAiDocument` in `App`). An extraction failure still shows in
+  `ai-pick-error` the message the import report shows for it (Open files,
+  § Editor and import), and a document with no blocks shows `docNoText`.
 - `Prompt`: a read-only text area (`ai-prompt`, `dir="ltr"`) with the prompt.
   In text mode the prompt holds the extracted text and appears once a
   document is picked; until then `ai-prompt-hint` shows `Choose a document
 first, then the prompt appears here.`. In attach mode the prompt asks for the
-  attached file, and names the picked document when there is one. `Copy prompt`
+  attached file, and names the picked document when there is one. In text
+  mode, for a PDF the prompt also says chord positions may be approximate
+  (`docs/CHORDPRO.md` § Documents and AI replies). `Copy prompt`
   (`ai-copy`) copies it and `ai-copied` shows `Copied`; when the clipboard
   cannot be written, the prompt is selected and `ai-copy-failed` shows `Could
 not copy automatically. The prompt is selected: press Ctrl+C.`. The status
@@ -816,12 +878,18 @@ Limits of document extraction:
 - PDF extraction stops after 30 seconds and fails as `Corrupt`
   (`docCorrupt`).
 - Hebrew text in a PDF is reordered from visual to logical order, and the
-  `docWarnPdfReordered` warning asks the user to check the lines. A niqqud mark
-  can land on the wrong letter when the PDF font maps ligature glyphs
-  ambiguously. Chord placement from a PDF is best-effort: the spaces in a line
-  are rebuilt from the gaps between glyphs, counted in the page's typical
-  character width, so a chord can sit off the letter it was printed over.
-  Review the song in the editor, use `Flip alignment`, or attach
+  `docWarnPdfReordered` warning asks the user to check the lines. Niqqud marks
+  that a PDF carries in `/ActualText` spans (the ligature glyphs LibreOffice
+  and many other producers write) are kept. A page uses its `/ActualText` spans
+  only when their character-code count matches the glyphs extracted for it. A
+  PDF without `/ActualText` spans, one whose spans are named property lists
+  (`/Properties` resource names), and one with non-Identity CID encodings, as
+  well as a page that shows text with the `'` or `"` operators or uses Form
+  XObjects, falls back to plain extraction, and there a niqqud mark can still be
+  lost or land on the wrong letter. Chord placement from a PDF is best-effort:
+  the spaces in a line are rebuilt from the gaps between glyphs, counted in the
+  page's typical character width, so a chord can sit off the letter it was
+  printed over. Review the song in the editor, use `Flip alignment`, or attach
   the file to the AI chat instead.
 
 ## Webview errors
@@ -889,7 +957,7 @@ Coordinates have two meanings:
 | `open-files`                    | `<button>`                 | Sidebar: picks song files and imports them (database mode only)       |
 | `import-report`                 | `<section>`                | Sidebar summary of the last file import                               |
 | `import-summary`                | `<p role="status">`        | `Imported N of M files` (saved files only)                            |
-| `import-queued`                 | `<p role="status">`        | `N files need alignment review`, only when files are queued           |
+| `import-queued`                 | `<p role="status">`        | `N files need review`, only when files are queued                     |
 | `import-converted`              | `<div>`                    | File names of converted `.txt` files that were saved at once          |
 | `import-skipped`                | `<div>`                    | File names of queued files skipped without saving                     |
 | `import-failed`                 | `<p role="alert">`         | One per failed file: file name and error message                      |
@@ -953,7 +1021,7 @@ Coordinates have two meanings:
 | `line-edit-text`                | `<button>`                 | Starts editing the line's lyrics                                      |
 | `line-add-below`                | `<button>`                 | Inserts an empty line below                                           |
 | `line-remove`                   | `<button>`                 | Removes the line                                                      |
-| `row-add-chord`                 | `<button>`                 | Opens the chord picker at position 0 of an empty row                  |
+| `row-add-chord`                 | `<button>`                 | Chord picker at position 0 of an empty row or the extra last row      |
 | `chords-input`                  | `<input dir="ltr">`        | Chords of a chord-only line, space separated                          |
 | `comment-input`                 | `<input dir="auto">`       | Text of a comment line                                                |
 | `visual-verbatim`               | `<pre>`                    | A line the visual editor shows read-only                              |
@@ -1019,9 +1087,11 @@ Coordinates have two meanings:
 | `setlist-select`                | `<button>`                 | Selects the setlist; `aria-current="true"` on the selected one        |
 | `setlists-empty`                | `<p>`                      | Empty state of the setlists panel                                     |
 | `setlists-panel`                | `<div>`                    | The sidebar setlists panel                                            |
+| `sidebar-panel-setlists`        | `<div role="tabpanel">`    | The Setlists sidebar content; labelled by the Setlists tab            |
+| `sidebar-panel-songs`           | `<div role="tabpanel">`    | The Songs sidebar content; labelled by the Songs tab                  |
 | `sidebar-tabs`                  | `<div role="tablist">`     | The Songs / Setlists switch                                           |
-| `tab-setlists`                  | `<button role="tab">`      | The Setlists tab                                                      |
-| `tab-songs`                     | `<button role="tab">`      | The Songs tab                                                         |
+| `tab-setlists`                  | `<button role="tab">`      | The Setlists tab; when selected, `aria-controls` is its panel id      |
+| `tab-songs`                     | `<button role="tab">`      | The Songs tab; when selected, `aria-controls` is its panel id         |
 | `ai-import`                     | `<button>`                 | Opens the Import with AI dialog                                       |
 | `ai-import-dialog`              | `<div role="dialog">`      | The Import with AI dialog                                             |
 | `ai-source-document`            | `<input type="radio">`     | Source: extract the text from a document                              |
@@ -1204,6 +1274,8 @@ Coordinates have two meanings:
 | `setlistsLoadFailed`   | `Could not load setlists`                                                                                                    |
 | `setlistSaveFailed`    | `Could not save the setlist`                                                                                                 |
 | `exportFailed`         | `Could not export the setlist`                                                                                               |
+| `exportSongFailed`     | `Could not export the song`                                                                                                  |
+| `noSetlistSelected`    | `Select a setlist`                                                                                                           |
 | `exportLabelSetlist`   | `Setlist`                                                                                                                    |
 | `exportLabelKey`       | `Key`                                                                                                                        |
 | `exportLabelCapo`      | `Capo`                                                                                                                       |
@@ -1235,7 +1307,7 @@ Coordinates have two meanings:
 | `fileFilterDocuments`  | `Documents`                                                                                                                  |
 | `docTooLarge`          | `The file is over 20 MB. Attach it in Import with AI instead`                                                                |
 | `docTextTooLarge`      | `The file holds more than 2 MB of text. Attach it in Import with AI instead`                                                 |
-| `docUnsupported`       | `Unsupported file type`                                                                                                      |
+| `docUnsupported`       | `Unsupported file type. Use Import with AI and attach the file`                                                              |
 | `docCorrupt`           | `The file is damaged or not in that format`                                                                                  |
 | `docIo`                | `Could not read the file`                                                                                                    |
 | `docNoText`            | `No text found, likely a scan. Use Import with AI and attach the file`                                                       |
@@ -1252,8 +1324,8 @@ read every string with `const t = useT()` and `t("<key>", vars)`:
 - `diagnosticsCount` (plural on `count`): `1 problem` / `N problems`.
 - `importSummary` (plural on `count` = total files, plus `saved`):
   `Imported 2 of 3 files`, `Imported 1 of 1 file`.
-- `importQueued` (plural on `count`): `1 file needs alignment review` /
-  `N files need alignment review`.
+- `importQueued` (plural on `count`): `1 file needs review` /
+  `N files need review`.
 - `deleteSongNamed`, `selectSongNamed` and `deleteConfirmTitle` (`title`, wrapped
   in the bidi isolates U+2068 / U+2069): `Delete <title>`, `Select <title>`,
   `Delete <title>?`.
