@@ -25,3 +25,9 @@ Written by hand, never by `generate.sh`.
 - anchors oracle: each index is read from the rendered page (`pdftoppm -r 150`, x positions from
   `pdftotext -bbox`): cell k counted from the right text edge (7.2 pt per monospace cell) is
   lyric grapheme k; on a space the next letter in reading order.
+- g12 regenerated only the `songbook_mixed.*` binaries (and `GENERATED.md`) from the recorded run
+  (title renamed to "Saltwater Steps"); `he_chords_above.*` and `en_table.*` are the g11
+  conversions, produced by the same commands with the same LibreOffice version.
+- `he_word_cp1255.rtf` is written by hand (Word-style: Hebrew as cp1255 `\'hh` bytes in `\rtlch`
+  runs whose associated font `\af` is the `\fcharset177` font). `generate.sh` never produces or
+  changes it, and its `.expected.json` is the extraction a correct reader returns.
