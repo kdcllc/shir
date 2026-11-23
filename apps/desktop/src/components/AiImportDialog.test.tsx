@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AI_SONG_DELIMITER } from "chord-core";
 import type { AiReplySong } from "chord-core";
+import { i18n } from "../i18n";
 import { STRINGS } from "../strings";
 import { AiImportDialog } from "./AiImportDialog";
 import type { AiImportDialogProps } from "./AiImportDialog";
@@ -91,17 +92,77 @@ describe("AiImportDialog", () => {
       text: "Dm  C\nsing along",
       warnings: ["a warning"],
     };
-    const { pickDocument } = setup({
-      pickDocument: vi.fn(() => Promise.resolve(picked)),
-    });
+    const pickDocument = vi.fn<AiImportDialogProps["pickDocument"]>(() =>
+      Promise.resolve(picked),
+    );
+    setup({ pickDocument });
     fireEvent.click(byId("ai-pick-document"));
-    await waitFor(() => expect(byId("ai-source-document")).toBeChecked());
-    expect(pickDocument).not.toHaveBeenCalled();
+    await screen.findByTestId("ai-picked");
+    expect(byId("ai-source-document")).toBeChecked();
+    expect(pickDocument).toHaveBeenCalledTimes(1);
     expect(prompt().value).toContain("sing along");
     expect(byId("ai-picked").textContent).toContain("tune.pdf");
     expect(byId("ai-picked").textContent).toContain("16");
     expect(byId("ai-pick-warnings").textContent).toBe("a warning");
     expect(byId("ai-copy")).toBeEnabled();
+  });
+
+  it("counts the picked text in graphemes, not UTF-16 units", async () => {
+    const text = "שָׁלוֹם עוֹלָם";
+    expect(text.length).toBe(14);
+    setup({
+      pickDocument: () =>
+        Promise.resolve({ sourceName: "shalom.docx", text, warnings: [] }),
+    });
+    fireEvent.click(byId("ai-pick-document"));
+    const picked = await screen.findByTestId("ai-picked");
+    expect(picked.textContent).toContain(i18n.t("aiCharCount", { count: 9 }));
+  });
+
+  it("gives each text area one accessible name and no label element", async () => {
+    setup({
+      pickDocument: () =>
+        Promise.resolve({
+          sourceName: "tune.pdf",
+          text: "Dm  C\nsing along",
+          warnings: [],
+        }),
+    });
+    const reply = screen.getByRole("textbox", { name: STRINGS.aiReplyLabel });
+    expect(reply).toBe(byId("ai-reply"));
+    expect((reply as HTMLTextAreaElement).labels).toHaveLength(0);
+    fireEvent.click(byId("ai-pick-document"));
+    await screen.findByTestId("ai-picked");
+    const promptBox = screen.getByRole("textbox", {
+      name: STRINGS.aiPromptLabel,
+    });
+    expect(promptBox).toBe(prompt());
+    expect((promptBox as HTMLTextAreaElement).labels).toHaveLength(0);
+  });
+
+  const PDF_LINE =
+    "The text was extracted from a PDF, so chord positions above lyrics may be approximate";
+
+  it("adds the approximate-positions line to the prompt of a PDF", () => {
+    setup({
+      initial: { sourceName: "tune.pdf", text: "Am\nla la", format: "pdf" },
+    });
+    expect(prompt().value).toContain(PDF_LINE);
+  });
+
+  it("leaves the approximate-positions line out for other or absent formats", () => {
+    for (const format of ["docx", undefined] as const) {
+      const view = render(
+        <AiImportDialog
+          initial={{ sourceName: "tune.docx", text: "Am\nla la", format }}
+          pickDocument={() => Promise.resolve(undefined)}
+          onImport={() => undefined}
+          onCancel={() => undefined}
+        />,
+      );
+      expect(prompt().value).not.toContain(PDF_LINE);
+      view.unmount();
+    }
   });
 
   it("keeps the previous source when the picker is cancelled", async () => {

@@ -8,6 +8,8 @@ export interface SelectionBarProps {
   count: number;
   /** A delete is running. */
   busy: boolean;
+  /** A delete or setlist call is running: Add to setlist is disabled. Default: `false`. */
+  addDisabled?: boolean | undefined;
   onStart(): void;
   onSelectAll(): void;
   onDelete(): void;
@@ -22,6 +24,7 @@ export function SelectionBar({
   selecting,
   count,
   busy,
+  addDisabled = false,
   onStart,
   onSelectAll,
   onDelete,
@@ -58,7 +61,7 @@ export function SelectionBar({
             type="button"
             data-testid="add-selected-to-setlist"
             data-ui-chrome
-            disabled={count === 0}
+            disabled={count === 0 || addDisabled}
             onClick={onAddToSetlist}
           >
             {t("addToSetlist")}

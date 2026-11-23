@@ -1,10 +1,19 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { i18n } from "../i18n";
 import { STRINGS } from "../strings";
 import type { Setlist, SetlistItem } from "../storage";
 import { SetlistEditor } from "./SetlistEditor";
+import type { SetlistEditorProps } from "./SetlistEditor";
 
 const item = (id: string, over: Partial<SetlistItem> = {}): SetlistItem => ({
   id,
@@ -32,8 +41,10 @@ const ABC = [item("a"), item("b"), item("c")];
 
 function makeHandlers() {
   return {
-    onReorder: vi.fn(),
-    onMove: vi.fn(),
+    onReorder: vi.fn<SetlistEditorProps["onReorder"]>(() =>
+      Promise.resolve(true),
+    ),
+    onMove: vi.fn<SetlistEditorProps["onMove"]>(() => Promise.resolve(true)),
     onTranspose: vi.fn(),
     onCapo: vi.fn(),
     onRemove: vi.fn(),
@@ -57,6 +68,16 @@ function setup(
   const view = render(element(setlistOf(items, over.name)));
   return {
     ...handlers,
+    rerenderBusy: (busy: boolean) =>
+      view.rerender(
+        <div dir={over.dir}>
+          <SetlistEditor
+            setlist={setlistOf(items, over.name)}
+            busy={busy}
+            {...handlers}
+          />
+        </div>,
+      ),
     rerender: (next: SetlistItem[]) => view.rerender(element(setlistOf(next))),
   };
 }
@@ -166,6 +187,7 @@ describe("SetlistEditor header and list", () => {
       "setlist-entry-up",
       "setlist-entry-down",
       "setlist-entry-remove",
+      "setlist-print",
       "setlist-export-pdf",
       "setlist-export-word",
     ])
@@ -277,15 +299,59 @@ describe("SetlistEditor move", () => {
     expect(h.onMove).toHaveBeenLastCalledWith("b", 1);
   });
 
-  it("announces the move in a polite live region", () => {
+  it("announces the move in a polite live region", async () => {
     setup();
     const live = screen.getByTestId("setlist-announce");
     expect(live).toHaveAttribute("aria-live", "polite");
     fireEvent.click(inEntry(1, "setlist-entry-down"));
-    expect(live).toHaveTextContent(
-      i18n.t("movedAnnounce", { title: "Title b", n: 3 }),
+    await waitFor(() =>
+      expect(live).toHaveTextContent(
+        i18n.t("movedAnnounce", { title: "Title b", n: 3 }),
+      ),
     );
     expect(live.textContent).toBe("Moved ⁨Title b⁩ to position 3");
+  });
+
+  it("a failed move announces nothing", async () => {
+    const h = setup();
+    h.onMove.mockResolvedValue(false);
+    fireEvent.click(inEntry(1, "setlist-entry-down"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(h.onMove).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("setlist-announce")).toBeEmptyDOMElement();
+  });
+
+  it("a rejected move announces nothing and raises no unhandled rejection", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const h = setup();
+      h.onMove.mockRejectedValue(new Error("storage down"));
+      fireEvent.click(inEntry(1, "setlist-entry-down"));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(screen.getByTestId("setlist-announce")).toBeEmptyDOMElement();
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
+  it("a failed move does not move focus on a later re-render", async () => {
+    const h = setup();
+    h.onMove.mockResolvedValue(false);
+    entry(0).focus();
+    fireEvent.keyDown(entry(0), { key: "ArrowDown", altKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    entry(0).blur();
+    act(() => h.rerender([ABC[0]!, ABC[1]!, ABC[2]!]));
+    expect(entry(0)).not.toHaveFocus();
+    expect(entry(1)).not.toHaveFocus();
   });
 
   it("Alt+ArrowDown / Alt+ArrowUp on a row call onMove", () => {
@@ -295,6 +361,19 @@ describe("SetlistEditor move", () => {
     fireEvent.keyDown(entry(1), { key: "ArrowUp", altKey: true });
     expect(h.onMove).toHaveBeenLastCalledWith("b", -1);
     expect(h.onMove).toHaveBeenCalledTimes(2);
+  });
+
+  it("Alt+Arrow from the capo select does not move the row or get prevented", () => {
+    const h = setup();
+    const capo = inEntry(1, "setlist-entry-capo");
+    const notPrevented = fireEvent.keyDown(capo, {
+      key: "ArrowDown",
+      altKey: true,
+    });
+    expect(notPrevented).toBe(true);
+    expect(h.onMove).not.toHaveBeenCalled();
+    fireEvent.keyDown(entry(1), { key: "ArrowDown", altKey: true });
+    expect(h.onMove).toHaveBeenCalledWith("b", 1);
   });
 
   it("plain arrows do nothing; the ends do not move out of range", () => {
@@ -315,20 +394,28 @@ describe("SetlistEditor move", () => {
     function Parent() {
       const [items, setItems] = useState(ABC);
       return (
-        <SetlistEditor
-          setlist={setlistOf(items)}
-          busy={false}
-          {...makeHandlers()}
-          onMove={(id, delta) =>
-            setItems((current) => {
-              const next = [...current];
-              const from = next.findIndex((x) => x.id === id);
-              const [moved] = next.splice(from, 1);
-              next.splice(from + delta, 0, moved!);
-              return next;
-            })
-          }
-        />
+        <>
+          <button type="button" data-testid="outside">
+            outside
+          </button>
+          <SetlistEditor
+            setlist={setlistOf(items)}
+            busy={false}
+            {...makeHandlers()}
+            onMove={(id, delta) => {
+              // Focus leaves the row before the parent re-renders the new order.
+              screen.getByTestId("outside").focus();
+              setItems((current) => {
+                const next = [...current];
+                const from = next.findIndex((x) => x.id === id);
+                const [moved] = next.splice(from, 1);
+                next.splice(from + delta, 0, moved!);
+                return next;
+              });
+              return Promise.resolve(true);
+            }}
+          />
+        </>
       );
     }
     render(<Parent />);
@@ -435,14 +522,54 @@ describe("SetlistEditor drag and drop", () => {
     expect(h.onReorder).not.toHaveBeenCalled();
   });
 
-  it("announces a drop with the new position", () => {
+  it("announces a drop with the new position", async () => {
     setup();
     mockRects();
     pointer(handle(0), "pointerdown", 50);
     pointer(handle(0), "pointermove", 251);
     pointer(handle(0), "pointerup", 251);
-    expect(screen.getByTestId("setlist-announce").textContent).toBe(
-      "Moved ⁨Title a⁩ to position 3",
+    await waitFor(() =>
+      expect(screen.getByTestId("setlist-announce").textContent).toBe(
+        "Moved ⁨Title a⁩ to position 3",
+      ),
     );
+  });
+
+  it("a failed reorder announces nothing", async () => {
+    const h = setup();
+    h.onReorder.mockResolvedValue(false);
+    mockRects();
+    pointer(handle(0), "pointerdown", 50);
+    pointer(handle(0), "pointermove", 251);
+    pointer(handle(0), "pointerup", 251);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(h.onReorder).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("setlist-announce")).toBeEmptyDOMElement();
+  });
+
+  it("a drop after the editor became busy calls no onReorder and announces nothing", async () => {
+    const drop = async (busyAtDrop: boolean) => {
+      const h = setup();
+      mockRects();
+      pointer(handle(0), "pointerdown", 50);
+      pointer(handle(0), "pointermove", 251);
+      if (busyAtDrop) {
+        h.rerenderBusy(true);
+        mockRects();
+      }
+      pointer(handle(0), "pointerup", 251);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      return h;
+    };
+    const idle = await drop(false);
+    expect(idle.onReorder).toHaveBeenCalledTimes(1);
+    cleanup();
+    const busy = await drop(true);
+    expect(busy.onReorder).not.toHaveBeenCalled();
+    expect(screen.getByTestId("setlist-announce")).toBeEmptyDOMElement();
   });
 });

@@ -58,14 +58,31 @@ function formsOf(key: string): [heKey: string, enKey: string][] {
   ];
 }
 
+const PREFIXED = /^(ai|doc)[A-Z]/;
+
+/** Differences between the ai*\/doc* keys of `keys` and the pinned ones; empty when equal. */
+function prefixedDifference(keys: readonly string[]): string[] {
+  const actual = keys.filter((k) => PREFIXED.test(k)).sort();
+  const pinned: readonly string[] = G11_KEYS.filter((k) =>
+    PREFIXED.test(k),
+  ).sort();
+  return [
+    ...actual.filter((k) => !pinned.includes(k)).map((k) => `extra ${k}`),
+    ...pinned.filter((k) => !actual.includes(k)).map((k) => `missing ${k}`),
+  ];
+}
+
 describe("g11 Hebrew strings", () => {
   it("the key list is exactly the g11 EN keys", () => {
     expect(new Set(G11_KEYS).size).toBe(G11_KEYS.length);
     for (const key of G11_KEYS) expect(en, key).toHaveProperty(key);
-    const added = Object.keys(EN).filter((k) =>
-      (G11_KEYS as readonly string[]).includes(k),
-    );
-    expect(added.sort()).toEqual([...G11_KEYS].sort());
+    expect(prefixedDifference(Object.keys(EN))).toEqual([]);
+  });
+
+  it("negative: an extra ai/doc key in EN is reported", () => {
+    expect(prefixedDifference([...Object.keys(EN), "aiExtra"])).toEqual([
+      "extra aiExtra",
+    ]);
   });
 
   it.each(G11_KEYS.flatMap((k) => formsOf(k)))(

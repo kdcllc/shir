@@ -86,6 +86,7 @@ interface Probe {
   inlineSize: number;
   passes: number[];
   denseBoxes: { top: number; bottom: number; left: number; right: number }[][];
+  denseDir: string;
 }
 
 async function installProbe(page: Page) {
@@ -115,6 +116,10 @@ async function installProbe(page: Page) {
         inlineSize: root.getBoundingClientRect().width,
         passes: songs.map((s) => Number(s.getAttribute("data-overlap-pass"))),
         denseBoxes,
+        denseDir: dense
+          ? getComputedStyle(dense.querySelector("[data-song]") as Element)
+              .direction
+          : "",
       };
     };
   });
@@ -149,6 +154,8 @@ test.describe("setlist print layout", () => {
     expect(Math.abs(probe.inlineSize - mm180)).toBeLessThanOrEqual(2);
     expect(probe.passes).toHaveLength(3);
     for (const p of probe.passes) expect(p).toBeGreaterThanOrEqual(1);
+    // The dense song is RTL like the dense_chords fixture.
+    expect(probe.denseDir).toBe("rtl");
     // Precondition: the dense song really has several chord boxes per line.
     expect(probe.denseBoxes.some((boxes) => boxes.length >= 6)).toBe(true);
     for (const boxes of probe.denseBoxes) {

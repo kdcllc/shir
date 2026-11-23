@@ -25,11 +25,11 @@ const BY_COUNT: Record<string, readonly string[]> = {
     "Imported 2 of 17 files",
   ],
   importQueued: [
-    "0 files need alignment review",
-    "1 file needs alignment review",
-    "2 files need alignment review",
-    "3 files need alignment review",
-    "17 files need alignment review",
+    "0 files need review",
+    "1 file needs review",
+    "2 files need review",
+    "3 files need review",
+    "17 files need review",
   ],
   deleteManyTitle: [
     "Delete 0 songs?",

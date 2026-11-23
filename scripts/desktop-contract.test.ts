@@ -2,6 +2,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = path.resolve(
@@ -131,74 +132,27 @@ describe("(b) docs/DESKTOP.md strings", () => {
 
 // ---- (c) no hard-coded JSX text -------------------------------------------
 
-const OPEN = "\u0001";
-const CLOSE = "\u0002";
-const EXPR = "\u0003";
-
-/**
- * Replaces every `{…}` with balanced-brace scanning (nested braces, JSX inside braces). A group
- * without markup collapses to a placeholder (JSX expression, attribute value, code block). A
- * group that contains JSX (`<`) is kept, scanned recursively, between OPEN/CLOSE markers so
- * literal text nested in `cond ? (<p>Hello</p>) : …` is still found.
- */
-function stripBraces(text: string): string {
-  let out = "";
-  let i = 0;
-  while (i < text.length) {
-    const ch = text[i]!;
-    if (ch !== "{") {
-      out += ch;
-      i += 1;
-      continue;
-    }
-    let depth = 1;
-    let j = i + 1;
-    while (j < text.length && depth > 0) {
-      if (text[j] === "{") depth += 1;
-      else if (text[j] === "}") depth -= 1;
-      j += 1;
-    }
-    if (depth > 0) {
-      out += text.slice(i);
-      break;
-    }
-    const inner = text.slice(i + 1, j - 1);
-    out += inner.includes("<") ? `${OPEN}${stripBraces(inner)}${CLOSE}` : EXPR;
-    i = j;
-  }
-  return out;
-}
-
-/** The part of a `>…<` run that sits outside any kept brace group (its JSX text). */
-function outsideBraces(run: string): string {
-  const firstOpen = run.indexOf(OPEN);
-  const firstClose = run.indexOf(CLOSE);
-  // A run that starts inside a kept group meets its CLOSE before any OPEN.
-  let depth =
-    firstClose >= 0 && (firstOpen < 0 || firstClose < firstOpen) ? 1 : 0;
-  let text = "";
-  for (const ch of run) {
-    if (ch === OPEN) depth += 1;
-    else if (ch === CLOSE) depth = Math.max(0, depth - 1);
-    else if (depth === 0) text += ch;
-  }
-  return text;
-}
-
-/** Files whose JSX text (between `>` and `<`, outside `{…}`) holds 3+ Latin letters. */
+/** Files whose JSX text (parsed with the TypeScript parser) holds 3+ Latin letters. */
 function checkJsxText(sources: Source[]): string[] {
   const problems: string[] = [];
   for (const { file, text } of sources) {
-    const code = stripBraces(text);
-    for (const m of code.matchAll(/(?<![=?])>([^<>]*)</g)) {
-      // Ignore HTML entities and the `return (` / `) : (` residue of JSX control flow.
-      const jsxText = outsideBraces(m[1]!);
-      const visible = jsxText
-        .replace(/&#?\w+;/g, "")
-        .replace(/\breturn\b/g, "");
-      if (/[A-Za-z]{3}/.test(visible))
-        problems.push(`${file}: ${JSON.stringify(jsxText.trim())}`);
-    }
+    const sourceFile = ts.createSourceFile(
+      file,
+      text,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const visit = (node: ts.Node): void => {
+      if (node.kind === ts.SyntaxKind.JsxText) {
+        const jsxText = node.getText(sourceFile);
+        // HTML entities are not text.
+        if (/[A-Za-z]{3}/.test(jsxText.replace(/&#?\w+;/g, "")))
+          problems.push(`${file}: ${JSON.stringify(jsxText.trim())}`);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
   }
   return problems;
 }
@@ -246,6 +200,17 @@ describe("(d) self-tests", () => {
         { file: "j.tsx", text: "<p>{cond ? <b>x</b> : null} Hello</p>" },
       ]),
     ).toEqual(['j.tsx: "Hello"']);
+  });
+
+  it("(c) ignores typed generics such as useRef<string | null>(null)", () => {
+    const code =
+      "const r = useRef<string | null>(null);\nconst x = <p>{a}</p>;";
+    expect(checkJsxText([{ file: "g.tsx", text: code }])).toEqual([]);
+    expect(
+      checkJsxText([
+        { file: "g.tsx", text: code.replace("<p>{a}</p>", "<p>Hello</p>") },
+      ]),
+    ).toEqual(['g.tsx: "Hello"']);
   });
 
   it("(b) parser reads values and the table parser drops header rows", () => {

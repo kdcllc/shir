@@ -2,8 +2,13 @@ import { parseSong, splitGraphemes } from "chord-core";
 import type { ExportEntry } from "chord-core";
 import type { Setlist } from "./storage";
 
-/** Maximum setlist name length in characters (the storage rule). */
-const MAX_NAME = 200;
+/** Maximum setlist name length in Unicode code points (the storage rule). */
+export const MAX_SETLIST_NAME_CHARS = 200;
+
+/** Length of the trimmed name in code points (Rust `chars().count()`, SQLite `length()`). */
+export function setlistNameLength(name: string): number {
+  return [...name.trim()].length;
+}
 
 /** Returns a new order with `itemId` moved by `delta` places; a move past either end changes nothing. */
 export function moveItem(
@@ -26,7 +31,7 @@ export function moveItem(
  */
 export function duplicateName(name: string, suffix: string): string {
   const tail = ` ${suffix}`;
-  const budget = Math.max(0, MAX_NAME - [...tail].length);
+  const budget = Math.max(0, MAX_SETLIST_NAME_CHARS - [...tail].length);
   let kept = "";
   let used = 0;
   for (const grapheme of splitGraphemes(name)) {

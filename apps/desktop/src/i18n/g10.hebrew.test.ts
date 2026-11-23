@@ -54,7 +54,7 @@ const NEW_KEYS = [
   "capoSongDefault",
 ] as const;
 
-/** Keys added by later goals (g11); not part of g10, so excluded before the exact comparison. */
+/** Keys added by later goals (g11, g12); not part of g10, so excluded before the exact comparison. */
 const LATER_KEYS = new Set([
   "importWithAi",
   "aiStepSource",
@@ -91,7 +91,12 @@ const LATER_KEYS = new Set([
   "aiSongLabel",
   "aiReviewSongs_one",
   "aiReviewSongs_other",
+  "noSetlistSelected",
+  "exportSongFailed",
 ]);
+
+/** The keys goal g12 added (also listed in LATER_KEYS). */
+const G12_KEYS = ["noSetlistSelected", "exportSongFailed"] as const;
 
 /** The EN keys at a95b2ba (before g10), read from git. */
 const BASELINE = new Set([
@@ -315,6 +320,22 @@ describe("g10 Hebrew strings", () => {
       expect(violations(heKey, en[enKey]!, he[heKey]!)).toEqual([]);
     },
   );
+
+  it.each(G12_KEYS.flatMap((k) => formsOf(k)))(
+    "%s is correct Hebrew",
+    (heKey, enKey) => {
+      expect(he, heKey).toHaveProperty(heKey);
+      expect(violations(heKey, en[enKey]!, he[heKey]!)).toEqual([]);
+      expect(isolateProblems(en[enKey]!)).toEqual([]);
+    },
+  );
+
+  it("the PDF hint uses gershayim and the export labels are infinitives", () => {
+    expect(HE.pdfHint.split("\u05F4")).toHaveLength(3);
+    expect(HE.pdfHint).not.toMatch(/[\u201C\u201D]/);
+    expect(HE.exportPdf.startsWith("לייצא")).toBe(true);
+    expect(HE.exportWord.startsWith("לייצא")).toBe(true);
+  });
 
   it.each(NEW_KEYS)("EN %s follows the isolate rule", (key) => {
     expect(isolateProblems(en[key]!)).toEqual([]);

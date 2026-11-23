@@ -158,6 +158,8 @@ export const STRINGS = {
   setlistsLoadFailed: "Could not load setlists",
   setlistSaveFailed: "Could not save the setlist",
   exportFailed: "Could not export the setlist",
+  exportSongFailed: "Could not export the song",
+  noSetlistSelected: "Select a setlist",
   exportLabelSetlist: "Setlist",
   exportLabelKey: "Key",
   exportLabelCapo: "Capo",
@@ -196,7 +198,8 @@ export const STRINGS = {
   docTooLarge: "The file is over 20 MB. Attach it in Import with AI instead",
   // prettier-ignore
   docTextTooLarge: "The file holds more than 2 MB of text. Attach it in Import with AI instead",
-  docUnsupported: "Unsupported file type",
+  // prettier-ignore
+  docUnsupported: "Unsupported file type. Use Import with AI and attach the file",
   docCorrupt: "The file is damaged or not in that format",
   docIo: "Could not read the file",
   // prettier-ignore
@@ -214,8 +217,8 @@ export const TEMPLATES = {
   diagnosticsCount_other: "{{count}} problems",
   importSummary_one: "Imported {{saved}} of {{count}} file",
   importSummary_other: "Imported {{saved}} of {{count}} files",
-  importQueued_one: "{{count}} file needs alignment review",
-  importQueued_other: "{{count}} files need alignment review",
+  importQueued_one: "{{count}} file needs review",
+  importQueued_other: "{{count}} files need review",
   deleteSongNamed: "Delete \u2068{{title}}\u2069",
   selectSongNamed: "Select \u2068{{title}}\u2069",
   deleteConfirmTitle: "Delete \u2068{{title}}\u2069?",

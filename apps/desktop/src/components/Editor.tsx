@@ -4,6 +4,7 @@ import { applyEdits, importText, parseSong } from "chord-core";
 import type { EditOp, ImportResult, RtlColumns, SongModel } from "chord-core";
 import { SongView } from "chord-render";
 import { withTitleFallback } from "../importFiles";
+import type { ReviewLabel } from "../importFiles";
 import { songMeta } from "../library";
 import { useT } from "../i18n";
 import { useHistory } from "../useHistory";
@@ -33,6 +34,8 @@ export interface EditorProps {
   titlePath?: string | undefined;
   /** Visible name of the file under review. */
   fileName?: string | undefined;
+  /** Source and title of an AI song under review, each isolated. Ignores `fileName`. */
+  fileLabel?: ReviewLabel | undefined;
   /** Shown in the review banner as a list. */
   notes?: readonly string[] | undefined;
   /** When set, a "Convert with AI instead" button is shown next to Flip. */
@@ -158,6 +161,7 @@ export function Editor({
   seed,
   titlePath,
   fileName,
+  fileLabel,
   notes,
   onConvertWithAi,
   onSave,
@@ -323,9 +327,17 @@ export function Editor({
       data-testid="editor"
       onKeyDown={onKeyDown}
     >
-      {fileName !== undefined && (
+      {(fileLabel !== undefined || fileName !== undefined) && (
         <p className={styles.file} data-testid="reviewing-file" data-ui-chrome>
-          {t("reviewingFile")} <bdi dir="auto">{fileName}</bdi>
+          {t("reviewingFile")}{" "}
+          {fileLabel === undefined ? (
+            <bdi dir="auto">{fileName}</bdi>
+          ) : (
+            <>
+              <bdi dir="auto">{fileLabel.source}</bdi> {t("separator")}{" "}
+              <bdi dir="auto">{fileLabel.title}</bdi>
+            </>
+          )}
         </p>
       )}
       <div className={styles.toolbar} data-ui-chrome>

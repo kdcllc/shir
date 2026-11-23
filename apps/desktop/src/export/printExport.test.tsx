@@ -240,4 +240,54 @@ describe("printExport", () => {
     expect(document.documentElement.dataset.printing).toBeUndefined();
     expect(document.title).toBe("Shir");
   });
+
+  it("a stale afterprint handler does not clean up a later print", async () => {
+    const spy = vi.spyOn(window, "addEventListener");
+    await runPrint("pdf");
+    const first = spy.mock.calls.find((c) => c[0] === "afterprint")?.[1] as
+      EventListener | undefined;
+    spy.mockRestore();
+    expect(first).toBeTypeOf("function");
+    window.dispatchEvent(new Event("afterprint"));
+    await runPrint("pdf");
+    (first as EventListener)(new Event("afterprint"));
+    expect(document.documentElement.dataset.printing).toBe("export");
+    expect(printRoot()).not.toBeNull();
+    expect(containers()).toHaveLength(1);
+    expect(document.title).toBe("רשימת-שירים");
+  });
+
+  it("does not print when cleanup ran during the overlap wait", async () => {
+    const p = printExport(doc, { ...base, mode: "print" });
+    await vi.advanceTimersByTimeAsync(100);
+    window.dispatchEvent(new Event("afterprint"));
+    await vi.advanceTimersByTimeAsync(2500);
+    await p;
+    expect(printSpy).not.toHaveBeenCalled();
+    expect(containers()).toHaveLength(0);
+  });
+
+  it("a second print during the wait cancels the first", async () => {
+    const a = printExport(doc, { ...base, mode: "print" });
+    await vi.advanceTimersByTimeAsync(100);
+    const b = printExport(doc, { ...base, mode: "print" });
+    await vi.advanceTimersByTimeAsync(0);
+    finishOverlap();
+    await vi.advanceTimersByTimeAsync(2500);
+    await Promise.all([a, b]);
+    expect(printSpy).toHaveBeenCalledTimes(1);
+    expect(containers()).toHaveLength(1);
+  });
+
+  it("waits for every song body, not just the rendered ones", async () => {
+    const two = docOf("x", [entry("he_niqqud"), entry("en_plain")]);
+    const p = printExport(two, { ...base, mode: "print" });
+    await vi.advanceTimersByTimeAsync(0);
+    finishOverlap();
+    await vi.advanceTimersByTimeAsync(1900);
+    expect(printSpy).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(300);
+    await p;
+    expect(printSpy).toHaveBeenCalledTimes(1);
+  });
 });

@@ -9,6 +9,7 @@ import {
 import type {
   AiReplySong,
   Diagnostic,
+  DocumentFormat,
   ExportDocument,
   SongModel,
 } from "chord-core";
@@ -28,7 +29,11 @@ import { SearchBox } from "./components/SearchBox";
 import { SelectionBar } from "./components/SelectionBar";
 import { SetlistEditor } from "./components/SetlistEditor";
 import { SetlistsPanel } from "./components/SetlistsPanel";
-import { SidebarTabs } from "./components/SidebarTabs";
+import {
+  SIDEBAR_PANEL_IDS,
+  SIDEBAR_TAB_IDS,
+  SidebarTabs,
+} from "./components/SidebarTabs";
 import type { SidebarView } from "./components/SidebarTabs";
 import { SongHeader } from "./components/SongHeader";
 import { SongIndex } from "./components/SongIndex";
@@ -44,8 +49,8 @@ import {
   readTextFile,
 } from "./files";
 import type { DocWarning } from "./bindings";
-import { fileNameOf, importSongFiles } from "./importFiles";
-import type { FileImportReport, QueuedFile } from "./importFiles";
+import { fileNameOf, importSongFiles, withTitle } from "./importFiles";
+import type { FileImportReport, QueuedFile, ReviewLabel } from "./importFiles";
 import { printExport, saveDocx } from "./export";
 import type { ExportLabels, ExportMeta } from "./export";
 import { useLocale, useT } from "./i18n";
@@ -109,8 +114,17 @@ interface Session {
   seed?: ImportSeed | undefined;
   /** Source path of a queued file under review. */
   path?: string | undefined;
+  /** Display label of an AI song under review; absent for a file (file-name label). */
+  label?: ReviewLabel | undefined;
   /** The converted document under review: its text and extraction warnings. */
-  document?: { name: string; text: string; warnings: DocWarning[] } | undefined;
+  document?:
+    | {
+        name: string;
+        format: DocumentFormat;
+        text: string;
+        warnings: DocWarning[];
+      }
+    | undefined;
 }
 
 /** The Import with AI dialog; `convert` when it replaces the document under review. */
@@ -135,6 +149,7 @@ interface Msg {
     | "setlistSaveFailed"
     | "setlistsLoadFailed"
     | "exportFailed"
+    | "exportSongFailed"
     | "addedToSetlist"
     | "exportSaved";
   vars?: { title?: string; count?: number; failed?: number; name?: string };
@@ -178,7 +193,12 @@ function messageOf(reason: unknown): string {
 
 const noSession = (): Session | undefined => undefined;
 const noQueue = (): QueuedFile[] => [];
-const noPaths = (): string[] => [];
+interface SkippedEntry {
+  path: string;
+  label?: ReviewLabel | undefined;
+}
+
+const noPaths = (): SkippedEntry[] => [];
 const noReport = (): FileImportReport | undefined => undefined;
 const noMessage = (): Msg | undefined => undefined;
 const noAction = (): (() => void) | undefined => undefined;
@@ -326,9 +346,9 @@ export function App() {
   /** Leaves the editor without saving; a queued file and the rest of the queue are skipped. */
   const abandon = () => {
     if (session === undefined) return;
-    const left = [
-      ...(session.path ? [session.path] : []),
-      ...queue.map((q) => q.path),
+    const left: SkippedEntry[] = [
+      ...(session.path ? [{ path: session.path, label: session.label }] : []),
+      ...queue.map((q) => ({ path: q.path, label: q.label })),
     ];
     if (left.length > 0) setSkipped((prev) => [...prev, ...left]);
     endSession();
@@ -353,6 +373,7 @@ export function App() {
           : { rtlColumns: head.rtlColumns }),
       },
       path: head.path,
+      label: head.label,
       document: head.document,
     });
   };
@@ -391,7 +412,12 @@ export function App() {
 
   /** The dialog's document picker: native picker, extraction, then the plain text of the blocks. */
   const pickAiDocument = async () => {
-    const path = await pickDocumentFile(t("fileFilterDocuments"));
+    let path;
+    try {
+      path = await pickDocumentFile(t("fileFilterDocuments"));
+    } catch (reason) {
+      throw new Error(t("importPickFailed"), { cause: reason });
+    }
     if (path === undefined) return undefined;
     let doc;
     try {
@@ -403,6 +429,7 @@ export function App() {
     return {
       sourceName: fileNameOf(path),
       text: documentToText(doc).text,
+      format: doc.format,
       warnings: doc.warnings.map(warningText),
     };
   };
@@ -412,20 +439,25 @@ export function App() {
     setAiRequest(undefined);
     const run = () => {
       const source = request.initial?.sourceName ?? t("aiDefaultSource");
-      const queued: QueuedFile[] = songs.map((song, i) => ({
-        path: `${source} ${t("separator")} ${
-          song.title !== undefined && song.title.trim() !== ""
-            ? song.title
-            : t("aiSongLabel", { n: i + 1 })
-        }`,
-        source: song.chordpro,
-        result: {
-          chordpro: song.chordpro,
-          format: "chordpro",
-          warnings: [],
-          hasRtlChords: false,
-        },
-      }));
+      const queued: QueuedFile[] = songs.map((song, i) => {
+        const untitled = song.title === undefined || song.title.trim() === "";
+        const ordinal = t("aiSongLabel", { n: i + 1 });
+        const title = untitled ? ordinal : song.title!;
+        const chordpro = untitled
+          ? withTitle(song.chordpro, ordinal)
+          : song.chordpro;
+        return {
+          path: `${source} ${t("separator")} ${title}`,
+          label: { source, title },
+          source: chordpro,
+          result: {
+            chordpro,
+            format: "chordpro",
+            warnings: [],
+            hasRtlChords: false,
+          },
+        };
+      });
       if (request.convert && session?.document !== undefined) {
         openQueued([...queued, ...queue]);
         return;
@@ -516,7 +548,10 @@ export function App() {
         abandon();
         return;
       }
-      setSkipped((prev) => [...prev, session.path!]);
+      setSkipped((prev) => [
+        ...prev,
+        { path: session.path!, label: session.label },
+      ]);
       openQueued(queue);
     });
 
@@ -654,10 +689,10 @@ export function App() {
   };
 
   const createNamedSetlist = (name: string) =>
-    void runSetlistCall(() => createSetlist(name), openNewSetlist);
+    runSetlistCall(() => createSetlist(name), openNewSetlist);
 
   const renameNamedSetlist = (id: string, name: string) =>
-    void runSetlistCall(() => renameSetlist(id, name), replaceOpen);
+    runSetlistCall(() => renameSetlist(id, name), replaceOpen);
 
   const duplicateNamedSetlist = (id: string) => {
     const source = setlists.find((s) => s.id === id);
@@ -676,20 +711,22 @@ export function App() {
     );
 
   /** Runs `call` against the open setlist and shows the returned setlist. */
-  const changeOpen = (call: (id: string) => Promise<Setlist>) => {
-    if (openSetlist === undefined) return;
+  const changeOpen = (
+    call: (id: string) => Promise<Setlist>,
+  ): Promise<boolean> => {
+    if (openSetlist === undefined) return Promise.resolve(false);
     const id = openSetlist.id;
-    void runSetlistCall(() => call(id), replaceOpen);
+    return runSetlistCall(() => call(id), replaceOpen);
   };
 
-  const moveEntry = (itemId: string, delta: -1 | 1) => {
-    if (openSetlist === undefined) return;
+  const moveEntry = (itemId: string, delta: -1 | 1): Promise<boolean> => {
+    if (openSetlist === undefined) return Promise.resolve(false);
     const order = moveItem(
       openSetlist.items.map((i) => i.id),
       itemId,
       delta,
     );
-    changeOpen((id) => reorderSetlistItems(id, order));
+    return changeOpen((id) => reorderSetlistItems(id, order));
   };
 
   const openFromSetlist = (songId: string, itemId: string) => {
@@ -762,6 +799,7 @@ export function App() {
   const runExport = async (
     mode: "print" | "pdf" | "word",
     build: () => Promise<{ doc: ExportDocument; cover: boolean }>,
+    failure: "exportFailed" | "exportSongFailed",
   ) => {
     if (setlistRunning.current) return;
     setlistRunning.current = true;
@@ -789,7 +827,7 @@ export function App() {
         await printExport(doc, { cover, labels, meta, mode });
       }
     } catch {
-      setNotice({ key: "exportFailed" });
+      setNotice({ key: failure });
     } finally {
       setlistRunning.current = false;
       setSetlistBusy(false);
@@ -799,15 +837,19 @@ export function App() {
   const exportSetlist = (mode: "print" | "pdf" | "word") => {
     const open = openSetlist;
     if (open === undefined) return;
-    void runExport(mode, async () => {
-      const ids = [...new Set(open.items.map((i) => i.songId))];
-      const stored = await Promise.all(ids.map((id) => getSong(id)));
-      const byId = new Map(ids.map((id, i) => [id, stored[i]!]));
-      return {
-        doc: buildExportDocument(open.name, entriesToExport(open, byId)),
-        cover: true,
-      };
-    });
+    void runExport(
+      mode,
+      async () => {
+        const ids = [...new Set(open.items.map((i) => i.songId))];
+        const stored = await Promise.all(ids.map((id) => getSong(id)));
+        const byId = new Map(ids.map((id, i) => [id, stored[i]!]));
+        return {
+          doc: buildExportDocument(open.name, entriesToExport(open, byId)),
+          cover: true,
+        };
+      },
+      "exportFailed",
+    );
   };
 
   /** Opens the delete confirmation; nothing is deleted before the user confirms. */
@@ -1035,13 +1077,16 @@ export function App() {
 
   const exportOpenSong = (mode: "print" | "pdf" | "word") => {
     if (entry === undefined || song === undefined) return;
-    void runExport(mode, () =>
-      Promise.resolve({
-        doc: buildExportDocument(entry.title || (song.title ?? ""), [
-          songToExport(song, transpose, capo),
-        ]),
-        cover: false,
-      }),
+    void runExport(
+      mode,
+      () =>
+        Promise.resolve({
+          doc: buildExportDocument(entry.title || (song.title ?? ""), [
+            songToExport(song, transpose, capo),
+          ]),
+          cover: false,
+        }),
+      "exportSongFailed",
     );
   };
 
@@ -1098,6 +1143,7 @@ export function App() {
   const showSong = !editing && !showSetlist && !inSetlists;
   const showLoadFailed = showSong && !showPane && loadFailed;
   const showNoSelection = showSong && !showPane && !loadFailed;
+  const showNoSetlist = inSetlists && !editing && openSetlist === undefined;
   const noticeEl = notice !== undefined && (
     <p role="alert" data-testid="app-notice" data-ui-chrome>
       {say(notice)}
@@ -1145,7 +1191,13 @@ export function App() {
           </p>
         )}
         {inSetlists && (
-          <>
+          <div
+            role="tabpanel"
+            id={SIDEBAR_PANEL_IDS.setlists}
+            aria-labelledby={SIDEBAR_TAB_IDS.setlists}
+            className={styles.tabpanel}
+            data-testid="sidebar-panel-setlists"
+          >
             {noticeEl}
             <SetlistsPanel
               setlists={setlists}
@@ -1157,10 +1209,16 @@ export function App() {
               onDuplicate={duplicateNamedSetlist}
               onDelete={removeSetlist}
             />
-          </>
+          </div>
         )}
         {showDb && !inSetlists && (
-          <>
+          <div
+            role="tabpanel"
+            id={SIDEBAR_PANEL_IDS.songs}
+            aria-labelledby={SIDEBAR_TAB_IDS.songs}
+            className={styles.tabpanel}
+            data-testid="sidebar-panel-songs"
+          >
             <div className={styles.actions} data-ui-chrome>
               <button type="button" data-testid="new-song" onClick={openNew}>
                 {t("newSong")}
@@ -1220,9 +1278,17 @@ export function App() {
                   <div data-testid="import-skipped">
                     <p>{t("importSkipped")}</p>
                     <ul className={styles["report-items"]}>
-                      {skipped.map((path, i) => (
+                      {skipped.map((entry, i) => (
                         <li key={i} dir="auto">
-                          {fileNameOf(path)}
+                          {entry.label === undefined ? (
+                            fileNameOf(entry.path)
+                          ) : (
+                            <>
+                              <bdi dir="auto">{entry.label.source}</bdi>{" "}
+                              {t("separator")}{" "}
+                              <bdi dir="auto">{entry.label.title}</bdi>
+                            </>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -1258,6 +1324,7 @@ export function App() {
               selecting={selecting}
               count={picked.size}
               busy={removing}
+              addDisabled={removing || setlistBusy}
               onStart={() => setSelecting(true)}
               onSelectAll={pickListed}
               onDelete={() => askDelete([...picked], true)}
@@ -1316,7 +1383,7 @@ export function App() {
                 />
               )}
             </nav>
-          </>
+          </div>
         )}
       </div>
       <main data-testid="song-pane" className={styles.pane}>
@@ -1326,9 +1393,12 @@ export function App() {
             initialText={session.text}
             baseline={session.baseline}
             seed={session.seed}
-            titlePath={session.path}
+            titlePath={session.label === undefined ? session.path : undefined}
+            fileLabel={session.label}
             fileName={
-              session.path === undefined ? undefined : fileNameOf(session.path)
+              session.label !== undefined || session.path === undefined
+                ? undefined
+                : fileNameOf(session.path)
             }
             notes={
               session.document === undefined
@@ -1346,6 +1416,7 @@ export function App() {
                       initial: {
                         sourceName: session.document!.name,
                         text: session.document!.text,
+                        format: session.document!.format,
                       },
                       convert: true,
                       edited: text !== session.text,
@@ -1505,6 +1576,7 @@ export function App() {
         )}
         {showLoadFailed && <p role="alert">{t("songLoadFailed")}</p>}
         {showNoSelection && <p>{t("noSongSelected")}</p>}
+        {showNoSetlist && <p>{t("noSetlistSelected")}</p>}
       </main>
       {confirming !== undefined && (
         <ConfirmDiscard

@@ -9,6 +9,20 @@ export interface SidebarTabsProps {
   onChange(view: SidebarView): void;
 }
 
+/** DOM ids of the two tabs. */
+// eslint-disable-next-line react-refresh/only-export-components -- shared DOM ids, imported by App
+export const SIDEBAR_TAB_IDS: Readonly<Record<SidebarView, string>> = {
+  songs: "sidebar-tab-songs",
+  setlists: "sidebar-tab-setlists",
+};
+
+/** DOM ids of the two tab panels (App renders the panel of the selected view). */
+// eslint-disable-next-line react-refresh/only-export-components -- shared DOM ids, imported by App
+export const SIDEBAR_PANEL_IDS: Readonly<Record<SidebarView, string>> = {
+  songs: "sidebar-panel-songs",
+  setlists: "sidebar-panel-setlists",
+};
+
 const VIEWS: readonly SidebarView[] = ["songs", "setlists"];
 
 /** Writing direction of the tab strip: the nearest `dir` attribute (`auto` counts as LTR). */
@@ -44,7 +58,9 @@ export function SidebarTabs({ view, onChange }: SidebarTabsProps) {
 
   const tabProps = (v: SidebarView) => ({
     type: "button" as const,
+    id: SIDEBAR_TAB_IDS[v],
     role: "tab",
+    "aria-controls": view === v ? SIDEBAR_PANEL_IDS[v] : undefined,
     "aria-selected": view === v,
     tabIndex: view === v ? 0 : -1,
     className: styles.tab,

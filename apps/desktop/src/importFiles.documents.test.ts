@@ -7,16 +7,17 @@ import {
   parseSong,
 } from "chord-core";
 import { describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import {
   AI_REPLY_FIXTURE_NAMES,
   DOC_FIXTURE_NAMES,
   DOC_FORMATS,
+  readAiReply,
+  readAiReplyExpected,
+  readDocAnchors,
+  readDocExpected,
+  readDocPdfLines,
 } from "../../../packages/test-fixtures/src/index";
 import type {
-  AiReplyFixtureName,
-  DocAnchor,
   DocFixtureName,
   DocFormat as FixtureFormat,
 } from "../../../packages/test-fixtures/src/index";
@@ -26,26 +27,6 @@ import type { FileImportDeps } from "./importFiles";
 import type { Song } from "./storage";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
-
-// The package's own readers resolve files from `import.meta.url`, which under this app's jsdom
-// environment is a `/@fs/` URL and does not map to a path. These helpers read the same files
-// (names and formats still come from the package by relative path).
-const FIXTURES = path.resolve(
-  import.meta.dirname,
-  "../../../packages/test-fixtures",
-);
-const readJson = <T>(...parts: string[]): T =>
-  JSON.parse(readFileSync(path.join(FIXTURES, ...parts), "utf8")) as T;
-const readDocExpected = (name: DocFixtureName): unknown[] =>
-  readJson("doc", `${name}.expected.json`);
-const readDocPdfLines = (name: DocFixtureName): string[] =>
-  readJson("doc", `${name}.pdf.lines.json`);
-const readDocAnchors = (): DocAnchor[] =>
-  readJson("doc", "he_chords_above.anchors.json");
-const readAiReply = (name: AiReplyFixtureName): string =>
-  readFileSync(path.join(FIXTURES, "ai", `${name}.txt`), "utf8");
-const readAiReplyExpected = (name: AiReplyFixtureName): string[] =>
-  readJson("ai", `${name}.expected.json`);
 
 const TITLE = /^\s*\{\s*(?:title\b|t\s*:)/im;
 
@@ -150,6 +131,33 @@ describe("document import pipeline with the real chord-core", () => {
     expect(report.queued).toEqual([]);
     expect(report.failed).toEqual([
       { path: "/music/scan.pdf", message: "no text layer", reason: "NoText" },
+    ]);
+  });
+
+  it("passes the rtlColumns of documentToText on to importText and the queued file", async () => {
+    const text = "Am      G\nשלום עולם יפה";
+    const d = deps("/music/x.docx", extracted("he_chords_above", "docx"));
+    const importSpy = vi.fn(importText);
+    const report = await importSongFiles({
+      ...d,
+      importText: importSpy,
+      documentToText: () => ({ text, rtlColumns: "logical" }),
+    });
+    expect(report.queued[0]?.rtlColumns).toBe("logical");
+    expect(importSpy).toHaveBeenCalledWith(text, { rtlColumns: "logical" });
+  });
+
+  it("documentToText throwing fails the file with reason Corrupt", async () => {
+    const d = deps("/music/x.docx", extracted("he_chords_above", "docx"));
+    const report = await importSongFiles({
+      ...d,
+      documentToText: () => {
+        throw new Error("boom");
+      },
+    });
+    expect(report.queued).toEqual([]);
+    expect(report.failed).toEqual([
+      { path: "/music/x.docx", message: "boom", reason: "Corrupt" },
     ]);
   });
 });

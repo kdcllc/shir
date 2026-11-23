@@ -319,6 +319,12 @@ describe("App bundled fallback", () => {
     expect(screen.getAllByRole("navigation")).toHaveLength(1);
     expect(screen.queryByTestId("song-index")).toBeNull();
   });
+
+  it("renders no tabs and no tabpanel", async () => {
+    await renderBundled();
+    expect(screen.queryByRole("tabpanel")).toBeNull();
+    expect(screen.queryByTestId("sidebar-tabs")).toBeNull();
+  });
 });
 
 describe("App database mode", () => {
@@ -354,6 +360,26 @@ describe("App database mode", () => {
       STRINGS.songList,
     );
     expect(signalUiReady).toHaveBeenCalledTimes(1);
+  });
+
+  it("labels the sidebar tabpanel by the selected tab", async () => {
+    await renderDb();
+    const panelOf = (tab: string) => {
+      const selected = screen.getByTestId(tab);
+      const panel = screen.getByRole("tabpanel");
+      expect(selected).toHaveAttribute("aria-controls", panel.id);
+      return panel;
+    };
+    expect(panelOf("tab-songs")).toHaveAccessibleName(STRINGS.tabSongs);
+    expect(screen.getByTestId("sidebar-panel-songs")).toBe(
+      screen.getByRole("tabpanel"),
+    );
+    fireEvent.click(screen.getByTestId("tab-setlists"));
+    expect(panelOf("tab-setlists")).toHaveAccessibleName(STRINGS.tabSetlists);
+    expect(screen.getByTestId("sidebar-panel-setlists")).toBe(
+      screen.getByRole("tabpanel"),
+    );
+    expect(screen.queryByTestId("sidebar-panel-songs")).toBeNull();
   });
 
   it("selecting a song loads it, applies its capo and resets transpose", async () => {
@@ -836,7 +862,7 @@ describe("App editor", () => {
       "shalom.txt",
     );
     expect(screen.getByTestId("import-queued").textContent).toBe(
-      "1 file needs alignment review",
+      "1 file needs review",
     );
     expect(saveSong).not.toHaveBeenCalled();
 
@@ -1162,6 +1188,16 @@ describe("App setlists (database mode)", () => {
     expect(window.print).not.toHaveBeenCalled();
   });
 
+  it("shows the song failure wording when the open song cannot be exported", async () => {
+    render(<App />);
+    await screen.findByTestId("song-title");
+    vi.mocked(saveExportDocx).mockRejectedValueOnce(new Error("disk"));
+    fireEvent.click(screen.getByTestId("song-export-word"));
+    expect((await screen.findByTestId("app-notice")).textContent).toBe(
+      STRINGS.exportSongFailed,
+    );
+  });
+
   it("exports the open song without a cover, with the PDF hint", async () => {
     render(<App />);
     await screen.findByTestId("song-title");
@@ -1380,7 +1416,7 @@ describe("App setlists (database mode)", () => {
     vi.mocked(saveExportDocx).mockRejectedValueOnce(new Error("disk"));
     fireEvent.click(screen.getByTestId("song-export-word"));
     expect((await screen.findByTestId("app-notice")).textContent).toBe(
-      STRINGS.exportFailed,
+      STRINGS.exportSongFailed,
     );
     vi.mocked(saveExportDocx).mockResolvedValueOnce("/x/y/Demo (2).docx");
     fireEvent.click(screen.getByTestId("song-export-word"));

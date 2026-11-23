@@ -3,7 +3,9 @@ import { parseSong } from "chord-core";
 import {
   duplicateName,
   entriesToExport,
+  MAX_SETLIST_NAME_CHARS,
   moveItem,
+  setlistNameLength,
   songToExport,
 } from "./setlists";
 import type { Setlist } from "./storage";
@@ -108,5 +110,15 @@ describe("songToExport", () => {
   it("pairs the song with transpose and capo", () => {
     const { song } = parseSong("{title: T}\n[C]Hi\n");
     expect(songToExport(song, 2, 3)).toEqual({ song, transpose: 2, capo: 3 });
+  });
+});
+
+describe("setlistNameLength", () => {
+  it("counts the code points of the trimmed name", () => {
+    expect(MAX_SETLIST_NAME_CHARS).toBe(200);
+    expect(setlistNameLength("  ab  ")).toBe(2);
+    expect(setlistNameLength("😀".repeat(200))).toBe(200);
+    // Code points, not graphemes: 4 letters plus 3 niqqud marks.
+    expect(setlistNameLength("שָׁלוֹם")).toBe(7);
   });
 });

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DOCUMENT_EXTENSIONS,
   importSongFiles,
+  withTitle,
   withTitleFallback,
 } from "./importFiles";
 import type { FileImportDeps } from "./importFiles";
@@ -72,6 +73,14 @@ describe("withTitleFallback", () => {
       expect(withTitleFallback(text, "/a/other.txt")).toBe(text);
     },
   );
+});
+
+describe("withTitle", () => {
+  it("prepends the trimmed title unless a title directive exists or the title is blank", () => {
+    expect(withTitle("[C]hi", "  Song 1 ")).toBe("{title: Song 1}\n[C]hi");
+    expect(withTitle("{t: Mine}\n[C]hi", "Song 1")).toBe("{t: Mine}\n[C]hi");
+    expect(withTitle("[C]hi", "   ")).toBe("[C]hi");
+  });
 });
 
 describe("importSongFiles", () => {
@@ -244,6 +253,24 @@ describe("importSongFiles documents", () => {
       { path: "/a/bad.pdf", message: "broken", reason: "Corrupt" },
     ]);
     expect(report.queued).toEqual([]);
+  });
+
+  it.each([
+    { kind: "Bogus", message: "m" },
+    { kind: "toString", message: "m" },
+    { kind: 7 },
+  ])("an unknown failure kind %j falls back to Ipc", async (rejection) => {
+    const d = deps({ "/a/bad.pdf": "" });
+    d.extractDocument.mockRejectedValue(rejection);
+    const report = await importSongFiles(d);
+    expect(report.failed[0]?.reason).toBe("Ipc");
+  });
+
+  it("keeps a known failure kind from a plain rejection object", async () => {
+    const d = deps({ "/a/bad.pdf": "" });
+    d.extractDocument.mockRejectedValue({ kind: "Corrupt", message: "m" });
+    const report = await importSongFiles(d);
+    expect(report.failed[0]?.reason).toBe("Corrupt");
   });
 
   it("zero blocks fail as NoText with the PdfNoText message", async () => {

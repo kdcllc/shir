@@ -240,12 +240,15 @@ describe("VisualEditor structure", () => {
     expect(caretPos(FIRST)).toBeUndefined();
   });
 
-  it("always ends with a phantom empty row that has no buttons", () => {
+  it("always ends with a phantom empty row that has only the add-chord button", () => {
     setup(HE);
     const phantom = row(HE.lines.length);
     expect(phantom).toHaveAttribute("data-kind", "empty");
     expect(phantom).toHaveAttribute("data-phantom", "");
-    expect(within(phantom).queryAllByRole("button")).toHaveLength(0);
+    const buttons = within(phantom).queryAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAttribute("data-testid", "row-add-chord");
+    expect(buttons[0]).toHaveAttribute("data-ui-chrome");
     expect(row(FIRST)).not.toHaveAttribute("data-phantom");
     expect(rows().at(-1)).toBe(phantom);
   });
@@ -1673,9 +1676,9 @@ describe("VisualEditor double click, empty rows and row identity", () => {
     const button = inRow(1).getByTestId("row-add-chord");
     expect(button).toHaveAccessibleName(STRINGS.chordAddEmpty);
     expect(button).toHaveAttribute("data-ui-chrome");
-    // Neither a lyric row nor the extra last row has one.
+    // A lyric row has none; the extra last row has one (see the phantom tests).
     expect(inRow(0).queryByTestId("row-add-chord")).toBeNull();
-    expect(inRow(2).queryByTestId("row-add-chord")).toBeNull();
+    expect(inRow(2).getByTestId("row-add-chord")).toBeInTheDocument();
     fireEvent.click(button);
     expect(row(1).contains(picker())).toBe(true);
     expect(screen.queryByTestId("line-input")).toBeNull();
@@ -1748,5 +1751,106 @@ describe("VisualEditor double click, empty rows and row identity", () => {
     expect(chordInput()).toBe(input);
     expect(input).toHaveValue("D");
     expect(row(2).contains(picker())).toBe(true);
+  });
+});
+
+describe("VisualEditor Add chord on the phantom row", () => {
+  const text = (live: { song: SongModel }) => serializeSong(live.song);
+
+  it("phantom-row Add chord opens the picker without reporting an edit", () => {
+    const { onEdit } = setup(EN);
+    const last = EN.lines.length;
+    const button = inRow(last).getByTestId("row-add-chord");
+    expect(button).toHaveAccessibleName(STRINGS.chordAddEmpty);
+    expect(button).toHaveAttribute("data-ui-chrome");
+    fireEvent.click(button);
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(row(last)).toHaveAttribute("data-phantom", "");
+    expect(row(last).contains(picker())).toBe(true);
+    expect(chordInput()).toHaveFocus();
+    expect(screen.queryByTestId("line-input")).toBeNull();
+  });
+
+  it("a chord picked on the phantom row is one addChord at lines.length", () => {
+    const { onEdit, live } = setupLive(EN);
+    const last = EN.lines.length;
+    const before = text(live);
+    fireEvent.click(inRow(last).getByTestId("row-add-chord"));
+    submitChord("Am");
+    expect(onEdit.mock.calls).toEqual([
+      [[{ type: "addChord", line: last, index: 0, chord: "Am" }]],
+    ]);
+    expect(text(live)).toBe(`${before}[Am]\n`);
+    expect(row(last)).toHaveAttribute("data-kind", "chords");
+    expect(inRow(last).getByTestId("chords-input")).toHaveFocus();
+    expect(row(last + 1)).toHaveAttribute("data-phantom", "");
+  });
+
+  it("cancelling the phantom-row picker leaves the song unchanged", () => {
+    const { onEdit, live } = setupLive(EN);
+    const last = EN.lines.length;
+    const before = text(live);
+    const count = rows().length;
+    fireEvent.click(inRow(last).getByTestId("row-add-chord"));
+    press(chordInput(), "Escape");
+    expect(picker()).toBeNull();
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(text(live)).toBe(before);
+    expect(live.song.lines).toHaveLength(EN.lines.length);
+    expect(rows()).toHaveLength(count);
+    expect(rows().at(-1)).toBe(row(last));
+    expect(row(last)).toHaveAttribute("data-phantom", "");
+  });
+
+  it("a rejecting parent still gets the addChord at lines.length", () => {
+    const { onEdit } = setup(EN);
+    const last = EN.lines.length;
+    fireEvent.click(inRow(last).getByTestId("row-add-chord"));
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(row(last).contains(picker())).toBe(true);
+    submitChord("G");
+    expect(onEdit.mock.calls).toEqual([
+      [[{ type: "addChord", line: last, index: 0, chord: "G" }]],
+    ]);
+  });
+
+  it("empty song: phantom Add chord then Am gives [Am]; cancel gives an empty song", () => {
+    const first = setupLive({ lines: [] });
+    fireEvent.click(inRow(0).getByTestId("row-add-chord"));
+    expect(first.onEdit).not.toHaveBeenCalled();
+    expect(row(0).contains(picker())).toBe(true);
+    submitChord("Am");
+    expect(first.onEdit.mock.calls).toEqual([
+      [[{ type: "addChord", line: 0, index: 0, chord: "Am" }]],
+    ]);
+    expect(text(first.live)).toBe("[Am]\n");
+    first.unmount();
+
+    const second = setupLive({ lines: [] });
+    fireEvent.click(inRow(0).getByTestId("row-add-chord"));
+    press(chordInput(), "Escape");
+    expect(second.onEdit).not.toHaveBeenCalled();
+    expect(second.live.song).toEqual({ lines: [] });
+    expect(text(second.live)).toBe("");
+  });
+
+  it("the Hebrew song shows the button on its phantom row", () => {
+    setup(HE);
+    const phantom = row(HE.lines.length);
+    expect(phantom).toHaveAttribute("data-phantom", "");
+    expect(within(phantom).getByTestId("row-add-chord")).toHaveAttribute(
+      "data-ui-chrome",
+    );
+  });
+
+  it("the phantom row has no RowButtons and the button hides while typing", () => {
+    setup(EN);
+    const last = EN.lines.length;
+    for (const id of ["line-edit-text", "line-add-below", "line-remove"]) {
+      expect(inRow(last).queryByTestId(id)).toBeNull();
+    }
+    fireEvent.click(wrapper(last));
+    expect(lineInput(last)).toHaveFocus();
+    expect(inRow(last).queryByTestId("row-add-chord")).toBeNull();
   });
 });

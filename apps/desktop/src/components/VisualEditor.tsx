@@ -611,7 +611,7 @@ export function VisualEditor({ id, song, onEdit: report }: VisualEditorProps) {
             />
           </div>
         )}
-        {blank && !phantom && edit === null && (
+        {blank && edit === null && (
           <button
             type="button"
             className={styles.add}

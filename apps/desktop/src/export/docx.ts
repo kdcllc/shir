@@ -266,11 +266,12 @@ function coverChildren(
   meta: ExportMeta,
 ): Child[] {
   const rtl = meta.dir === "rtl";
+  const titleRtl = (firstStrongDirection(doc.title) ?? meta.dir) === "rtl";
   const children: Child[] = [
     new Paragraph({
       heading: HeadingLevel.TITLE,
-      ...(rtl ? { bidirectional: true } : {}),
-      children: [run(doc.title, { bold: true, rtl })],
+      ...(titleRtl ? { bidirectional: true } : {}),
+      children: [run(doc.title, { bold: true, rtl: titleRtl })],
     }),
     para([run(`${labels.date}: ${meta.dateText}`, { rtl })], { rtl }),
     para([run(labels.songs, { bold: true, rtl })], { rtl }),

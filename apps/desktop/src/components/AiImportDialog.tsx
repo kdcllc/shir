@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { buildAiPrompt, parseAiReply } from "chord-core";
-import type { AiReplyResult, AiReplySong } from "chord-core";
+import { buildAiPrompt, parseAiReply, splitGraphemes } from "chord-core";
+import type { AiReplyResult, AiReplySong, DocumentFormat } from "chord-core";
 import { useT } from "../i18n";
 import styles from "./AiImportDialog.module.css";
 import { useDialogFocus } from "./useDialogFocus";
@@ -9,6 +9,8 @@ import { useDialogFocus } from "./useDialogFocus";
 export interface AiDocument {
   sourceName: string;
   text: string;
+  /** Format of the extracted document; `"pdf"` adds the approximate-positions line to the prompt. */
+  format?: DocumentFormat | undefined;
 }
 
 export interface AiImportDialogProps {
@@ -47,8 +49,6 @@ export function AiImportDialog({
   const t = useT();
   const titleId = useId();
   const groupName = useId();
-  const promptId = useId();
-  const replyId = useId();
   const promptArea = useRef(noArea());
   const { dialog, onKeyDown } = useDialogFocus(onCancel);
   const [mode, setMode] = useState<Mode>(
@@ -70,6 +70,7 @@ export function AiImportDialog({
             mode: "text",
             text: doc.text,
             sourceName: doc.sourceName,
+            format: doc.format,
           });
     }
     return doc === undefined
@@ -84,7 +85,11 @@ export function AiImportDialog({
     try {
       const picked = await pickDocument();
       if (picked !== undefined) {
-        setDoc({ sourceName: picked.sourceName, text: picked.text });
+        setDoc({
+          sourceName: picked.sourceName,
+          text: picked.text,
+          format: picked.format,
+        });
         setWarnings(picked.warnings);
       }
     } catch (reason) {
@@ -180,7 +185,9 @@ export function AiImportDialog({
                 {doc !== undefined && (
                   <p className={styles.picked} data-testid="ai-picked">
                     <bdi>{doc.sourceName}</bdi> {t("separator")}{" "}
-                    {t("aiCharCount", { count: doc.text.length })}
+                    {t("aiCharCount", {
+                      count: splitGraphemes(doc.text).length,
+                    })}
                   </p>
                 )}
                 {pickError !== undefined && (
@@ -215,9 +222,7 @@ export function AiImportDialog({
             </fieldset>
           </li>
           <li className={styles.step}>
-            <label htmlFor={promptId} className={styles.heading}>
-              {t("aiStepPrompt")}
-            </label>
+            <span className={styles.heading}>{t("aiStepPrompt")}</span>
             {prompt === undefined ? (
               <p className={styles.hint} data-testid="ai-prompt-hint">
                 {t("aiPromptHint")}
@@ -225,7 +230,6 @@ export function AiImportDialog({
             ) : (
               <textarea
                 ref={promptArea}
-                id={promptId}
                 readOnly
                 dir="ltr"
                 spellCheck={false}
@@ -257,11 +261,8 @@ export function AiImportDialog({
             </div>
           </li>
           <li className={styles.step}>
-            <label htmlFor={replyId} className={styles.heading}>
-              {t("aiStepReply")}
-            </label>
+            <span className={styles.heading}>{t("aiStepReply")}</span>
             <textarea
-              id={replyId}
               dir="auto"
               spellCheck={false}
               aria-label={t("aiReplyLabel")}

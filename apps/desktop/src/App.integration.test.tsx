@@ -308,7 +308,7 @@ describe("G6 editor", () => {
       "he.txt",
     );
     expect(screen.getByTestId("import-queued").textContent).toBe(
-      "1 file needs alignment review",
+      "1 file needs review",
     );
     expect(screen.getByTestId("import-summary").textContent).toBe(
       "Imported 1 of 2 files",

@@ -184,6 +184,17 @@ describe("AddToSetlistDialog", () => {
     expect(confirm()).toHaveFocus();
   });
 
+  it("with Confirm disabled, Tab wraps from Cancel to the first radio and Shift+Tab back", () => {
+    setup();
+    expect(confirm()).toBeDisabled();
+    const cancel = screen.getByTestId("add-to-setlist-cancel");
+    cancel.focus();
+    fireEvent.keyDown(cancel, { key: "Tab" });
+    expect(options()[0]).toHaveFocus();
+    fireEvent.keyDown(options()[0]!, { key: "Tab", shiftKey: true });
+    expect(cancel).toHaveFocus();
+  });
+
   it("Tab in the middle is left to the browser", () => {
     setup();
     options()[0]!.focus();
