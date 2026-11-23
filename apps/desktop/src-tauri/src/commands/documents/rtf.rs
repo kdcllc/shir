@@ -52,6 +52,10 @@ struct Group {
     skip: bool,
     /// Inside `\fonttbl`.
     fonttbl: bool,
+    /// Current `\afN` associated font (used for the `\rtlch` run).
+    af: Option<i64>,
+    /// In a `\rtlch` run (the later of `\rtlch` / `\ltrch` wins).
+    rtl: bool,
 }
 
 #[derive(Default)]
@@ -167,6 +171,14 @@ impl<'a> Parser<'a> {
     }
 
     fn codepage(&self) -> u32 {
+        // In a right-to-left run the associated font decides, when it is Hebrew or Arabic.
+        if let Some(g) = self.stack.last().filter(|g| g.rtl) {
+            match g.af.and_then(|f| self.fonts.get(&f)) {
+                Some(177 | 181) => return 1255,
+                Some(178..=180) => return 1256,
+                _ => {}
+            }
+        }
         let font = self.stack.last().and_then(|g| g.font).or(self.deff);
         match font.and_then(|f| self.fonts.get(&f)) {
             Some(177 | 181) => 1255,
@@ -294,6 +306,8 @@ impl<'a> Parser<'a> {
             font: None,
             skip: false,
             fonttbl: false,
+            af: None,
+            rtl: false,
         });
         self.stack.push(g);
         Ok(())
@@ -356,6 +370,17 @@ impl<'a> Parser<'a> {
             self.skip_n = self.stack.last().map_or(1, |g| g.uc);
             return;
         }
+        // `\binN` always skips its data, even when it is itself the `\uN` fallback.
+        if word == "bin" {
+            if self.skip_n > 0 {
+                self.skip_n -= 1;
+            } else {
+                self.flush_run();
+            }
+            let len = usize::try_from(n.unwrap_or(0)).unwrap_or(0);
+            self.pos = self.pos.saturating_add(len).min(self.bytes.len());
+            return;
+        }
         if self.skip_n > 0 {
             self.skip_n -= 1;
             return;
@@ -381,6 +406,16 @@ impl<'a> Parser<'a> {
                     g.font = n;
                 }
             }
+            "af" => {
+                if let Some(g) = self.stack.last_mut() {
+                    g.af = n;
+                }
+            }
+            "rtlch" | "ltrch" => {
+                if let Some(g) = self.stack.last_mut() {
+                    g.rtl = word == "rtlch";
+                }
+            }
             "fcharset" => {
                 let in_tbl = self.stack.last().is_some_and(|g| g.fonttbl);
                 let font = self.stack.last().and_then(|g| g.font);
@@ -392,10 +427,6 @@ impl<'a> Parser<'a> {
                 if let Some(g) = self.stack.last_mut() {
                     g.fonttbl = true;
                 }
-            }
-            "bin" => {
-                let len = usize::try_from(n.unwrap_or(0)).unwrap_or(0);
-                self.pos = self.pos.saturating_add(len).min(self.bytes.len());
             }
             w if SKIPPED.contains(&w) => {
                 if let Some(g) = self.stack.last_mut() {
@@ -497,13 +528,22 @@ pub(super) fn extract(bytes: &[u8]) -> Result<DocumentText, DocError> {
     }
     let mut p = Parser::new(&bytes[start..]);
     p.run_parse()?;
+    if p.stack.is_empty()
+        && !p.bytes[p.pos.min(p.bytes.len())..]
+            .iter()
+            .all(|&b| b.is_ascii_whitespace() || b == 0)
+    {
+        return Err(corrupt(
+            "unexpected content after the end of the RTF document",
+        ));
+    }
     p.finish()
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::enforce_text_cap;
-    use super::super::zipxml::test_util::{fixture_dir, FIXTURE_NAMES};
+    use super::super::zipxml::test_util::{fixture_dir, FIXTURE_NAMES, RTF_ONLY_FIXTURE_NAMES};
     use super::*;
 
     fn blocks(src: &str) -> Vec<DocBlock> {
@@ -655,6 +695,50 @@ mod tests {
     fn bin_skips_raw_bytes_with_braces() {
         let src = "{\\rtf1 a\\bin5 }{}\\x b\\par}";
         assert_eq!(blocks(src), [para("a b")]);
+    }
+
+    #[test]
+    fn bin_as_unicode_fallback_skips_its_data() {
+        let src = r"{\rtf1\uc1\u1513\bin3 }}}x\par}";
+        assert_eq!(blocks(src), [para("שx")]);
+    }
+
+    #[test]
+    fn trailing_content_after_root_group() {
+        for src in [r"{\rtf1 a}x", r"{\rtf1 a}}"] {
+            let e = extract(src.as_bytes()).unwrap_err();
+            assert_eq!(e.kind, DocErrorKind::Corrupt, "{src}");
+            assert!(
+                e.message.contains("after the end of the RTF document"),
+                "{}",
+                e.message
+            );
+        }
+        assert_eq!(blocks("{\\rtf1 a}\r\n"), [para("a")]);
+        assert_eq!(blocks("{\\rtf1 a}\0"), [para("a")]);
+    }
+
+    #[test]
+    fn associated_font_charset_inside_rtlch() {
+        let src = r"{\rtf1\ansi\ansicpg1252{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset177 Arial;}{\f2\fcharset178 Arial;}}\f0 {\ltrch\fcs0 \f0 \rtlch\fcs1 \af1 \'f9\'ec\'e5\'ed}{\rtlch\fcs1 \af1 \ltrch\fcs0 \f0 caf\'e9}{\rtlch\af2 \'c7}\par}";
+        assert_eq!(blocks(src), [para("שלוםcafé\u{0627}")]);
+        // The state is group scoped.
+        let src = r"{\rtf1\ansi\ansicpg1252{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset177 Arial;}}\f0 {\rtlch\af1 \'e0}\'e9\par}";
+        assert_eq!(blocks(src), [para("אé")]);
+    }
+
+    #[test]
+    fn word_cp1255_fixture_matches_expected() {
+        for name in RTF_ONLY_FIXTURE_NAMES {
+            let dir = fixture_dir();
+            let bytes = std::fs::read(dir.join(format!("{name}.rtf"))).unwrap();
+            let expected: Vec<DocBlock> = serde_json::from_slice(
+                &std::fs::read(dir.join(format!("{name}.expected.json"))).unwrap(),
+            )
+            .unwrap();
+            let got = enforce_text_cap(extract(&bytes).unwrap()).unwrap();
+            assert_eq!(got.blocks, expected, "{name}");
+        }
     }
 
     #[test]

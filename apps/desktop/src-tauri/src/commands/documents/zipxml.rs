@@ -40,9 +40,9 @@ pub(super) fn read_entry(bytes: &[u8], name: &str, max: u64) -> Result<Vec<u8>, 
         .take(max.saturating_add(1))
         .read_to_end(&mut out)
         .map_err(|e| corrupt(format!("cannot read archive entry \"{name}\": {e}")))?;
-    if out.len() as u64 > max {
-        return Err(text_too_large(name, max));
-    }
+    // No post-read length check: a forged declared size makes the zip crate itself fail the
+    // read (`Corrupt`), so more than `max` bytes never arrive; see
+    // `forged_entry_size_is_still_capped`. The `take` above stays as defense in depth.
     Ok(out)
 }
 
@@ -183,7 +183,18 @@ impl Builder {
         let Some(t) = self.tables.last_mut() else {
             return;
         };
-        let text = t.cell.take().map(|p| p.join("\n")).unwrap_or_default();
+        // Word requires a `<w:p/>` after a nested table in a cell; drop that one trailing
+        // empty paragraph so the flattened cell has no trailing newline.
+        let text = t
+            .cell
+            .take()
+            .map(|mut p| {
+                if p.len() > 1 && p.last().is_some_and(String::is_empty) {
+                    p.pop();
+                }
+                p.join("\n")
+            })
+            .unwrap_or_default();
         let n = if force_empty || text.is_empty() {
             1
         } else {
@@ -244,6 +255,9 @@ pub(super) mod test_util {
     /// The fixture names (`packages/test-fixtures/doc/<name>.*`).
     pub const FIXTURE_NAMES: [&str; 3] = ["he_chords_above", "en_table", "songbook_mixed"];
 
+    /// Fixtures that exist only as RTF (`<name>.rtf` and `<name>.expected.json`).
+    pub const RTF_ONLY_FIXTURE_NAMES: [&str; 1] = ["he_word_cp1255"];
+
     /// Directory of the document fixtures.
     pub fn fixture_dir() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../packages/test-fixtures/doc")
@@ -286,6 +300,64 @@ mod tests {
         let e = read_entry(&z, "b.xml", 100).unwrap_err();
         assert_eq!(e.kind, DocErrorKind::Corrupt);
         assert!(e.message.contains("b.xml"), "{}", e.message);
+    }
+
+    #[test]
+    fn too_many_entries_is_corrupt() {
+        let names: Vec<String> = (0..=MAX_ENTRIES).map(|i| format!("e{i}")).collect();
+        let entries: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &b"x"[..])).collect();
+        let z = make_zip(&entries);
+        let e = read_entry(&z, "e0", 100).unwrap_err();
+        assert_eq!(e.kind, DocErrorKind::Corrupt);
+        assert!(e.message.contains("too many entries"), "{}", e.message);
+
+        let z = make_zip(&entries[..MAX_ENTRIES]);
+        assert_eq!(read_entry(&z, "e0", 100).unwrap(), b"x");
+    }
+
+    /// Overwrite the little-endian u32 at `offset` after each `sig` in `zip`.
+    fn patch_u32(zip: &mut [u8], sig: &[u8; 4], offset: usize, value: u32) {
+        let mut patched = 0;
+        let mut i = 0;
+        while i + offset + 4 <= zip.len() {
+            if zip[i..i + 4] == sig[..] {
+                zip[i + offset..i + offset + 4].copy_from_slice(&value.to_le_bytes());
+                patched += 1;
+            }
+            i += 1;
+        }
+        assert_eq!(
+            patched, 1,
+            "expected exactly one header with signature {sig:?}"
+        );
+    }
+
+    #[test]
+    fn forged_entry_size_is_still_capped() {
+        use std::io::Write;
+        let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        w.start_file("a.xml", opts).unwrap();
+        w.write_all(&[b'a'; 100]).unwrap();
+        let mut z = w.finish().unwrap().into_inner();
+        // The honest archive is refused by the declared size.
+        assert_eq!(
+            read_entry(&z, "a.xml", 50).unwrap_err().kind,
+            DocErrorKind::TextTooLarge
+        );
+        // Forge the uncompressed size (local header offset 22, central directory offset 24).
+        patch_u32(&mut z, b"PK\x03\x04", 22, 10);
+        patch_u32(&mut z, b"PK\x01\x02", 24, 10);
+        // Observed: zip 9.4.2 itself fails the read once the data outgrows the declared size,
+        // so the result is `Corrupt`, never more than `max` bytes.
+        let e = read_entry(&z, "a.xml", 50).unwrap_err();
+        assert_eq!(e.kind, DocErrorKind::Corrupt);
+        assert!(
+            e.message.contains("declared uncompressed size"),
+            "{}",
+            e.message
+        );
     }
 
     #[test]

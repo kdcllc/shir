@@ -17,6 +17,16 @@ enum Skip {
     Object,
 }
 
+/// The character of a `w:sym` `w:char` hex value. Word's symbol-font private-use codes
+/// (U+F000-U+F0FF) have no plain-text meaning, so they give `None`, like invalid values.
+fn sym_char(v: &str) -> Option<char> {
+    let n = u32::from_str_radix(v.trim(), 16).ok()?;
+    if (0xF000..=0xF0FF).contains(&n) {
+        return None;
+    }
+    char::from_u32(n)
+}
+
 struct Walker {
     b: Builder,
     in_t: bool,
@@ -27,7 +37,7 @@ impl Walker {
     fn start(&mut self, e: &BytesStart<'_>) -> Result<bool, DocError> {
         let name = e.local_name();
         let skip = match name.as_ref() {
-            "del" | "Fallback" | "tabs" => Some(Skip::Silent),
+            "del" | "Fallback" | "tabs" | "moveFrom" => Some(Skip::Silent),
             "drawing" | "pict" => Some(Skip::Image),
             "object" => Some(Skip::Object),
             _ => None,
@@ -49,6 +59,14 @@ impl Walker {
             "t" => self.in_t = true,
             "tab" => self.b.push_str("\t"),
             "cr" => self.b.push_str("\n"),
+            "noBreakHyphen" => self.b.push_str("\u{2011}"),
+            // An optional hyphen is invisible in plain text.
+            "softHyphen" => {}
+            "sym" => {
+                if let Some(c) = attr(e, "char")?.as_deref().and_then(sym_char) {
+                    self.b.push_str(c.encode_utf8(&mut [0u8; 4]));
+                }
+            }
             "br" => {
                 if attr(e, "type")?.as_deref() == Some("page") {
                     self.b.break_para();
@@ -194,7 +212,7 @@ mod tests {
              <w:tr><w:tc><w:p><w:r><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl>\
              <w:p/></w:tc></w:tr></w:tbl>",
         );
-        assert_eq!(b, vec![table(&[&["top\na\tb\nc\n"]])]);
+        assert_eq!(b, vec![table(&[&["top\na\tb\nc"]])]);
     }
 
     #[test]
@@ -214,6 +232,29 @@ mod tests {
              <mc:Fallback><w:p><w:r><w:t>fb</w:t></w:r></w:p></mc:Fallback></mc:AlternateContent>",
         );
         assert_eq!(b, vec![para("keep"), para("c")]);
+    }
+
+    #[test]
+    fn moved_from_text_is_skipped() {
+        let b = blocks(
+            "<w:p><w:moveFrom><w:r><w:t>moved</w:t></w:r></w:moveFrom><w:r><w:t>keep</w:t></w:r></w:p>\
+             <w:p><w:moveTo><w:r><w:t>moved</w:t></w:r></w:moveTo></w:p>",
+        );
+        assert_eq!(b, vec![para("keep"), para("moved")]);
+        let b = blocks(
+            "<w:p><w:moveFromRangeStart w:id=\"1\"/><w:r><w:t>x</w:t></w:r><w:moveFromRangeEnd w:id=\"1\"/></w:p>",
+        );
+        assert_eq!(b, vec![para("x")]);
+    }
+
+    #[test]
+    fn no_break_hyphen_soft_hyphen_and_sym() {
+        let b = blocks(
+            "<w:p><w:r><w:t>a</w:t><w:noBreakHyphen/><w:t>b</w:t><w:softHyphen/><w:t>c</w:t>\
+             <w:sym w:font=\"Symbol\" w:char=\"2665\"/><w:sym w:font=\"Wingdings\" w:char=\"F04A\"/>\
+             <w:sym w:char=\"zz\"/><w:sym w:char=\"D800\"/><w:sym/></w:r></w:p>",
+        );
+        assert_eq!(b, vec![para("a\u{2011}bc\u{2665}")]);
     }
 
     #[test]

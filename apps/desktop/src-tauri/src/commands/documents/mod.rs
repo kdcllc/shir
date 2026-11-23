@@ -147,6 +147,19 @@ fn enforce_text_cap(mut doc: DocumentText) -> Result<DocumentText, DocError> {
     Ok(doc)
 }
 
+/// Read `r` to the end, refusing more than `max` bytes. Reads at most `max + 1` bytes, so a
+/// file that grew after the metadata check cannot exhaust memory.
+fn read_capped<R: Read>(r: R, max: u64) -> Result<Vec<u8>, DocError> {
+    let mut bytes = Vec::new();
+    r.take(max.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(DocError::io)?;
+    if bytes.len() as u64 > max {
+        return Err(DocError::too_large());
+    }
+    Ok(bytes)
+}
+
 /// Extract the text blocks of the document at `path`.
 pub fn extract_document_impl(path: &Path) -> Result<DocumentText, DocError> {
     let meta = std::fs::metadata(path).map_err(DocError::io)?;
@@ -167,13 +180,7 @@ pub fn extract_document_impl(path: &Path) -> Result<DocumentText, DocError> {
         ));
     };
     let file = std::fs::File::open(path).map_err(DocError::io)?;
-    let mut bytes = Vec::new();
-    file.take(MAX_DOCUMENT_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(DocError::io)?;
-    if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
-        return Err(DocError::too_large());
-    }
+    let bytes = read_capped(file, MAX_DOCUMENT_BYTES)?;
     let doc = match format {
         DocFormat::Docx => docx::extract(&bytes)?,
         DocFormat::Odt => odt::extract(&bytes)?,
@@ -228,6 +235,15 @@ mod tests {
         f.set_len(MAX_DOCUMENT_BYTES + 1).unwrap();
         drop(f);
         let e = extract_document_impl(&p).unwrap_err();
+        assert_eq!(e.kind, DocErrorKind::TooLarge);
+        assert!(e.message.contains("20 MB"), "{}", e.message);
+    }
+
+    #[test]
+    fn read_capped_refuses_a_reader_longer_than_the_cap() {
+        let at_cap = read_capped(std::io::Cursor::new(vec![7u8; 8]), 8).unwrap();
+        assert_eq!(at_cap, vec![7u8; 8]);
+        let e = read_capped(std::io::Cursor::new(vec![7u8; 9]), 8).unwrap_err();
         assert_eq!(e.kind, DocErrorKind::TooLarge);
         assert!(e.message.contains("20 MB"), "{}", e.message);
     }
